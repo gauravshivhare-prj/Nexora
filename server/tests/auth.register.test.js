@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 
 import { ERROR_CODES } from '../src/constants/errorCodes.js';
-import { clearUsers, postJson, postRaw, startTestServer } from './helpers/testServer.js';
+import { clearUsers, postJson, postRaw, resetRateLimiters, startTestServer } from './helpers/testServer.js';
 
 const VALID_PAYLOAD = {
   name: 'Gaurav Shivhare',
@@ -41,6 +41,7 @@ describe('POST /api/auth/register', () => {
   });
 
   beforeEach(async () => {
+    resetRateLimiters();
     await clearUsers();
   });
 

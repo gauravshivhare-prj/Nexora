@@ -54,3 +54,28 @@ export const USER_ROLES = {
 };
 
 export const USER_ROLE_VALUES = Object.values(USER_ROLES);
+
+// --- Rate limiting --------------------------------------------------------
+
+/**
+ * In-memory sliding-window rate limits for authentication endpoints.
+ *
+ * The numbers are deliberately generous so that local development, automated
+ * tests and a small-scale MVP are never hampered, while still throttling real
+ * credential-guessing attacks. Login is tighter than registration because
+ * login is the credential-guessing surface.
+ *
+ * `windowMs` is the sliding window length; `maxAttempts` is the number of
+ * requests allowed per IP within that window. After hitting the limit the
+ * client receives a 429 with a `Retry-After` header.
+ */
+export const RATE_LIMIT_POLICY = {
+  login: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 30,
+  },
+  register: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 20,
+  },
+};

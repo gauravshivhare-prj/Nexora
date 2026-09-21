@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 import { createApp } from '../../src/app.js';
 import { ensureModelIndexes } from '../../src/models/index.js';
+import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
 
 /**
  * Integration-test harness.
@@ -47,6 +48,18 @@ function deriveTestUri(baseUri) {
 }
 
 /**
+ * Clears all in-memory rate-limit counters so tests start from a clean slate.
+ *
+ * Called automatically by `startTestServer()` and should also be called in
+ * `beforeEach()` hooks in any test suite that exercises rate-limited endpoints
+ * — otherwise counters accumulated in earlier tests can cause unexpected 429s.
+ */
+export function resetRateLimiters() {
+  loginLimiter.reset();
+  registerLimiter.reset();
+}
+
+/**
  * Connects to the test database and starts the app on an ephemeral port.
  *
  * @returns {Promise<{ baseUrl: string, close: () => Promise<void> }>}
@@ -54,6 +67,7 @@ function deriveTestUri(baseUri) {
 export async function startTestServer() {
   await mongoose.connect(resolveTestDatabaseUri(), { serverSelectionTimeoutMS: 5000 });
   await ensureModelIndexes();
+  resetRateLimiters();
 
   const server = createApp().listen(0);
   await new Promise((resolve, reject) => {
@@ -83,7 +97,7 @@ export async function clearUsers() {
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *
- * @returns {Promise<{ status: number, body: unknown }>}
+ * @returns {Promise<{ status: number, headers: Headers, body: unknown }>}
  */
 export async function postRaw(baseUrl, path, rawBody, headers = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -100,7 +114,7 @@ export async function postRaw(baseUrl, path, rawBody, headers = {}) {
     body = text;
   }
 
-  return { status: response.status, body };
+  return { status: response.status, headers: response.headers, body };
 }
 
 /** POSTs a JSON payload. */
@@ -134,3 +148,4 @@ export function getWithToken(baseUrl, path, token) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+

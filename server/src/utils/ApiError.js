@@ -40,4 +40,8 @@ export class ApiError extends Error {
   static serviceUnavailable(message, errorCode = ERROR_CODES.SERVICE_UNAVAILABLE) {
     return new ApiError(503, message, errorCode);
   }
+
+  static tooManyRequests(message, errorCode = ERROR_CODES.RATE_LIMIT_EXCEEDED) {
+    return new ApiError(429, message, errorCode);
+  }
 }

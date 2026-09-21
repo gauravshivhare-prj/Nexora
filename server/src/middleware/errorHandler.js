@@ -117,5 +117,12 @@ export function errorHandler(error, req, res, next) {
     body.stack = error.stack;
   }
 
+  // RFC 6585 §4: a 429 response SHOULD include a Retry-After header so
+  // well-behaved clients know when to retry. The value is set by the rate
+  // limiter middleware as `error.retryAfter` (seconds).
+  if (statusCode === 429 && error.retryAfter != null) {
+    res.set('Retry-After', String(error.retryAfter));
+  }
+
   res.status(statusCode).json(body);
 }

@@ -12,6 +12,7 @@ import {
   postJson,
   postRaw,
   requestWithHeaders,
+  resetRateLimiters,
   startTestServer,
 } from './helpers/testServer.js';
 
@@ -44,6 +45,7 @@ describe('authentication session', () => {
   });
 
   beforeEach(async () => {
+    resetRateLimiters();
     await clearUsers();
     await postJson(server.baseUrl, '/api/auth/register', ACCOUNT);
   });

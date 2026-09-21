@@ -26,6 +26,11 @@ export const ERROR_CODES = {
   /** Authenticated successfully, but the account is deactivated. */
   ACCOUNT_INACTIVE: 'ACCOUNT_INACTIVE',
   FORBIDDEN: 'FORBIDDEN',
+
+  // --- Rate limiting ------------------------------------------------------
+  /** Too many requests from this client within the configured window. */
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+
   DATABASE_ERROR: 'DATABASE_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
