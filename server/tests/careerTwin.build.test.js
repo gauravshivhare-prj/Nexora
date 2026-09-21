@@ -145,7 +145,13 @@ describe('buildCareerTwin', () => {
     const react = twin.skills.find((skill) => skill.name === 'React');
     assert.equal(react.strength, EVIDENCE_STRENGTH.SUPPORTED);
     assert.equal(react.evidence.length, 2);
-    assert.match(react.evidence[1].detail, /Used in your project "Nexora"/);
+
+    // Strongest first. Everything downstream that quotes a single reason
+    // takes the first one, so the project — not the profile listing — is
+    // what a student reads next to a "supported" status.
+    assert.match(react.evidence[0].detail, /Used in your project "Nexora"/);
+    assert.equal(react.evidence[0].strength, EVIDENCE_STRENGTH.SUPPORTED);
+    assert.match(react.evidence[1].detail, /listed this on your profile/);
   });
 
   it('merges spellings of one skill instead of listing it twice', () => {

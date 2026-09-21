@@ -176,6 +176,34 @@ rather than through `skillKey`, hiding a synonym-matching path. Full
 regression green: 294 backend, 37 frontend. `npm audit` reports 0
 vulnerabilities; no dependency was added.
 
+### CHANGE-005
+Date: 2026-09-21
+Requested by: Project owner
+Feature: Skill gap foundation (Phase 6)
+Reason: Phase 6 of the planned sequence, and the input the roadmap is
+generated from. It is also where the evidence model built in Phase 4 first
+becomes visible to a student.
+Current behavior: A career match named missing skills but said nothing about
+how well-evidenced the matched ones were.
+Requested behavior: A per-skill status distinguishing demonstrated from
+merely claimed, each with a reason and a concrete way to improve it.
+Impact: Additive and read-only. One new route on the existing career router.
+Files/modules affected:
+- `domain/skillGap/computeSkillGap.js`, `services/skillGap.service.js`.
+- One handler added to `controllers/recommendation.controller.js` and one
+  route to `routes/career.routes.js`.
+- `domain/careerTwin/buildCareerTwin.js` — evidence is now sorted
+  strongest-first (see BUG-004).
+Risk: Low. Nothing persisted, nothing existing changed except the evidence
+ordering fix, which is covered by updated CareerTwin tests.
+Decision: Approved
+Implemented: Yes
+Tested: 22 new tests, including the case the feature exists for — a skill
+declared "expert" on a profile is reported as `claimed`, while the same
+declaration plus a project is reported as `supported`. Full regression green:
+316 backend, 37 frontend. `npm audit` reports 0 vulnerabilities; no
+dependency was added.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

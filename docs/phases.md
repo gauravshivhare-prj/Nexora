@@ -15,7 +15,8 @@ This document defines the controlled development sequence for Nexora.
 | 3 — Resume Intelligence | Backend foundation complete; no upload, no provider, no UI |
 | 4 — CareerTwin | Backend foundation complete; no UI |
 | 5 — Career Recommendation | Backend foundation complete; no UI |
-| 6 onwards | Not started |
+| 6 — Skill Gap | Backend foundation complete; no UI |
+| 7 onwards | Not started |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -206,6 +207,27 @@ published formula, and named matched/missing skills each have a test.
 - Every displayed gap has a reason.
 - Scores are bounded and validated.
 - No recommendation is generated without role requirements.
+
+**Delivered — backend foundation only**
+- A four-level status scale — `missing`, `claimed`, `supported`, `verified` —
+  built on the Phase 4 evidence model, so a merely listed skill is reported
+  as a gap rather than as a skill the student has.
+- A reason and structured `suggestedEvidence` on every skill, each suggestion
+  naming the status it would reach and whether it is available yet.
+- Priority ordering by what to act on next.
+- `GET /api/careers/roles/:roleId/skill-gap`.
+- 22 tests: 15 pure-function, 7 API.
+
+All three exit criteria are met, each with a direct test: a reason on every
+skill, counts rather than unbounded scores, and a 404 when the role is not
+in the catalogue.
+
+**Deliberately NOT delivered, and why**
+- **No coverage percentage.** Counts only — see architecture.md.
+- **No assessments or interviews.** Phase 8. The evidence model already has
+  the `verified` level and the sources reserved, and suggestions referring
+  to assessments are marked `available: false`.
+- **No skill gap UI.** Phase 10 integrates the dashboard.
 
 ## Phase 7 — Personalized Roadmap
 - Learning actions

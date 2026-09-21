@@ -193,6 +193,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/roles` | Bearer | The curated role catalogue, with its source |
 | `GET` | `/api/careers/recommendations` | Bearer | Ranked matches. `?limit=`, `?includeAll=` |
 | `GET` | `/api/careers/roles/:roleId/match` | Bearer | Score against one named role |
+| `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
 
 ### Ownership rule
 
@@ -423,6 +424,52 @@ breakdown, and the concrete `evidence` behind it — de-duplicated, so one
 project behind three skills is one piece of evidence rather than three.
 Matches below `MINIMUM_RECOMMENDABLE_SCORE` are filtered out as noise unless
 `?includeAll=true`.
+
+### Skill gap
+
+Compares a CareerTwin against one role's requirements. Pure, deterministic,
+no AI, nothing persisted — a gap is a function of a twin and a versioned
+role, so a stored copy could only disagree with a recomputed one.
+
+The output is not a list of missing words. Every skill the role names comes
+back with a status, the reason behind it, and a concrete way to change it,
+because the useful question is never "do you have Docker?" but "what would
+it take for Nexora to say you have Docker?".
+
+| Status | Meaning |
+|---|---|
+| `missing` | Not seen anywhere in the profile or resumes |
+| `claimed` | Listed, but Nexora has not seen it used |
+| `supported` | Backed by a project or certification |
+| `verified` | Independently checked. **Nothing produces this yet** |
+
+`claimed` being its own status — rather than counted as "has the skill" — is
+the point of the feature. A student who typed "Docker, expert" into a form
+has a gap; one who shipped a containerised project does not. A system that
+treats those the same is a checklist, and the student finds out which they
+were at the interview.
+
+Ordering is by what to do next: required-and-missing first, then
+required-but-only-claimed. The second is placed high deliberately — the
+student believes they are finished there, so it is the gap most likely to
+surprise them.
+
+`suggestedEvidence` is structured rather than prose, so the roadmap can act
+on it. Suggestions are deliberately generic: a specific course or project
+brief would be an invented external resource, and there is no verified
+dataset of those. Assessment suggestions carry `available: false` rather
+than pointing at a feature that does not exist.
+
+**No coverage percentage.** The summary reports counts only. "You are 60%
+ready" invites a student to read one number and stop, when the whole value
+is in which part of the 60% is shown rather than merely said — and the career
+match score already provides one honest headline figure computed from
+published weights. A second would compete with it.
+
+Skills the student has that the role does not name are returned as
+`additionalSkills` — context, never criticism. A backend student's Figma is
+not a flaw in their backend profile; it is a hint that another role may fit
+better, and that is the reader's call.
 
 ### Not implemented
 

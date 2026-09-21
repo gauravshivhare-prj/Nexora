@@ -3,6 +3,7 @@ import {
   recommendRoles,
   scoreAgainstRole,
 } from '../services/recommendation.service.js';
+import { getSkillGap } from '../services/skillGap.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
@@ -62,6 +63,26 @@ export const roleMatch = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Role match calculated',
+    data,
+  });
+});
+
+/**
+ * GET /api/careers/roles/:roleId/skill-gap
+ *
+ * Every skill the role names, with where the student stands on it and what
+ * would move it up a level.
+ *
+ * Sits under the role rather than at a top-level `/skill-gap` because a gap
+ * has no meaning without a role to be short of. Nothing is persisted — it is
+ * a pure function of a CareerTwin and a versioned role.
+ */
+export const skillGap = asyncHandler(async (req, res) => {
+  const data = await getSkillGap(req.auth.userId, req.params.roleId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Skill gap calculated',
     data,
   });
 });

@@ -4,6 +4,7 @@ import {
   recommendations,
   roleMatch,
   roles,
+  skillGap,
 } from '../controllers/recommendation.controller.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -24,6 +25,7 @@ router.use(requireAuth);
 
 router.get('/roles', roles);
 router.get('/roles/:roleId/match', roleMatch);
+router.get('/roles/:roleId/skill-gap', skillGap);
 router.get('/recommendations', recommendations);
 
 export default router;

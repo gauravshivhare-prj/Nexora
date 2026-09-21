@@ -115,6 +115,31 @@ Regression test: "matches a skill across a difference in spelling" in
 `server/tests/careerMatch.test.js`.
 Status: Verified
 
+### BUG-004
+Date: 2026-09-21
+Environment: Development, backend test suite
+Severity: P2 — Medium
+Feature: CareerTwin evidence ordering / skill gap reasons (Phase 6)
+Steps to reproduce: Give a student a profile skill and a project using it,
+generate a CareerTwin, then read the skill gap for a role requiring it.
+Expected: The reason beside a `supported` status cites the project.
+Actual: "You have pointed at concrete work involving Node.js. You listed this
+on your profile as expert." — a sentence that claims concrete work and then
+cites the profile listing.
+Console/API error: None. Incoherent user-facing text, no failure.
+Root cause: `buildCareerTwin` appended evidence in collection order, so
+self-declared evidence always came first. Everything downstream that quotes a
+single reason takes `evidence[0]`, so the weakest evidence was the one shown.
+Fix: Sort each skill's evidence strongest-first in `buildCareerTwin`, using a
+stable sort so the result stays deterministic. This also improves the
+CareerTwin payload and the recommendation evidence list, both of which lead
+with the first item.
+Regression test: "distinguishes a typed skill from a demonstrated one end to
+end" in `server/tests/skillGap.test.js`, plus an updated assertion in
+`server/tests/careerTwin.build.test.js` that now pins the intended ordering
+rather than the accidental one.
+Status: Verified
+
 ## Debugging Rules
 1. Reproduce first.
 2. Read the actual error.

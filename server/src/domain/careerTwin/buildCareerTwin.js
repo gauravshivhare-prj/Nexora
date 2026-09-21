@@ -176,7 +176,12 @@ function collectSkills(profile, analysedResumes) {
       name: entry.name,
       strength: strongestStrength(entry.evidence),
       selfDeclaredLevel: entry.selfDeclaredLevel,
-      evidence: entry.evidence,
+      // Strongest first. Everything downstream that quotes a single reason
+      // takes the first one, so this is what decides whether a student reads
+      // "used in your project Nexora" or "you listed this on your profile" —
+      // and for a skill that has both, the second would be a strange thing
+      // to say. Stable within a strength, so the order stays deterministic.
+      evidence: [...entry.evidence].sort((left, right) => rank(right.strength) - rank(left.strength)),
       /** Distinct kinds of evidence — four resume mentions is still one kind. */
       sourceCount: new Set(entry.evidence.map((item) => item.source)).size,
     }))
