@@ -3,10 +3,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute.jsx';
 import { AuthenticatedPage } from '../pages/AuthenticatedPage.jsx';
 import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
+import { CareersPage } from '../pages/CareersPage.jsx';
 import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
+import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
 
@@ -68,6 +70,24 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <CareerTwinPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/careers"
+        element={
+          <ProtectedRoute>
+            <CareersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/careers/:roleId/skill-gap"
+        element={
+          <ProtectedRoute>
+            <SkillGapPage />
           </ProtectedRoute>
         }
       />
