@@ -5,7 +5,7 @@ Nexora should feel like a serious career product, not an AI chatbot wrapper.
 
 ## Design System
 - Clean light interface
-- Deep navy + blue primary accents
+- Sunset Warm palette: warm orange primary/secondary accents on a warm off-white background (token values in "Final Visual Theme — Sunset Warm" below)
 - Strong typography hierarchy
 - Consistent spacing
 - Minimal glassmorphism
