@@ -1,9 +1,11 @@
+import { readToken } from './tokenStorage.js';
+
 /**
  * The single place the frontend talks to the Nexora backend.
  *
  * Components never call `fetch` directly: they call a feature service, which
- * calls `request()` here. That keeps the base URL, timeout, error shape and
- * response parsing in one file.
+ * calls `request()` here. That keeps the base URL, timeout, authentication
+ * header, error shape and response parsing in one file.
  */
 
 /** How long to wait before treating a request as unreachable. */
@@ -32,12 +34,19 @@ export function getApiBaseUrl() {
  * error for console diagnostics only — it is never rendered.
  */
 export class ApiRequestError extends Error {
-  constructor(message, { status = null, errorCode = null, cause = null } = {}) {
+  constructor(message, { status = null, errorCode = null, details = null, cause = null } = {}) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.errorCode = errorCode;
+    /** Per-field failures from the backend: `[{ field, message }]` or null. */
+    this.details = details;
     this.cause = cause;
+  }
+
+  /** True when the server rejected our identity — a signal to end the session. */
+  get isAuthFailure() {
+    return this.status === 401 || this.status === 403;
   }
 }
 
@@ -57,7 +66,9 @@ async function readJsonBody(response) {
  * Performs a request against the Nexora API.
  *
  * @param {string} path Path beginning with "/", e.g. "/api/health".
- * @param {RequestInit} [options]
+ * @param {RequestInit & { body?: unknown, auth?: boolean }} [options]
+ *   `body` is a plain value that gets JSON-encoded, not a string.
+ *   `auth` defaults to true; set it false to send no Authorization header.
  * @returns {Promise<unknown>} The parsed JSON body.
  * @throws {ApiRequestError} On network failure, timeout, or a non-2xx status.
  */
@@ -69,8 +80,13 @@ export async function request(path, options = {}) {
     );
   }
 
-  const { signal, ...rest } = options;
+  const { signal, body, auth = true, ...rest } = options;
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
+  // Attached here, once, so no caller has to remember it and no component
+  // ever handles the token itself. Read per request rather than captured, so
+  // a login or logout takes effect on the very next call.
+  const token = auth ? readToken() : null;
 
   // Combine the caller's cancellation (e.g. unmount) with our own timeout.
   const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -78,12 +94,19 @@ export async function request(path, options = {}) {
   let response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
-      // Express sends an ETag, so the browser would happily revalidate and
-      // replay a cached body. For a liveness check that is actively wrong:
-      // a stale 200 would report "connected" while the server is down.
+      // Express sends an ETag, so the browser would otherwise revalidate and
+      // replay a cached body. For liveness and identity checks that is
+      // actively wrong — a stale 200 would report a healthy backend, or a
+      // still-valid session, after either had stopped being true.
       cache: 'no-store',
-      headers: { Accept: 'application/json', ...rest.headers },
       ...rest,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...rest.headers,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: abortSignal,
     });
   } catch (error) {
@@ -106,22 +129,31 @@ export async function request(path, options = {}) {
     );
   }
 
-  const body = await readJsonBody(response);
+  const responseBody = await readJsonBody(response);
 
   if (!response.ok) {
     // The backend's error middleware returns { success, message, errorCode }.
     // Fall back to the status text when the response came from elsewhere.
-    throw new ApiRequestError(body?.message ?? `Request failed with status ${response.status}.`, {
-      status: response.status,
-      errorCode: body?.errorCode ?? null,
-    });
+    throw new ApiRequestError(
+      responseBody?.message ?? `Request failed with status ${response.status}.`,
+      {
+        status: response.status,
+        errorCode: responseBody?.errorCode ?? null,
+        details: Array.isArray(responseBody?.details) ? responseBody.details : null,
+      },
+    );
   }
 
-  if (body === null) {
+  if (responseBody === null) {
     throw new ApiRequestError('The backend returned a response that was not valid JSON.', {
       status: response.status,
     });
   }
 
-  return body;
+  return responseBody;
+}
+
+/** POSTs a JSON body. The client's only mutation verb so far. */
+export function post(path, body, options = {}) {
+  return request(path, { method: 'POST', body, ...options });
 }

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import { ApiConnectionPanel } from '../components/ApiConnectionPanel.jsx';
 
 /**
@@ -32,6 +34,21 @@ export function FoundationPage() {
           Foundation Ready
         </p>
       </header>
+
+      <nav aria-label="Get started" className="animate-rise mt-8 flex flex-wrap gap-3">
+        <Link
+          to="/register"
+          className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+        >
+          Create an account
+        </Link>
+        <Link
+          to="/login"
+          className="rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand"
+        >
+          Sign in
+        </Link>
+      </nav>
 
       <div className="mt-10">
         <ApiConnectionPanel />
