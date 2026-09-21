@@ -16,7 +16,8 @@ This document defines the controlled development sequence for Nexora.
 | 4 — CareerTwin | Backend foundation complete; no UI |
 | 5 — Career Recommendation | Backend foundation complete; no UI |
 | 6 — Skill Gap | Backend foundation complete; no UI |
-| 7 onwards | Not started |
+| 7 — Personalized Roadmap | Backend foundation complete; no UI |
+| 8 onwards | Not started |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -240,6 +241,33 @@ in the catalogue.
 - Roadmap is tied to actual skill gaps.
 - Tasks can be marked complete.
 - Progress updates correctly.
+
+**Delivered — backend foundation only**
+- A generator that builds every item from a measured gap, with priority,
+  banded effort, prerequisites, resource references and a verification step.
+- Priority ordering that places a *claimed* core skill above a *missing*
+  optional one — the student thinks that box is ticked, so it is the likeliest
+  surprise.
+- Resource references as structured placeholders with search hints. No
+  fabricated URLs; `url` is null everywhere and a test enforces it.
+- `GET /api/careers/roles/:roleId/roadmap`.
+- 31 tests: 20 pure-function, 11 API.
+
+Exit criteria one and three are met, and tested — including a test that adds
+a project and watches the corresponding item disappear.
+
+Exit criterion two, "tasks can be marked complete", is met **differently from
+how it is worded**, and deliberately. There is no completion flag to set. A
+student completes an item by adding the evidence, which closes the gap, which
+removes the item. A stored flag could disagree with the evidence, which is
+the thing this architecture exists to prevent. Items expose
+`completion.completesWhen` so a client can say what closing one requires.
+
+**Deliberately NOT delivered, and why**
+- **No curated course links.** There is no verified catalogue, and an
+  invented link actively misleads. See architecture.md.
+- **No hour estimates.** Banded effort instead.
+- **No roadmap UI.** Phase 10 integrates the dashboard.
 
 ## Phase 8 — Assessment & AI Interview
 - Skill assessment

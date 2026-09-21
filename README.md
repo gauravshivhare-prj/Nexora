@@ -2,24 +2,25 @@
 
 AI-Powered Career Readiness & Employability Platform — *From Student Profile to Career-Ready Candidate*.
 
-> **Status: Phase 6 — Skill Gap backend foundation.**
+> **Status: Phase 7 — Personalized Roadmap backend foundation.**
 > Implemented: the project foundation, authentication (register, login, logout,
 > JWT-protected routes, session restore, rate limiting), the student profile, resume
 > storage with an AI analysis pipeline, the CareerTwin — a derived career
 > representation whose every skill carries traceable evidence — deterministic,
-> explainable career matching against a curated role catalogue, and skill gap
+> explainable career matching against a curated role catalogue, skill gap
 > analysis that reports a merely listed skill as a gap rather than as one the
-> student has.
+> student has, and a roadmap generated from those gaps.
 >
 > **No AI provider ships with Nexora**, so resume analysis answers `503 — not
 > configured` rather than returning invented data. The CareerTwin and career
 > matching use no AI at all and work fully in that state. The role catalogue is a
 > hand-written reference list and carries **no salary, demand or hiring figures** —
-> there is no verified source for them.
+> there is no verified source for them. Roadmap learning resources are structured
+> placeholders with search hints, **not curated links**, for the same reason.
 >
-> Not built: resume file upload, the roadmap, assessments, and any UI beyond
-> authentication and the profile. See [docs/phases.md](docs/phases.md) for the
-> sequence and
+> Not built: resume file upload, assessments and AI interviews, opportunity
+> matching, and any UI beyond authentication and the profile. See
+> [docs/phases.md](docs/phases.md) for the sequence and
 > [docs/architecture.md](docs/architecture.md#7-implemented-surface) for the exact
 > data model, API surface and AI boundary that exist today.
 

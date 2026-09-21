@@ -3,6 +3,7 @@ import {
   recommendRoles,
   scoreAgainstRole,
 } from '../services/recommendation.service.js';
+import { getRoadmap } from '../services/roadmap.service.js';
 import { getSkillGap } from '../services/skillGap.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -83,6 +84,31 @@ export const skillGap = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Skill gap calculated',
+    data,
+  });
+});
+
+/**
+ * GET /api/careers/roles/:roleId/roadmap
+ *
+ * A prioritised plan for closing the gaps towards this role.
+ *
+ * Under the role for the same reason the gap is: a roadmap without a
+ * destination is a reading list. `?maxItems=` caps the plan; the summary
+ * reports how many actionable gaps existed before the cap, so a student is
+ * not left thinking a ten-item plan is the whole of it.
+ */
+export const roadmap = asyncHandler(async (req, res) => {
+  const data = await getRoadmap(req.auth.userId, req.params.roleId, {
+    maxItems: req.query.maxItems,
+  });
+
+  res.status(200).json({
+    success: true,
+    message:
+      data.roadmap.items.length > 0
+        ? 'Roadmap generated'
+        : 'No roadmap needed — you already meet what this role asks for',
     data,
   });
 });

@@ -194,6 +194,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/recommendations` | Bearer | Ranked matches. `?limit=`, `?includeAll=` |
 | `GET` | `/api/careers/roles/:roleId/match` | Bearer | Score against one named role |
 | `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
+| `GET` | `/api/careers/roles/:roleId/roadmap` | Bearer | Prioritised plan built from the gap |
 
 ### Ownership rule
 
@@ -470,6 +471,62 @@ Skills the student has that the role does not name are returned as
 `additionalSkills` — context, never criticism. A backend student's Figma is
 not a flaw in their backend profile; it is a hint that another role may fit
 better, and that is the reader's call.
+
+### Personalised roadmap
+
+Built on the skill gap service, not on the CareerTwin directly:
+
+```text
+CareerTwin → skill gap → prioritised skills → roadmap
+```
+
+That layering is the point. If the roadmap computed its own view of a
+student's skills, it could eventually disagree with the gap analysis — and a
+plan that tells someone to learn what their own gap page says they have is
+worse than no plan. Reusing the gap service also means one implementation of
+ownership scoping, the unknown-role 404 and the missing-CareerTwin 409.
+
+Every item traces to a measured gap. There are no generic steps, because
+"learn the fundamentals" is advice for nobody in particular and a student can
+tell. Each item carries:
+
+```text
+goal (the role) → skill → objective → actions
+                → resources → verification
+```
+
+**Verification is what makes it a roadmap rather than a reading list.**
+Finishing a course proves nothing Nexora can record. Shipping a project and
+listing its technologies moves the skill from `claimed` to `supported`, which
+the student then sees in their own gap analysis.
+
+**No completion flag is stored.** A student completes an item by adding the
+evidence, which closes the gap, which removes the item. A stored flag could
+disagree with the evidence, which is the one thing this architecture exists
+to prevent. Items expose `completion.completesWhen` instead.
+
+**Resources are placeholders, and `url` is null everywhere.** Nexora has no
+verified course catalogue. Having a model suggest a course URL is the worst
+available option — models invent plausible titles and plausible links with
+equal confidence, and a student following a dead link has been actively
+misled by the product that sent them there. Each resource gives a type, a
+title and a `searchHint` the student can run themselves, plus
+`verified: false`. The response states this in `method.resourceNote`.
+
+**Effort is banded** (`quick` / `moderate` / `substantial`), never given in
+hours. "12 hours to learn Docker" is a number nobody can justify, and
+printing it would make the plan look precise exactly where it cannot be.
+
+An item appears only if it has at least one *available* action. A `supported`
+skill's only remaining step is passing an assessment, which does not exist
+yet — listing it would ask the student to use a feature that is not there.
+This is tested on the suggestion's `available` flag rather than on the
+status, so those skills rejoin the plan automatically when assessments ship.
+
+Prerequisites come from a small explicit table (Express.js needs JavaScript
+and Node.js) and are filtered to skills that are *also on this roadmap*, so a
+prerequisite never points at nothing. Inferring a dependency graph across all
+of technology is not something this could do honestly.
 
 ### Not implemented
 

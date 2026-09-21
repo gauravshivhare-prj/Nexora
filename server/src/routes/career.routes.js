@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import {
   recommendations,
+  roadmap,
   roleMatch,
   roles,
   skillGap,
@@ -26,6 +27,7 @@ router.use(requireAuth);
 router.get('/roles', roles);
 router.get('/roles/:roleId/match', roleMatch);
 router.get('/roles/:roleId/skill-gap', skillGap);
+router.get('/roles/:roleId/roadmap', roadmap);
 router.get('/recommendations', recommendations);
 
 export default router;

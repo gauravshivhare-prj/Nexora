@@ -204,6 +204,38 @@ declaration plus a project is reported as `supported`. Full regression green:
 316 backend, 37 frontend. `npm audit` reports 0 vulnerabilities; no
 dependency was added.
 
+### CHANGE-006
+Date: 2026-09-21
+Requested by: Project owner
+Feature: Personalized roadmap foundation (Phase 7)
+Reason: Phase 7 of the planned sequence, and the point where the chain from
+profile to action closes.
+Current behavior: A skill gap named what was missing but said nothing about
+what to do about it.
+Requested behavior: A prioritised plan generated from real gaps, with a
+verification step per item and no fabricated learning resources.
+Impact: Additive and read-only. One new route on the existing career router.
+No new collection, no writes.
+Files/modules affected:
+- `domain/roadmap/buildRoadmap.js`, `domain/roadmap/resourceReferences.js`,
+  `services/roadmap.service.js`.
+- One handler added to `controllers/recommendation.controller.js` and one
+  route to `routes/career.routes.js`.
+Risk: Low technically. The editorial risk — a roadmap being mistaken for
+curated advice — is handled by shipping `resourcesVerified: false` and an
+explanatory note in every response, and by a test that fails if any resource
+ever carries a URL.
+Decision: Approved
+Implemented: Yes
+Tested: 31 new tests, including one that follows a student through the loop:
+generate a roadmap, add the project it asked for, regenerate, and watch the
+item close because the evidence changed rather than because anything was
+marked done. Full regression green: 347 backend, 37 frontend. `npm audit`
+reports 0 vulnerabilities; no dependency was added.
+
+Note on exit criteria: "tasks can be marked complete" is satisfied by
+evidence rather than by a flag. Recorded in phases.md with the reasoning.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 
