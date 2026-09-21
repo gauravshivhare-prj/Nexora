@@ -16,6 +16,19 @@ function normaliseError(error) {
       statusCode: error.statusCode,
       message: error.message,
       errorCode: error.errorCode,
+      details: error.details,
+    };
+  }
+
+  // Unique-index violation. Must be checked before the generic MongoServerError
+  // branch below, which would otherwise report a duplicate email as a 503
+  // "database unavailable" — misleading to the client and to whoever reads the
+  // logs. The offending value is never echoed back.
+  if (error.code === 11000 || error.code === 11001) {
+    return {
+      statusCode: 409,
+      message: 'A record with these details already exists',
+      errorCode: ERROR_CODES.CONFLICT,
     };
   }
 
@@ -53,8 +66,14 @@ function normaliseError(error) {
     };
   }
 
-  // Any other database-layer failure: driver errors and mongoose runtime errors.
-  if (error instanceof mongoose.Error || error.name === 'MongoServerError') {
+  // Any other database-layer failure.
+  //
+  // The driver raises more than MongoServerError: a lost connection surfaces
+  // as MongoNotConnectedError, an unreachable host as MongoServerSelectionError
+  // and so on. Matching only the one name let an outage — the most likely
+  // database failure in production — fall through to a generic 500, so every
+  // Mongo* error is treated as "database unavailable" instead.
+  if (error instanceof mongoose.Error || error.name?.startsWith('Mongo')) {
     return {
       statusCode: 503,
       message: 'Database is currently unavailable',
@@ -77,7 +96,7 @@ function normaliseError(error) {
  */
 // eslint-disable-next-line no-unused-vars -- Express identifies error middleware by arity.
 export function errorHandler(error, req, res, next) {
-  const { statusCode, message, errorCode } = normaliseError(error);
+  const { statusCode, message, errorCode, details } = normaliseError(error);
 
   const logContext = `${req.method} ${req.originalUrl} → ${statusCode} ${errorCode}`;
   if (statusCode >= 500) {
@@ -87,6 +106,13 @@ export function errorHandler(error, req, res, next) {
   }
 
   const body = { success: false, message, errorCode };
+
+  // Per-field validation failures. Safe in production: these are the caller's
+  // own field names and our own policy messages, never internal state.
+  if (Array.isArray(details) && details.length > 0) {
+    body.details = details;
+  }
+
   if (!isProduction && error.stack) {
     body.stack = error.stack;
   }

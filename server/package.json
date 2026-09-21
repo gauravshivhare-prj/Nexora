@@ -2,7 +2,7 @@
   "name": "nexora-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Nexora backend API — Phase 0 foundation",
+  "description": "Nexora backend API",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -10,9 +10,11 @@
   },
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

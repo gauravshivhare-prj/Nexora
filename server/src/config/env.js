@@ -8,7 +8,38 @@ import 'dotenv/config';
  * confusing runtime error later.
  */
 
-const REQUIRED_VARIABLES = ['MONGODB_URI'];
+const REQUIRED_VARIABLES = ['MONGODB_URI', 'JWT_SECRET'];
+
+/**
+ * A JWT secret shorter than this is brute-forceable offline, and every token
+ * the application has ever issued is only as trustworthy as this value. It is
+ * enforced in development too: a weak local secret has a habit of being copied
+ * into production.
+ */
+const MIN_JWT_SECRET_LENGTH = 32;
+
+/**
+ * Placeholder words people pad out to satisfy a length check.
+ *
+ * Matched as substrings, not exact values: every one of these is shorter than
+ * MIN_JWT_SECRET_LENGTH, so an exact-match list could never fire — the length
+ * check would always reject first. "changeme-changeme-changeme-changeme" is
+ * the case worth catching.
+ */
+const PLACEHOLDER_FRAGMENTS = [
+  'changeme',
+  'change-me',
+  'change_me',
+  'your-secret',
+  'yoursecret',
+  'placeholder',
+  'jwtsecret',
+  'jwt_secret',
+  'supersecret',
+  'mysecret',
+  'todo',
+  'example',
+];
 
 function assertRequiredVariables() {
   const missing = REQUIRED_VARIABLES.filter((key) => !process.env[key]?.trim());
@@ -31,6 +62,58 @@ function parsePort(value, fallback) {
   return port;
 }
 
+/**
+ * Validates the JWT signing secret.
+ *
+ * The error never echoes the configured value, so a misconfiguration cannot
+ * print a real secret into a terminal, a CI log or a screenshot.
+ */
+function parseJwtSecret(value) {
+  const secret = value.trim();
+
+  if (secret.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(
+      `JWT_SECRET is too short: it must be at least ${MIN_JWT_SECRET_LENGTH} characters. ` +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"',
+    );
+  }
+
+  const lowered = secret.toLowerCase();
+  const placeholder = PLACEHOLDER_FRAGMENTS.find((fragment) => lowered.includes(fragment));
+  if (placeholder) {
+    throw new Error(
+      `JWT_SECRET looks like a placeholder (it contains "${placeholder}"). Generate a real random secret.`,
+    );
+  }
+
+  // A long string of one repeated character passes the length check while
+  // carrying almost no entropy.
+  if (new Set(secret).size < 8) {
+    throw new Error(
+      'JWT_SECRET has too little variation to be random. Generate a real random secret.',
+    );
+  }
+
+  return secret;
+}
+
+/**
+ * Token lifetime, as a duration string accepted by the JWT library
+ * (e.g. "15m", "1h", "7d"). Validated here so a typo fails at startup rather
+ * than at the first login attempt.
+ */
+function parseJwtExpiresIn(value, fallback) {
+  const expiresIn = value?.trim();
+  if (!expiresIn) return fallback;
+
+  if (!/^\d+[smhd]$/.test(expiresIn)) {
+    throw new Error(
+      `Invalid JWT_EXPIRES_IN value: "${expiresIn}". Expected a number followed by s, m, h or d — for example "1h".`,
+    );
+  }
+  return expiresIn;
+}
+
 assertRequiredVariables();
 
 export const env = {
@@ -38,6 +121,23 @@ export const env = {
   port: parsePort(process.env.PORT, 5000),
   clientUrl: process.env.CLIENT_URL ?? 'http://localhost:5173',
   mongodbUri: process.env.MONGODB_URI.trim(),
+
+  // Token lifetime is not sensitive and stays plainly visible.
+  jwtExpiresIn: parseJwtExpiresIn(process.env.JWT_EXPIRES_IN, '1h'),
 };
+
+/**
+ * The JWT signing secret. Read once here and never re-read from process.env,
+ * so there is a single place to audit.
+ *
+ * Defined as a non-enumerable property so `JSON.stringify(env)`, a debugger
+ * dump or an accidental `logger.info('config', env)` cannot print it. Reading
+ * `env.jwtSecret` directly still works.
+ */
+Object.defineProperty(env, 'jwtSecret', {
+  value: parseJwtSecret(process.env.JWT_SECRET),
+  enumerable: false,
+  writable: false,
+});
 
 export const isProduction = env.nodeEnv === 'production';

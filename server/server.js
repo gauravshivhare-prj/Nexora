@@ -1,6 +1,7 @@
 import { createApp } from './src/app.js';
 import { connectDatabase, disconnectDatabase } from './src/config/database.js';
 import { env } from './src/config/env.js';
+import { ensureModelIndexes } from './src/models/index.js';
 import { logger } from './src/utils/logger.js';
 
 /**
@@ -32,10 +33,13 @@ async function shutdown(reason, exitCode = 0) {
 async function start() {
   try {
     await connectDatabase();
+    // Indexes before traffic: the unique email index is what prevents
+    // duplicate accounts, so serving requests without it would be unsafe.
+    await ensureModelIndexes();
   } catch (error) {
     // A missing database is a startup failure, not something to hide behind a
     // server that appears healthy. Report the real cause and stop.
-    logger.error('Failed to connect to MongoDB — server not started', error.message);
+    logger.error('Failed to prepare MongoDB — server not started', error.message);
     process.exit(1);
   }
 

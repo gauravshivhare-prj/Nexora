@@ -25,6 +25,10 @@ export class ApiError extends Error {
     return new ApiError(404, message, errorCode);
   }
 
+  static conflict(message, errorCode = ERROR_CODES.CONFLICT) {
+    return new ApiError(409, message, errorCode);
+  }
+
   static serviceUnavailable(message, errorCode = ERROR_CODES.SERVICE_UNAVAILABLE) {
     return new ApiError(503, message, errorCode);
   }
