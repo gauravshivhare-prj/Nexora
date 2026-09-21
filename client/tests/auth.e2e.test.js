@@ -63,9 +63,12 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
     it('creates an account and starts an authenticated session', async () => {
       await registerFresh();
 
-      const text = await page.bodyText();
-      assert.match(text, /Welcome, Gaurav Shivhare/);
-      assert.match(text, /Authentication successful/);
+      // The dashboard greets by name from the session, so this is a check
+      // that the token was exchanged for a real user rather than that some
+      // page rendered. It loads asynchronously, hence the wait.
+      await page.waitFor('document.body.innerText.includes("Welcome, Gaurav Shivhare")', {
+        description: 'the dashboard greeting',
+      });
       assert.ok(await page.storedToken(), 'no token was stored');
     });
 
@@ -164,7 +167,11 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
       await loginAs(email);
       await page.waitFor('location.pathname === "/app"', { description: 'navigation to /app' });
 
-      assert.match(await page.bodyText(), /Welcome, Gaurav Shivhare/);
+      // The dashboard fetches before it greets, so the pathname changing is
+      // not yet the page being there.
+      await page.waitFor('document.body.innerText.includes("Welcome, Gaurav Shivhare")', {
+        description: 'the dashboard greeting',
+      });
       assert.ok(await page.storedToken(), 'no token was stored');
     });
 
@@ -262,14 +269,14 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
       await page.waitFor('location.pathname === "/login"', {
         description: 'redirect to /login',
       });
-      assert.ok(!(await page.bodyText()).includes('Authentication successful'));
+      assert.ok(!(await page.bodyText()).includes('Log out'));
     });
 
     it('lets an authenticated visitor reach /app directly', async () => {
       await registerFresh();
       await page.goto(`${stack.appUrl}/app`);
 
-      await page.waitFor('document.body.innerText.includes("Authentication successful")', {
+      await page.waitFor('document.body.innerText.includes("Log out")', {
         description: 'the protected page',
       });
       assert.equal(await page.path(), '/app');
@@ -305,7 +312,7 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
       await page.waitFor('location.pathname === "/login"', {
         description: 'redirect back to /login',
       });
-      assert.ok(!(await page.bodyText()).includes('Authentication successful'));
+      assert.ok(!(await page.bodyText()).includes('Log out'));
     });
 
     it('survives a reload after logout', async () => {

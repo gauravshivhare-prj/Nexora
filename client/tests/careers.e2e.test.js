@@ -165,9 +165,9 @@ describe('career matches and skill gap', { timeout: 180_000 }, () => {
     assert.match(await page.bodyText(), /Generate your CareerTwin first/);
   });
 
-  it('is reachable from the signed-in landing page', async () => {
+  it('is reachable from the main navigation', async () => {
     await signUp();
-    await page.clickText('Career matches');
+    await page.clickText('Careers');
 
     await page.waitFor('location.pathname === "/careers"', {
       description: 'navigation to /careers',

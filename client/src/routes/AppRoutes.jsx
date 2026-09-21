@@ -1,24 +1,30 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { ProtectedRoute } from '../components/ProtectedRoute.jsx';
-import { AuthenticatedPage } from '../pages/AuthenticatedPage.jsx';
+import { AppLayout } from '../layouts/AppLayout.jsx';
 import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
 import { CareersPage } from '../pages/CareersPage.jsx';
+import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
-import { RoadmapPage } from '../pages/RoadmapPage.jsx';
-import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
+import { RoadmapPage } from '../pages/RoadmapPage.jsx';
+import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 
 /**
  * Application routes.
  *
- * Current surface: the public foundation page, the two auth screens, and the
- * protected pages. No routes exist for future features — they will be added
- * by the phase that implements them.
+ * Public routes sit at the top level; everything a signed-in student uses
+ * sits inside AppLayout, which carries both the navigation and the auth
+ * guard. Nesting the guard means a route added below it is protected
+ * because of where it is, not because someone remembered to wrap it — the
+ * previous arrangement repeated ProtectedRoute per route, which is one
+ * omission away from a leak.
+ *
+ * No routes exist for features that do not: the UI spec names assessments,
+ * AI interviews and opportunities, and none of them have endpoints yet.
  *
  * The catch-all is routing infrastructure rather than a feature: without it
  * an unknown URL renders nothing, which would look like a broken build.
@@ -30,77 +36,19 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      <Route
-        path="/app"
-        element={
-          <ProtectedRoute>
-            <AuthenticatedPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route element={<AppLayout />}>
+        <Route path="/app" element={<DashboardPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
 
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        }
-      />
+        <Route path="/resume" element={<ResumePage />} />
+        <Route path="/resume/:resumeId" element={<ResumeDetailPage />} />
 
-      <Route
-        path="/resume"
-        element={
-          <ProtectedRoute>
-            <ResumePage />
-          </ProtectedRoute>
-        }
-      />
+        <Route path="/career-twin" element={<CareerTwinPage />} />
 
-      <Route
-        path="/resume/:resumeId"
-        element={
-          <ProtectedRoute>
-            <ResumeDetailPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/career-twin"
-        element={
-          <ProtectedRoute>
-            <CareerTwinPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/careers"
-        element={
-          <ProtectedRoute>
-            <CareersPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/careers/:roleId/skill-gap"
-        element={
-          <ProtectedRoute>
-            <SkillGapPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/careers/:roleId/roadmap"
-        element={
-          <ProtectedRoute>
-            <RoadmapPage />
-          </ProtectedRoute>
-        }
-      />
+        <Route path="/careers" element={<CareersPage />} />
+        <Route path="/careers/:roleId/skill-gap" element={<SkillGapPage />} />
+        <Route path="/careers/:roleId/roadmap" element={<RoadmapPage />} />
+      </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

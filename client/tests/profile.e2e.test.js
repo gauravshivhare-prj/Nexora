@@ -88,9 +88,9 @@ describe('student profile page', { timeout: 180_000 }, () => {
     assert.match(text, /No certifications added yet/);
   });
 
-  it('is reachable from the signed-in landing page', async () => {
+  it('is reachable from the main navigation', async () => {
     await signUp();
-    await page.clickText('Your profile');
+    await page.clickText('Profile');
 
     await page.waitFor('location.pathname === "/profile"', {
       description: 'navigation to /profile',

@@ -155,9 +155,9 @@ describe('career twin page', { timeout: 180_000 }, () => {
     assert.doesNotMatch(text, /At a glance/);
   });
 
-  it('is reachable from the signed-in landing page', async () => {
+  it('is reachable from the main navigation', async () => {
     await signUp();
-    await page.clickText('Your CareerTwin');
+    await page.clickText('CareerTwin');
 
     await page.waitFor('location.pathname === "/career-twin"', {
       description: 'navigation to /career-twin',
@@ -226,9 +226,12 @@ describe('career twin page', { timeout: 180_000 }, () => {
     // Evidence is collapsed by default, and the button says how much there is.
     assert.match(await page.bodyText(), /Show 1 source/);
 
+    // Scoped to a list item: the navigation's "Menu" disclosure is also an
+    // aria-expanded button and comes first in the document, so an unscoped
+    // query would open the menu and never touch the evidence.
     const opened = await page.evaluate(`(() => {
-      const button = [...document.querySelectorAll('button')]
-        .find((b) => b.getAttribute('aria-expanded') === 'false');
+      const button = [...document.querySelectorAll('li button[aria-expanded="false"]')]
+        .find((b) => /source/.test(b.textContent));
       if (!button) return false;
       button.click();
       return true;

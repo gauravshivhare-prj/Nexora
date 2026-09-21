@@ -127,9 +127,9 @@ describe('resume page', { timeout: 180_000 }, () => {
     assert.match(text, /Nothing saved yet/);
   });
 
-  it('is reachable from the signed-in landing page', async () => {
+  it('is reachable from the main navigation', async () => {
     await signUp();
-    await page.clickText('Your resume');
+    await page.clickText('Resume');
 
     await page.waitFor('location.pathname === "/resume"', {
       description: 'navigation to /resume',
