@@ -6,6 +6,8 @@ import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
+import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
+import { ResumePage } from '../pages/ResumePage.jsx';
 
 /**
  * Application routes.
@@ -38,6 +40,24 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/resume"
+        element={
+          <ProtectedRoute>
+            <ResumePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/resume/:resumeId"
+        element={
+          <ProtectedRoute>
+            <ResumeDetailPage />
           </ProtectedRoute>
         }
       />

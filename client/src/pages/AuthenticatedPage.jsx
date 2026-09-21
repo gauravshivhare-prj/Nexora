@@ -56,6 +56,13 @@ export function AuthenticatedPage() {
             Your profile
           </Link>
 
+          <Link
+            to="/resume"
+            className="rounded-xl border border-orange-200 bg-surface px-5 py-3 text-center text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Your resume
+          </Link>
+
           <button
             type="button"
             onClick={handleLogout}

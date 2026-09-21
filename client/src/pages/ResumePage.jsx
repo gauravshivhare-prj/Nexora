@@ -1,0 +1,314 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
+import { FormAlert } from '../components/FormAlert.jsx';
+import { FormField } from '../components/FormField.jsx';
+import { FormTextarea } from '../components/FormTextarea.jsx';
+import { ProcessingStatus } from '../components/resume/ProcessingStatus.jsx';
+import {
+  FILE_UPLOAD_AVAILABLE,
+  RESUMES_PER_USER,
+  RESUME_LABEL_MAX,
+  RESUME_TEXT_LIMITS,
+} from '../constants/resumeOptions.js';
+import { ApiRequestError } from '../services/apiClient.js';
+import { createResume, fetchResumes } from '../services/resume.service.js';
+
+/**
+ * /resume — the student's stored resumes, and the form that adds one.
+ *
+ * Storing a resume and analysing it are separate actions on the backend, and
+ * they stay separate here: this page only ever stores text. Analysis lives on
+ * the detail page, behind a deliberate press, because it costs money and a
+ * student who only wanted to keep a copy should not spend it by accident.
+ */
+
+const LOAD_STATUS = { LOADING: 'loading', READY: 'ready', FAILED: 'failed' };
+
+export function ResumePage() {
+  const [resumes, setResumes] = useState([]);
+  const [loadStatus, setLoadStatus] = useState(LOAD_STATUS.LOADING);
+  const [loadError, setLoadError] = useState(null);
+
+  const load = useCallback(async (signal) => {
+    setLoadStatus(LOAD_STATUS.LOADING);
+    setLoadError(null);
+
+    try {
+      const result = await fetchResumes({ signal });
+      if (signal?.aborted) return;
+
+      setResumes(result);
+      setLoadStatus(LOAD_STATUS.READY);
+    } catch (error) {
+      if (signal?.aborted) return;
+
+      setLoadError(toMessage(error, 'Your resumes could not be loaded.'));
+      setLoadStatus(LOAD_STATUS.FAILED);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  if (loadStatus === LOAD_STATUS.LOADING) {
+    return (
+      <PageShell>
+        <LoadingState label="Loading your resumes…" rows={2} />
+      </PageShell>
+    );
+  }
+
+  if (loadStatus === LOAD_STATUS.FAILED) {
+    return (
+      <PageShell>
+        <ErrorState
+          title="Your resumes could not be loaded"
+          message={loadError}
+          onRetry={() => load()}
+        />
+      </PageShell>
+    );
+  }
+
+  const isFull = resumes.length >= RESUMES_PER_USER;
+
+  return (
+    <PageShell>
+      <PageHeader title="Resume">
+        {resumes.length === 0
+          ? 'Nothing saved yet. Paste a resume below and Nexora can read it into structured skills, projects and experience.'
+          : `${resumes.length} of ${RESUMES_PER_USER} saved.`}
+      </PageHeader>
+
+      <div className="flex flex-col gap-5">
+        <Card title="Saved resumes" description="Newest first. Open one to analyse or delete it.">
+          {resumes.length === 0 ? (
+            <EmptyState>No resumes saved yet.</EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {resumes.map((resume) => (
+                <li key={resume.id}>
+                  <ResumeRow resume={resume} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <AddResumeCard
+          isFull={isFull}
+          onAdded={(resume) => setResumes((current) => [resume, ...current])}
+        />
+      </div>
+    </PageShell>
+  );
+}
+
+/** One row in the list — enough to tell resumes apart and see where each is. */
+function ResumeRow({ resume }) {
+  return (
+    <Link
+      to={`/resume/${resume.id}`}
+      className="animate-rise block rounded-xl border border-orange-100 bg-orange-50/30 p-4 transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-semibold text-ink">{resume.label ?? 'Untitled resume'}</p>
+        <p className="text-xs text-ink-muted">{formatDate(resume.createdAt)}</p>
+      </div>
+
+      <p className="mt-1 text-xs text-ink-muted">
+        {resume.textLength.toLocaleString('en')} characters
+        {resume.file.originalName ? ` · ${resume.file.originalName}` : ''}
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <ProcessingStatus step={resume.extraction} name="Text" />
+        <ProcessingStatus step={resume.analysis} name="Analysis" />
+      </div>
+    </Link>
+  );
+}
+
+/**
+ * The paste form.
+ *
+ * Length is checked here as well as on the server — not to replace the
+ * server's answer, but because "too short" is knowable without a round trip
+ * and a counter that cannot say how much is left is not much of a counter.
+ * The server's rejection still wins: it is what sets the field error.
+ */
+function AddResumeCard({ isFull, onAdded }) {
+  const [label, setLabel] = useState('');
+  const [text, setText] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [isRetryable, setIsRetryable] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [saved, setSaved] = useState(null);
+
+  const trimmed = text.trim();
+  const tooShort = trimmed.length > 0 && trimmed.length < RESUME_TEXT_LIMITS.min;
+
+  function clearResult() {
+    setError(null);
+    setIsRetryable(false);
+    setSaved(null);
+  }
+
+  async function submit() {
+    setIsSaving(true);
+    setError(null);
+    setFieldErrors({});
+    setSaved(null);
+
+    try {
+      const resume = await createResume({ label: label.trim(), text });
+
+      onAdded(resume);
+      setSaved(resume);
+      setLabel('');
+      setText('');
+    } catch (failure) {
+      if (failure instanceof ApiRequestError && failure.details) {
+        setFieldErrors(Object.fromEntries(failure.details.map((d) => [d.field, d.message])));
+        setError('Some fields need attention. They are marked below.');
+      } else {
+        setError(toMessage(failure, 'Your resume could not be saved.'));
+        // A conflict is a state to resolve, not a hiccup to retry through.
+        setIsRetryable(!(failure instanceof ApiRequestError) || failure.status !== 409);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (isSaving || isFull) return;
+    submit();
+  }
+
+  return (
+    <Card
+      title="Add a resume"
+      description="Paste the text of your resume. Nexora stores it as-is; analysing it is a separate step."
+    >
+      {isFull ? (
+        <EmptyState>
+          You have reached the limit of {RESUMES_PER_USER} saved resumes. Delete one before adding
+          another.
+        </EmptyState>
+      ) : (
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+          <FormAlert
+            message={error}
+            action={isRetryable && !isSaving ? { label: 'Try again', onClick: submit } : undefined}
+          />
+
+          {saved ? (
+            <FormAlert
+              tone="success"
+              message={`Saved “${saved.label ?? 'Untitled resume'}”. Open it to run the analysis.`}
+            />
+          ) : null}
+
+          <FormField
+            label="Label"
+            value={label}
+            onChange={(value) => {
+              setLabel(value);
+              clearResult();
+            }}
+            error={fieldErrors.label}
+            maxLength={RESUME_LABEL_MAX}
+            hint="Something you will recognise later, like “Backend — March 2026”."
+            placeholder="Backend internships"
+            required={false}
+            disabled={isSaving}
+          />
+
+          <FormTextarea
+            label="Resume text"
+            value={text}
+            onChange={(value) => {
+              setText(value);
+              clearResult();
+            }}
+            error={fieldErrors.text ?? (tooShort ? shortMessage(trimmed.length) : undefined)}
+            maxLength={RESUME_TEXT_LIMITS.max}
+            rows={12}
+            hint={`Between ${RESUME_TEXT_LIMITS.min} and ${RESUME_TEXT_LIMITS.max.toLocaleString('en')} characters. Layout is kept — paste it exactly as it is.`}
+            required={false}
+            disabled={isSaving}
+          />
+
+          {!FILE_UPLOAD_AVAILABLE ? (
+            // Stated rather than offered. The backend accepts only pasted
+            // text today, so a file picker here would be a control that
+            // cannot succeed.
+            <p className="rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3 text-xs text-ink-muted">
+              <span className="font-semibold text-ink">Uploading a PDF is not available yet.</span>{' '}
+              Nexora only accepts pasted text for now — copy the text out of your document and
+              paste it above.
+            </p>
+          ) : null}
+
+          <div>
+            <button
+              type="submit"
+              disabled={isSaving || trimmed.length < RESUME_TEXT_LIMITS.min}
+              aria-busy={isSaving}
+              className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
+            >
+              {isSaving ? 'Saving…' : 'Save resume'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+function shortMessage(length) {
+  const needed = RESUME_TEXT_LIMITS.min - length;
+  return `Too short to be a resume — ${needed} more character${needed === 1 ? '' : 's'} needed.`;
+}
+
+export function formatDate(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Turns a failure into something a student can act on.
+ *
+ * Same rule as the profile page: the backend writes its 4xx messages for
+ * display, so they are shown as-is; anything unexpected gets a generic line
+ * rather than risking internals on screen.
+ */
+export function toMessage(error, fallback) {
+  if (error instanceof ApiRequestError) {
+    if (error.status === null) return error.message; // network / timeout
+
+    // 502 and 503 are the AI pipeline's own answers — "the provider is not
+    // configured", "its output could not be trusted" — and the backend
+    // writes both for display. Replacing them with a generic line would
+    // hide the one thing that tells a student whether to wait or give up.
+    if (error.status >= 500 && error.status !== 502 && error.status !== 503) {
+      return 'Nexora is having trouble right now. Please try again in a moment.';
+    }
+    return error.message;
+  }
+
+  console.error(fallback, error);
+  return fallback;
+}
