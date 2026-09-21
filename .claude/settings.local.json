@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(git --version)",
+      "Bash(mongod --version)",
+      "Read(//c/Program Files/MongoDB/Server/**)",
+      "Bash(sc query *)",
+      "Bash(npm install *)"
+    ]
+  }
+}
