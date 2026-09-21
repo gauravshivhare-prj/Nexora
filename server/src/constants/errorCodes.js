@@ -10,6 +10,22 @@ export const ERROR_CODES = {
   CONFLICT: 'CONFLICT',
   /** Registration rejected because the email is already registered. */
   EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
+
+  // --- Authentication -----------------------------------------------------
+  /**
+   * Login failed. Deliberately one code for both "no such email" and "wrong
+   * password": a client that could tell them apart could enumerate accounts.
+   */
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  /** No Authorization header, or not in "Bearer <token>" form. */
+  AUTH_TOKEN_MISSING: 'AUTH_TOKEN_MISSING',
+  /** Token was unreadable, had a bad signature, or failed a claim check. */
+  AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
+  /** Token was well-formed and correctly signed, but has expired. */
+  AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
+  /** Authenticated successfully, but the account is deactivated. */
+  ACCOUNT_INACTIVE: 'ACCOUNT_INACTIVE',
+  FORBIDDEN: 'FORBIDDEN',
   DATABASE_ERROR: 'DATABASE_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',

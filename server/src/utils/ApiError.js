@@ -25,6 +25,14 @@ export class ApiError extends Error {
     return new ApiError(404, message, errorCode);
   }
 
+  static unauthorized(message, errorCode = ERROR_CODES.AUTH_TOKEN_INVALID) {
+    return new ApiError(401, message, errorCode);
+  }
+
+  static forbidden(message, errorCode = ERROR_CODES.FORBIDDEN) {
+    return new ApiError(403, message, errorCode);
+  }
+
   static conflict(message, errorCode = ERROR_CODES.CONFLICT) {
     return new ApiError(409, message, errorCode);
   }

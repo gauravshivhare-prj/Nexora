@@ -107,3 +107,30 @@ export async function postRaw(baseUrl, path, rawBody, headers = {}) {
 export function postJson(baseUrl, path, payload) {
   return postRaw(baseUrl, path, JSON.stringify(payload));
 }
+
+/**
+ * Sends a request with arbitrary headers, for exercising Authorization
+ * handling.
+ *
+ * @returns {Promise<{ status: number, body: unknown }>}
+ */
+export async function requestWithHeaders(baseUrl, path, { method = 'GET', headers = {} } = {}) {
+  const response = await fetch(`${baseUrl}${path}`, { method, headers });
+
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+
+  return { status: response.status, body };
+}
+
+/** GETs a path with a Bearer token attached. */
+export function getWithToken(baseUrl, path, token) {
+  return requestWithHeaders(baseUrl, path, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
