@@ -2,10 +2,13 @@
 
 AI-Powered Career Readiness & Employability Platform — *From Student Profile to Career-Ready Candidate*.
 
-> **Status: Phase 0 — Foundation.**
-> No product features are implemented yet. The application currently proves that the
-> frontend, the backend and the database connection all start and talk to each other.
-> See [docs/phases.md](docs/phases.md) for the development sequence.
+> **Status: Phase 2 — Student Profile complete.**
+> Implemented so far: the project foundation, authentication (register, login, logout,
+> JWT-protected routes, session restore, rate limiting) and the student profile.
+> Resume intelligence, CareerTwin, career matching, skill gap and the roadmap are not
+> built yet. See [docs/phases.md](docs/phases.md) for the sequence and
+> [docs/architecture.md](docs/architecture.md#7-implemented-surface) for the exact
+> data model and API surface that exist today.
 
 ## Repository layout
 
@@ -69,9 +72,21 @@ Open <http://localhost:5173> and press **Check API Connection** to call the real
 |---|---|---|
 | `server` | `npm run dev` | Start the API with file watching |
 | `server` | `npm start` | Start the API |
+| `server` | `npm test` | Integration tests against a real MongoDB |
 | `client` | `npm run dev` | Start the Vite dev server |
 | `client` | `npm run build` | Production build into `client/dist` |
 | `client` | `npm run preview` | Serve the production build locally |
+| `client` | `npm test` | End-to-end tests in a real headless browser |
+
+### Testing notes
+
+Neither suite mocks anything. The backend tests run the real Express app against a
+real MongoDB; the frontend tests boot the backend, the Vite dev server and headless
+Chrome, then drive the browser over the DevTools Protocol. Both refuse to run against
+a database whose name does not end in `_test`, and both drop their database afterwards.
+
+The frontend suite needs Chrome or Edge installed. Neither suite adds a test
+dependency — the harnesses are in `server/tests/helpers/` and `client/tests/helpers/`.
 
 ## Environment variables
 
@@ -81,7 +96,9 @@ Open <http://localhost:5173> and press **Check API Connection** to call the real
 | `server/.env` | `PORT` | Defaults to `5000` |
 | `server/.env` | `CLIENT_URL` | Allowed CORS origin; defaults to `http://localhost:5173` |
 | `server/.env` | `MONGODB_URI` | **Required.** Server refuses to start without it |
-| `server/.env` | `JWT_SECRET` | Reserved for Phase 1; unused today |
+| `server/.env` | `MONGODB_URI_TEST` | Optional. Overrides the derived `_test` database |
+| `server/.env` | `JWT_SECRET` | **Required.** At least 32 random characters |
+| `server/.env` | `JWT_EXPIRES_IN` | Token lifetime, e.g. `1h`. Defaults to `1h` |
 | `client/.env` | `VITE_API_URL` | Backend base URL, no trailing slash |
 
 Only `VITE_`-prefixed variables are exposed to the browser. Never put a secret in

@@ -1,13 +1,14 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../hooks/useAuth.js';
 
 /**
  * Temporary landing page for a signed-in user.
  *
- * This is NOT the dashboard. It exists only to prove the session works end
- * to end, and will be replaced once the Student Profile and Dashboard phases
- * give it something real to show.
+ * This is NOT the dashboard. It exists to prove the session works end to end
+ * and to reach the pages that do exist, and will be replaced once the
+ * Dashboard phase has the full picture to show.
  */
 export function AuthenticatedPage() {
   const { user, logout } = useAuth();
@@ -47,19 +48,28 @@ export function AuthenticatedPage() {
           </div>
         </dl>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          aria-busy={isLoggingOut}
-          className="mt-6 w-full rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:text-ink-muted sm:w-auto"
-        >
-          {isLoggingOut ? 'Signing out…' : 'Log out'}
-        </button>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Link
+            to="/profile"
+            className="rounded-xl bg-brand px-5 py-3 text-center text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+          >
+            Your profile
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            aria-busy={isLoggingOut}
+            className="rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:text-ink-muted"
+          >
+            {isLoggingOut ? 'Signing out…' : 'Log out'}
+          </button>
+        </div>
       </section>
 
       <p className="mt-6 text-center text-xs text-ink-muted">
-        Your profile, CareerTwin and roadmap arrive in the next phases.
+        Your CareerTwin and roadmap arrive in the next phases.
       </p>
     </main>
   );

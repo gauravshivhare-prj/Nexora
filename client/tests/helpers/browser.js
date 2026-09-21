@@ -108,26 +108,69 @@ export async function connectBrowser(debugPort) {
     },
 
     /**
-     * Types into the input belonging to a label.
+     * Types into the input or textarea belonging to a label.
      *
      * Assigns through the native value setter and dispatches `input`, which
      * is what React's synthetic onChange actually listens for — setting
-     * `.value` alone would update the DOM but not the component state.
+     * `.value` alone would update the DOM but not the component state. The
+     * setter is taken from the element's own prototype because input and
+     * textarea each define their own, and the wrong one is a silent no-op.
+     *
+     * `nth` selects among repeated labels, which the profile form's skill and
+     * project rows produce.
      */
-    async fill(labelText, value) {
+    async fill(labelText, value, { nth = 0 } = {}) {
       const ok = await evaluate(`(() => {
-        const label = [...document.querySelectorAll('label')]
-          .find((l) => l.textContent.trim().startsWith(${JSON.stringify(labelText)}));
+        const labels = [...document.querySelectorAll('label')]
+          .filter((l) => l.textContent.trim().startsWith(${JSON.stringify(labelText)}));
+        const label = labels[${nth}];
         if (!label) return false;
-        const input = document.getElementById(label.htmlFor);
-        if (!input) return false;
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, ${JSON.stringify(value)});
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const field = document.getElementById(label.htmlFor);
+        if (!field) return false;
+        const prototype = field.tagName === 'TEXTAREA'
+          ? window.HTMLTextAreaElement.prototype
+          : window.HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, 'value').set
+          .call(field, ${JSON.stringify(value)});
+        field.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       })()`);
 
-      if (!ok) throw new Error(`No input found for label "${labelText}".`);
+      if (!ok) throw new Error(`No field found for label "${labelText}" (nth=${nth}).`);
+    },
+
+    /**
+     * Chooses an option in the <select> belonging to a label.
+     *
+     * A select needs its own helper: it has a distinct native value setter,
+     * and React listens for `change` rather than `input` on it.
+     */
+    async selectOption(labelText, value, { nth = 0 } = {}) {
+      const ok = await evaluate(`(() => {
+        const labels = [...document.querySelectorAll('label')]
+          .filter((l) => l.textContent.trim().startsWith(${JSON.stringify(labelText)}));
+        const label = labels[${nth}];
+        if (!label) return false;
+        const select = document.getElementById(label.htmlFor);
+        if (!select || select.tagName !== 'SELECT') return false;
+        Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set
+          .call(select, ${JSON.stringify(value)});
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`);
+
+      if (!ok) throw new Error(`No select found for label "${labelText}" (nth=${nth}).`);
+    },
+
+    /** Reads back the current value of a labelled field, to assert persistence. */
+    async valueOf(labelText, { nth = 0 } = {}) {
+      return evaluate(`(() => {
+        const labels = [...document.querySelectorAll('label')]
+          .filter((l) => l.textContent.trim().startsWith(${JSON.stringify(labelText)}));
+        const label = labels[${nth}];
+        if (!label) return null;
+        return document.getElementById(label.htmlFor)?.value ?? null;
+      })()`);
     },
 
     /** Clicks the first button or link whose trimmed text matches. */

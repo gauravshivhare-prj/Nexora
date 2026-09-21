@@ -153,7 +153,17 @@ export async function request(path, options = {}) {
   return responseBody;
 }
 
-/** POSTs a JSON body. The client's only mutation verb so far. */
+/** POSTs a JSON body — creating something, or performing an action. */
 export function post(path, body, options = {}) {
   return request(path, { method: 'POST', body, ...options });
+}
+
+/**
+ * PATCHes a JSON body — a partial update of something that already exists.
+ *
+ * Distinct from post() because the backend's merge semantics are: keys you
+ * send are changed, keys you omit are left alone.
+ */
+export function patch(path, body, options = {}) {
+  return request(path, { method: 'PATCH', body, ...options });
 }

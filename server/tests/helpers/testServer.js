@@ -94,6 +94,11 @@ export async function clearUsers() {
   await mongoose.connection.collection('users').deleteMany({});
 }
 
+/** Removes all student profiles. Separate collection, so separate reset. */
+export async function clearProfiles() {
+  await mongoose.connection.collection('studentprofiles').deleteMany({});
+}
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *
@@ -147,5 +152,32 @@ export function getWithToken(baseUrl, path, token) {
   return requestWithHeaders(baseUrl, path, {
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+/**
+ * Sends a JSON body with a Bearer token, for the authenticated write
+ * endpoints. `token` may be omitted to exercise the unauthenticated path.
+ *
+ * @returns {Promise<{ status: number, body: unknown }>}
+ */
+export async function sendJsonWithToken(baseUrl, path, { method, token, payload }) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+
+  return { status: response.status, body };
 }
 

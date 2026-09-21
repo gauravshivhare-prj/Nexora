@@ -5,6 +5,19 @@ This document defines the controlled development sequence for Nexora.
 
 **Rule:** Never jump ahead to multiple features at once. Each phase must be completed, tested, reviewed, and accepted before the next phase begins.
 
+## Status
+
+| Phase | State |
+|---|---|
+| 0 — Project Foundation | Complete |
+| 1 — Authentication | Complete |
+| 2 — Student Profile | Complete |
+| 3 onwards | Not started |
+
+A phase is marked complete only when its exit criteria are met and its tests
+pass. The implemented data model and API surface are recorded in
+[architecture.md](architecture.md#7-implemented-surface).
+
 ## Phase 0 — Project Foundation
 - Repository structure
 - Environment configuration
@@ -53,6 +66,16 @@ This document defines the controlled development sequence for Nexora.
 - Validation exists on every input.
 - Data persists correctly.
 - Empty/invalid states are handled.
+
+**Delivered**
+- `StudentProfile` model, separate from `User`, one per account.
+- `GET /api/profile` and `PATCH /api/profile`, both owner-scoped.
+- Merge-patch semantics, so editing one section cannot wipe another.
+- `/profile` page with loading, empty, error, validation and saved states.
+- 38 backend tests and 15 browser end-to-end tests.
+
+Skills carry a self-declared `level`. That is recorded as a **claim**; nothing
+treats it as evidence. The evidence model arrives with Phase 6.
 
 ## Phase 3 — Resume Intelligence
 - Resume upload

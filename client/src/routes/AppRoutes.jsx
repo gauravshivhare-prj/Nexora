@@ -4,14 +4,15 @@ import { ProtectedRoute } from '../components/ProtectedRoute.jsx';
 import { AuthenticatedPage } from '../pages/AuthenticatedPage.jsx';
 import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
+import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
 
 /**
  * Application routes.
  *
- * Phase 1 surface: the public foundation page, the two auth screens, and one
- * protected placeholder. No routes exist for future features — they will be
- * added by the phase that implements them.
+ * Current surface: the public foundation page, the two auth screens, and the
+ * protected pages. No routes exist for future features — they will be added
+ * by the phase that implements them.
  *
  * The catch-all is routing infrastructure rather than a feature: without it
  * an unknown URL renders nothing, which would look like a broken build.
@@ -28,6 +29,15 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <AuthenticatedPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

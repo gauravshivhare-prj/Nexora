@@ -128,6 +128,73 @@ Split AI/ML services only when:
 - independent scaling is needed,
 - or deployment complexity is justified.
 
+## 7. Implemented Surface
+
+This section records what exists in the codebase today. Everything above is
+design intent; everything here is built and tested. Anything not listed is not
+implemented yet.
+
+### Collections
+
+| Collection | Source of truth for | Owner field |
+|---|---|---|
+| `users` | Account identity — name, email, password hash, role, active flag | — |
+| `studentprofiles` | Student-entered profile data | `user` (unique) |
+
+`User` and `StudentProfile` are deliberately separate documents. An
+authentication change cannot put profile data at risk, a profile migration
+cannot lock anyone out, and the `User` load on every authenticated request
+stays small.
+
+### StudentProfile shape
+
+```text
+user            ObjectId → User, unique, immutable
+personal        phone, dateOfBirth, gender, city, state
+academic        collegeName, degree, branch, currentSemester,
+                graduationYear, cgpa
+career          targetRole, preferredLocation, careerInterests[], bio
+skills[]        { name, level }            level is a CLAIM, not evidence
+projects[]      { title, description, technologies[], projectUrl, githubUrl }
+certifications[]{ name, issuer, issueDate, credentialUrl }
+```
+
+Every field is optional. Limits live in `server/src/constants/profilePolicy.js`
+and are enforced by both the request validator and the Mongoose schema.
+
+### Endpoints
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| `GET` | `/api/health` | — | Liveness and database reachability |
+| `POST` | `/api/auth/register` | — | Rate limited per IP |
+| `POST` | `/api/auth/login` | — | Rate limited per IP; issues a JWT |
+| `POST` | `/api/auth/logout` | — | Stateless; no server-side write |
+| `GET` | `/api/auth/me` | Bearer | Re-reads the account behind the token |
+| `GET` | `/api/profile` | Bearer | 200 with an empty profile before first save |
+| `PATCH` | `/api/profile` | Bearer | Merge semantics; upserts on first save |
+
+### Ownership rule
+
+Every student-scoped resource derives its owner from `req.auth.userId`, which
+`requireAuth` sets from a verified token. No endpoint accepts an owner id from
+the request, and there is no `/api/profile/:id` route — a profile is only ever
+addressable as "mine". An unrecognised body key such as `user` is rejected as a
+validation error rather than ignored, so a client attempting to name a
+different owner is told plainly instead of receiving a misleading 200.
+
+### Profile merge semantics
+
+`PATCH /api/profile` follows RFC 7386: a key that is absent is left untouched,
+and an explicit `null` or empty string clears the stored value. Arrays
+(`skills`, `projects`, `certifications`, `careerInterests`) are replaced
+wholesale when present — their entries have no stable ids, so there is no
+well-defined merge, and inventing one would make removal impossible to express.
+
+Validation failures are reported together, each keyed by a dotted path
+(`skills[0].level`), so a client can mark every offending field in one pass.
+A rejected patch writes nothing.
+
 ## Nexora Design & Experience Standard
 
 ### Final Visual Theme — Sunset Warm

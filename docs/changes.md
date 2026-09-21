@@ -48,6 +48,42 @@ Tested:
 
 Major changes require review before coding.
 
+## Change Log
+
+### CHANGE-001
+Date: 2026-09-21
+Requested by: Project owner
+Feature: Student Profile (Phase 2)
+Reason: Phase 2 of the planned sequence. Every later phase — resume
+intelligence, CareerTwin, career matching, skill gap, roadmap — reads student
+data, and none of them can start without somewhere for it to live.
+Current behavior: No profile existed. `User` held account identity only.
+Requested behavior: A separate `StudentProfile` document holding personal,
+academic and career information, skills, projects and certifications, with a
+protected API and a `/profile` page.
+Impact: Additive. No change to authentication, the JWT design, password
+hashing or the `User` schema.
+Files/modules affected:
+- Backend: `constants/profilePolicy.js`, `utils/fieldTypes.js`,
+  `models/StudentProfile.model.js`, `services/profile.service.js`,
+  `controllers/profile.controller.js`, `routes/profile.routes.js`,
+  plus registration in `models/index.js` and `routes/index.js`.
+- Frontend: `pages/ProfilePage.jsx`, `services/profile.service.js`,
+  `constants/profileOptions.js`, `components/FieldShell.jsx`,
+  `components/FormSelect.jsx`, `components/FormTextarea.jsx`,
+  `components/TagListField.jsx`, `components/profile/*`, plus the `/profile`
+  route and a link from the signed-in landing page.
+- `FormField` was refactored onto the shared `FieldShell`; `FormAlert` gained a
+  `tone` prop. Both are behaviour-preserving and covered by the existing
+  authentication end-to-end tests.
+Risk: Low. Additive model and routes; the authentication surface is untouched.
+The one shared-component refactor is covered by existing tests.
+Decision: Approved
+Implemented: Yes
+Tested: 38 backend tests, 15 browser end-to-end tests. Full regression green —
+109 backend, 37 frontend. Production build passes. `npm audit` reports 0
+vulnerabilities in both packages; no dependency was added.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 
