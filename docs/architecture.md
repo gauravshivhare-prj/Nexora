@@ -190,6 +190,9 @@ and are enforced by both the request validator and the Mongoose schema.
 | `POST` | `/api/resumes/:id/analysis` | Bearer | Runs the AI pipeline. 503 when unconfigured |
 | `GET` | `/api/career-twin` | Bearer | Stored twin plus `isStale`. Never regenerates |
 | `POST` | `/api/career-twin` | Bearer | Rebuilds. `?narrative=true` adds an optional summary |
+| `GET` | `/api/careers/roles` | Bearer | The curated role catalogue, with its source |
+| `GET` | `/api/careers/recommendations` | Bearer | Ranked matches. `?limit=`, `?includeAll=` |
+| `GET` | `/api/careers/roles/:roleId/match` | Bearer | Score against one named role |
 
 ### Ownership rule
 
@@ -364,6 +367,62 @@ built from and `isCareerTwinStale()` compares that to the present.
 `GET /api/career-twin` reports staleness and deliberately does **not**
 regenerate: a read that rewrote stored data would make GET a mutation and
 would hide from the student that their twin was out of date.
+
+### Career recommendation
+
+Deterministic and explainable, with no AI anywhere. The same CareerTwin and
+the same catalogue always produce the same scores.
+
+Nothing is persisted. A recommendation is a pure function of a twin and a
+versioned catalogue, so a stored copy could only disagree with a recomputed
+one. Recomputing is cheap; a stale recommendation is not.
+
+**The catalogue** (`domain/careers/roleCatalogue.js`) is a hand-written
+internal reference list. It is **not** derived from a job board, a
+labour-market dataset or a survey. It contains no salary figures, no demand
+or growth numbers and no hiring rates, because Nexora has no verified source
+for any of them — and a student making a career decision on an invented
+number is the most damaging kind of fabrication. What it does hold is a
+checkable answer to one narrow question: which skills does this kind of role
+usually involve? `CATALOGUE_SOURCE` says exactly this in every response.
+
+**The weights** (`domain/careers/scoring.js`) are collected in one file,
+sum-checked at import time, versioned, and returned with every response — a
+weight nobody can find is a weight nobody can challenge.
+
+| Dimension | Weight | Question it answers |
+|---|---|---|
+| `requiredSkills` | 0.45 | Do you have what the role is defined by? |
+| `preferredSkills` | 0.20 | Do you have what strengthens it? |
+| `evidenceStrength` | 0.20 | How solid is what you have? |
+| `interestAlignment` | 0.10 | Have you said you want this? |
+| `backgroundAlignment` | 0.05 | Is your field one this role draws from? |
+
+They are a judgement, not a measurement, encoding three opinions: required
+beats preferred; evidence beats assertion; interest and background are weak
+signals that must never score a motivated career-changer out of a field.
+
+Safeguards that are tested rather than assumed:
+
+- An **unknown** academic background scores a neutral 0.5, not 0. Not filling
+  in a branch is not a statement about fitness, and scoring silence as a
+  negative would penalise an incomplete profile rather than describe a
+  person. A *different* background scores 0 on a 5%-weighted dimension and
+  nothing more. There is no exclusion rule anywhere in the matcher.
+- A role Nexora *suggested* (`origin: 'nexora'`) does not count as the
+  student's stated intent, or the system would agree with itself more each
+  time it ran.
+- Generic title words ("developer", "engineer") are ignored when matching
+  intent, or every engineering role would align with every engineering
+  interest.
+- `claimed` evidence scores above zero. Scoring assertion at nothing would
+  make the dimension a proxy for how long someone has used Nexora.
+
+Every match carries `matchedRequired`, `missingRequired`, the per-dimension
+breakdown, and the concrete `evidence` behind it — de-duplicated, so one
+project behind three skills is one piece of evidence rather than three.
+Matches below `MINIMUM_RECOMMENDABLE_SCORE` are filtered out as noise unless
+`?includeAll=true`.
 
 ### Not implemented
 

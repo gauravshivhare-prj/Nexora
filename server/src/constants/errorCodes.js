@@ -49,6 +49,10 @@ export const ERROR_CODES = {
   /** No CareerTwin has been generated yet. */
   CAREER_TWIN_NOT_FOUND: 'CAREER_TWIN_NOT_FOUND',
 
+  // --- Career roles -------------------------------------------------------
+  /** No role with that id exists in the curated catalogue. */
+  CAREER_ROLE_NOT_FOUND: 'CAREER_ROLE_NOT_FOUND',
+
   // --- AI -----------------------------------------------------------------
   /** No AI provider is configured, so nothing can be analysed. */
   AI_PROVIDER_NOT_CONFIGURED: 'AI_PROVIDER_NOT_CONFIGURED',

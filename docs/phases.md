@@ -14,7 +14,8 @@ This document defines the controlled development sequence for Nexora.
 | 2 — Student Profile | Complete |
 | 3 — Resume Intelligence | Backend foundation complete; no upload, no provider, no UI |
 | 4 — CareerTwin | Backend foundation complete; no UI |
-| 5 onwards | Not started |
+| 5 — Career Recommendation | Backend foundation complete; no UI |
+| 6 onwards | Not started |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -169,6 +170,30 @@ AI-written field is confined to prose and labelled as such.
 - Recommendations are deterministic/reproducible for identical inputs.
 - Match score has a documented formula.
 - User can see why a role matches.
+
+**Delivered — backend foundation only**
+- A curated catalogue of 10 entry-level technology roles with required
+  skills, preferred skills, related technologies and common backgrounds.
+  Versioned, and its nature stated in every response.
+- A deterministic five-dimension scoring engine with all weights in one
+  sum-checked, versioned file, returned with every result.
+- Explainable output: matched skills, missing skills, per-dimension
+  breakdown, and the concrete evidence behind the score.
+- `GET /api/careers/roles`, `/recommendations`, `/roles/:roleId/match`.
+- 47 tests: 28 pure-function over the matcher and catalogue, 19 API.
+
+All three exit criteria are met, and tested directly — determinism, the
+published formula, and named matched/missing skills each have a test.
+
+**Deliberately NOT delivered, and why**
+- **No job-market data.** No salary, demand, growth or hiring figures
+  anywhere, because there is no verified source for them. A test asserts
+  their absence from every recommendation.
+- **No AI in matching.** Scoring is arithmetic over a student's own data; a
+  model would add invention to the one place that must not have any.
+- **No persistence of recommendations.** They are a pure function of a twin
+  and a versioned catalogue, so a stored copy could only go stale.
+- **No career recommendation UI.** Phase 10 integrates the dashboard.
 
 ## Phase 6 — Skill Gap
 - Required vs current skill comparison

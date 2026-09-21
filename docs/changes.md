@@ -148,6 +148,34 @@ case, staleness, and a narrative that is invented, malformed or unavailable.
 Full regression green: 247 backend, 37 frontend. `npm audit` reports 0
 vulnerabilities; no dependency was added.
 
+### CHANGE-004
+Date: 2026-09-21
+Requested by: Project owner
+Feature: Career recommendation foundation (Phase 5)
+Reason: Phase 5 of the planned sequence. Skill gaps and the roadmap are both
+computed against a target role, so role requirements have to exist first.
+Current behavior: A CareerTwin existed but nothing to compare it against.
+Requested behavior: A versioned role catalogue and a deterministic,
+explainable matching engine with documented weights.
+Impact: Additive and read-only. No new collection, no writes, no change to
+any existing endpoint or to the frontend.
+Files/modules affected:
+- `domain/careers/roleCatalogue.js`, `domain/careers/scoring.js`,
+  `domain/careers/matchRole.js`, `services/recommendation.service.js`,
+  `controllers/recommendation.controller.js`, `routes/career.routes.js`.
+- Registration in `routes/index.js`; one new error code.
+Risk: Low. Nothing is persisted and nothing existing changed. The main risk
+is editorial rather than technical — the catalogue and the weights are
+judgements, which is why both are versioned and published in every response.
+Decision: Approved
+Implemented: Yes
+Tested: 47 new tests. Two real defects were found and fixed during the
+phase: `backgroundScore` compared word arrays instead of strings, so every
+known background scored zero; and a test helper built skill keys by hand
+rather than through `skillKey`, hiding a synonym-matching path. Full
+regression green: 294 backend, 37 frontend. `npm audit` reports 0
+vulnerabilities; no dependency was added.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

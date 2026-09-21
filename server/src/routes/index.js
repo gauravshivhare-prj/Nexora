@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import authRoutes from './auth.routes.js';
+import careerRoutes from './career.routes.js';
 import careerTwinRoutes from './careerTwin.routes.js';
 import healthRoutes from './health.routes.js';
 import profileRoutes from './profile.routes.js';
@@ -14,5 +15,6 @@ router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/resumes', resumeRoutes);
 router.use('/career-twin', careerTwinRoutes);
+router.use('/careers', careerRoutes);
 
 export default router;

@@ -2,17 +2,22 @@
 
 AI-Powered Career Readiness & Employability Platform — *From Student Profile to Career-Ready Candidate*.
 
-> **Status: Phase 4 — CareerTwin backend foundation.**
+> **Status: Phase 5 — Career Recommendation backend foundation.**
 > Implemented: the project foundation, authentication (register, login, logout,
 > JWT-protected routes, session restore, rate limiting), the student profile, resume
-> storage with an AI analysis pipeline, and the CareerTwin — a derived career
-> representation whose every skill carries traceable evidence.
+> storage with an AI analysis pipeline, the CareerTwin — a derived career
+> representation whose every skill carries traceable evidence — and deterministic,
+> explainable career matching against a curated role catalogue.
 >
 > **No AI provider ships with Nexora**, so resume analysis answers `503 — not
-> configured` rather than returning invented data. The CareerTwin is built without
-> any AI and works fully in that state. There is no resume file upload, and no UI
-> for resumes or the CareerTwin. Career matching, skill gap and the roadmap are not
-> built. See [docs/phases.md](docs/phases.md) for the sequence and
+> configured` rather than returning invented data. The CareerTwin and career
+> matching use no AI at all and work fully in that state. The role catalogue is a
+> hand-written reference list and carries **no salary, demand or hiring figures** —
+> there is no verified source for them.
+>
+> Not built: resume file upload, skill gap, the roadmap, and any UI beyond
+> authentication and the profile. See [docs/phases.md](docs/phases.md) for the
+> sequence and
 > [docs/architecture.md](docs/architecture.md#7-implemented-surface) for the exact
 > data model, API surface and AI boundary that exist today.
 

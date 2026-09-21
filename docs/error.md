@@ -70,6 +70,51 @@ Regression test: "omits the full text from the list" in
 the length is correct.
 Status: Verified
 
+### BUG-002
+Date: 2026-09-21
+Environment: Development, backend test suite
+Severity: P2 — Medium
+Feature: Career match scoring (Phase 5)
+Steps to reproduce: Score a student whose academic branch is "Computer
+Science and Engineering" against Backend Developer.
+Expected: `backgroundAlignment` scores 1 — that branch is listed among the
+role's common backgrounds.
+Actual: It scored 0, the same as an unrelated branch. Every student with a
+branch filled in was scored as though their background were irrelevant, and
+one who had left it blank scored *higher* than one who had filled it in
+correctly.
+Console/API error: None. Wrong scores, no failure.
+Root cause: `normalise()` returns an array of words, for word-level title
+comparison. `backgroundScore` used it for a substring test, so the code read
+`array.includes(array)`, which is always false.
+Fix: Split the helper in two — `normalise()` for word lists, `flatten()` for
+a single comparable string — and use `flatten()` in `backgroundScore`, testing
+containment in both directions so "Computer Science" and "Computer Science and
+Engineering" match each other.
+Regression test: "treats an unknown academic background as neutral, not
+negative" in `server/tests/careerMatch.test.js` asserts the full ordering
+related > unknown > unrelated, which the bug broke.
+Status: Verified
+
+### BUG-003
+Date: 2026-09-21
+Environment: Development, backend test suite
+Severity: P3 — Low (test-only)
+Feature: Career match tests (Phase 5)
+Steps to reproduce: Score a student whose skill is written "js" against a
+role requiring "JavaScript".
+Expected: They match — `skillKey` resolves the synonym.
+Actual: No match, in the test only.
+Root cause: The test helper built skill keys with an inline
+`toLowerCase().replace(...)` instead of calling `skillKey`. That reproduces
+normalisation but not the alias list, so the helper produced twins no real
+CareerTwin would ever contain, and the test was exercising the matcher
+against impossible data.
+Fix: The helper calls `skillKey`, as the CareerTwin builder does.
+Regression test: "matches a skill across a difference in spelling" in
+`server/tests/careerMatch.test.js`.
+Status: Verified
+
 ## Debugging Rules
 1. Reproduce first.
 2. Read the actual error.
