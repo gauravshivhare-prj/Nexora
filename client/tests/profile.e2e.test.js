@@ -246,6 +246,75 @@ describe('student profile page', { timeout: 180_000 }, () => {
     assert.ok(invalid >= 1, 'no field was marked aria-invalid');
   });
 
+  it('moves focus to the field the server rejected', async () => {
+    await signUp();
+    await openProfile();
+
+    // Phone sits in the first section; scroll to the bottom so the rejected
+    // field is genuinely off-screen when the answer comes back.
+    await page.fill('Phone', 'call me maybe');
+    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+    await save();
+
+    await page.waitFor(
+      'document.activeElement?.getAttribute("aria-invalid") === "true"',
+      { description: 'focus to move to the rejected field' },
+    );
+
+    // Focus landed on Phone specifically, not just on some invalid control.
+    const label = await page.evaluate(
+      'document.querySelector(\'label[for="\' + CSS.escape(document.activeElement.id) + \'"]\').innerText',
+    );
+    assert.match(label, /Phone/);
+  });
+
+  it('offers a retry on the save alert when the backend is unreachable', async () => {
+    await signUp();
+    await openProfile();
+
+    // Break fetch, fail a save, then restore it and use the alert's retry —
+    // so the retry is what completes the save, not a second Save press.
+    await page.evaluate(`(() => {
+      window.__realFetch = window.fetch;
+      window.fetch = (input, init) =>
+        window.__realFetch(String(input).replace(/:\\d+\\//, ':1/'), init);
+    })()`);
+
+    await page.fill('City', 'Bhopal');
+    await save();
+    await page.waitFor('document.body.innerText.includes("Try again")', {
+      description: 'the retry action on the save alert',
+    });
+
+    await page.evaluate('window.fetch = window.__realFetch');
+    await page.clickText('Try again');
+    await waitForSaved();
+
+    assert.equal(await page.valueOf('City'), 'Bhopal');
+  });
+
+  it('says so instead of silently dropping a duplicate interest', async () => {
+    await signUp();
+    await openProfile();
+
+    await page.fill('Career interests', 'Distributed systems');
+    await page.clickText('Add');
+    await page.fill('Career interests', 'distributed systems');
+    await page.clickText('Add');
+
+    await page.waitFor(
+      'document.body.innerText.includes("is already in the list")',
+      { description: 'the duplicate notice' },
+    );
+
+    // Typing again retracts the notice: it is about the attempt, not a state.
+    await page.fill('Career interests', 'Compilers');
+    await page.waitFor(
+      '!document.body.innerText.includes("is already in the list")',
+      { description: 'the duplicate notice to clear' },
+    );
+  });
+
   it('clears an error once the field is corrected and saved', async () => {
     await signUp();
     await openProfile();

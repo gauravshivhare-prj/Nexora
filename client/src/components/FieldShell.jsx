@@ -34,7 +34,7 @@ export function FieldShell({ label, error, hint, required = true, children }) {
       {error ? (
         // The leading glyph means the failure is not signalled by colour
         // alone, which matters for colour-blind and monochrome displays.
-        <p id={errorId} className="flex items-start gap-1.5 text-sm font-medium text-danger">
+        <p id={errorId} className="flex items-start gap-1.5 text-sm font-medium text-danger-text">
           <span aria-hidden="true">✕</span>
           <span>{error}</span>
         </p>
@@ -52,7 +52,9 @@ export function FieldShell({ label, error, hint, required = true, children }) {
  * the text input above it.
  */
 export function controlClassName(invalid) {
-  return `w-full rounded-xl border bg-surface px-4 py-2.5 text-ink transition-colors duration-200 placeholder:text-ink-muted/70 disabled:cursor-not-allowed disabled:bg-orange-50/60 ${
+  // Placeholders are at full ink-muted rather than a fade of it: a hint the
+  // student cannot read is not a hint.
+  return `w-full rounded-xl border bg-surface px-4 py-2.5 text-ink transition-colors duration-200 placeholder:text-ink-muted disabled:cursor-not-allowed disabled:bg-orange-50/60 ${
     invalid
       ? 'border-danger focus-visible:outline-danger'
       : 'border-orange-200 hover:border-orange-300'

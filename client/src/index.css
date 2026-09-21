@@ -20,6 +20,20 @@
   --color-ink: #1f2937;
   --color-ink-muted: #6b7280;
 
+  /*
+   * Text-weight variants of the accent colours.
+   *
+   * The palette above is specified for fills — a solid brand button, a danger
+   * border, a warning dot — where the colour carries no text. Used as small
+   * text on a light background the same values fall short of WCAG AA 4.5:1
+   * (#EA580C on white is 3.6:1, #EF4444 is 3.8:1, #F59E0B is 2.2:1). These are
+   * the darkened equivalents, each ≥4.5:1 on both surface and canvas, for
+   * anything the student has to read rather than just notice.
+   */
+  --color-brand-text: #c2410c;
+  --color-danger-text: #b91c1c;
+  --color-warning-text: #b45309;
+
   --animate-rise: rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
 
   @keyframes rise {

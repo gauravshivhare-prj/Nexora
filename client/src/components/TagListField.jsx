@@ -24,7 +24,10 @@ export function TagListField({
 }) {
   const id = useId();
   const hintId = `${id}-hint`;
+  const noticeId = `${id}-notice`;
   const [draft, setDraft] = useState('');
+  /** Why the last attempt did not add anything, if it did not. */
+  const [notice, setNotice] = useState(null);
 
   const isFull = values.length >= maxItems;
 
@@ -36,12 +39,21 @@ export function TagListField({
     // backend applies the same rule; doing it here too means the student sees
     // the result immediately rather than after a save.
     const isDuplicate = values.some((value) => value.toLowerCase() === entry.toLowerCase());
-    if (!isDuplicate) onChange([...values, entry]);
+
+    // Dropping the duplicate without saying so reads as the control being
+    // broken — the student pressed Add and nothing appeared. Say which entry
+    // was already there instead.
+    if (isDuplicate) setNotice(`“${entry}” is already in the list.`);
+    else {
+      setNotice(null);
+      onChange([...values, entry]);
+    }
 
     setDraft('');
   }
 
   function remove(index) {
+    setNotice(null);
     onChange(values.filter((_, position) => position !== index));
   }
 
@@ -57,7 +69,10 @@ export function TagListField({
           id={id}
           type="text"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            if (notice) setNotice(null);
+          }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return;
             event.preventDefault();
@@ -66,7 +81,7 @@ export function TagListField({
           maxLength={maxLength}
           disabled={disabled || isFull}
           placeholder={isFull ? `Limit of ${maxItems} reached` : placeholder}
-          aria-describedby={hintId}
+          aria-describedby={notice ? `${noticeId} ${hintId}` : hintId}
           className={controlClassName(false)}
         />
 
@@ -74,11 +89,26 @@ export function TagListField({
           type="button"
           onClick={add}
           disabled={disabled || isFull || draft.trim() === ''}
-          className="shrink-0 rounded-xl border border-orange-200 px-4 text-sm font-semibold text-brand transition-colors duration-200 hover:border-brand hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:text-ink-muted"
+          className="shrink-0 rounded-xl border border-orange-200 px-4 text-sm font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:text-ink-muted"
         >
           Add
         </button>
       </div>
+
+      {/*
+        Polite, not an alert: nothing is broken and nothing was lost, the
+        entry simply already exists.
+      */}
+      {notice ? (
+        <p
+          id={noticeId}
+          role="status"
+          className="flex items-start gap-1.5 text-xs font-medium text-warning-text"
+        >
+          <span aria-hidden="true">!</span>
+          <span>{notice}</span>
+        </p>
+      ) : null}
 
       <p id={hintId} className="text-xs text-ink-muted">
         {hint ?? `Press Enter or choose Add. Up to ${maxItems}.`}

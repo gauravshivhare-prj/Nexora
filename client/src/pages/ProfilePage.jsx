@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { FormAlert } from '../components/FormAlert.jsx';
@@ -48,8 +48,17 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [savedMessage, setSavedMessage] = useState(null);
+  /** Whether the last failure was one that simply trying again could clear. */
+  const [isRetryable, setIsRetryable] = useState(false);
   /** Server field failures, keyed by dotted path. */
   const [fieldErrors, setFieldErrors] = useState({});
+
+  const formRef = useRef(null);
+  /**
+   * Bumped on every rejected save, so the focus effect below re-runs even
+   * when the server returns the same errors twice in a row.
+   */
+  const [rejectionCount, setRejectionCount] = useState(0);
 
   const load = useCallback(async (signal) => {
     setLoadStatus(LOAD_STATUS.LOADING);
@@ -76,6 +85,27 @@ export function ProfilePage() {
     return () => controller.abort();
   }, [load]);
 
+  /**
+   * Sends focus to the first rejected field after a failed save.
+   *
+   * The form is six sections tall, so the field the server objected to is
+   * very often off-screen — and a keyboard or screen-reader user is left at
+   * the Save button with an announcement and no way to reach what it refers
+   * to. Nothing is scrolled when there are no field errors, so a network
+   * failure leaves the caret where the student had it.
+   */
+  useEffect(() => {
+    if (rejectionCount === 0) return;
+
+    const firstInvalid = formRef.current?.querySelector('[aria-invalid="true"]');
+    if (!firstInvalid) return;
+
+    firstInvalid.focus({ preventScroll: true });
+    // The CSS reduced-motion override cannot reach a scroll started from JS,
+    // so the preference is read here instead.
+    firstInvalid.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
+  }, [rejectionCount]);
+
   /** Reads a server error for one dotted path, for passing to a field. */
   const errorFor = useCallback((path) => fieldErrors[path], [fieldErrors]);
 
@@ -88,6 +118,7 @@ export function ProfilePage() {
   const clearResult = useCallback(() => {
     setSavedMessage(null);
     setSaveError(null);
+    setIsRetryable(false);
   }, []);
 
   const setSectionField = useCallback(
@@ -110,10 +141,13 @@ export function ProfilePage() {
     [clearResult],
   );
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (isSaving) return;
-
+  /**
+   * Sends the form.
+   *
+   * Separate from the submit handler so the alert's "Try again" can re-run
+   * exactly the same save without synthesising a submit event.
+   */
+  async function save() {
     setIsSaving(true);
     setSaveError(null);
     setSavedMessage(null);
@@ -130,12 +164,23 @@ export function ProfilePage() {
       if (error instanceof ApiRequestError && error.details) {
         setFieldErrors(byField(error.details));
         setSaveError('Some fields need attention. They are marked below.');
+        // A rejected field is something to go and fix, so no retry is
+        // offered here — pressing it again would fail identically.
+        setRejectionCount((count) => count + 1);
       } else {
         setSaveError(toMessage(error, 'save'));
+        setIsRetryable(true);
       }
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (isSaving) return;
+    setIsRetryable(false);
+    save();
   }
 
   const summary = useMemo(() => describeCompleteness(values), [values]);
@@ -169,12 +214,19 @@ export function ProfilePage() {
       <header className="animate-rise mb-6">
         <Link
           to="/app"
-          className="text-sm font-medium text-ink-muted transition-colors duration-200 hover:text-brand"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:text-brand-text"
         >
-          ← Back
+          <span aria-hidden="true">←</span>
+          Back
         </Link>
 
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-balance text-ink">
+        {/* The same brand eyebrow the signed-in landing page carries, so the
+            profile reads as part of Nexora rather than a standalone form. */}
+        <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-brand-text uppercase">
+          Nexora
+        </p>
+
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-balance text-ink sm:text-3xl">
           Your profile
         </h1>
 
@@ -185,10 +237,13 @@ export function ProfilePage() {
         </p>
       </header>
 
-      <FormAlert message={saveError} />
+      <FormAlert
+        message={saveError}
+        action={isRetryable && !isSaving ? { label: 'Try again', onClick: save } : undefined}
+      />
       <FormAlert message={savedMessage} tone="success" />
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+      <form ref={formRef} onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <ProfileCard title="Personal" description="How Nexora can reach you, and where you are.">
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
@@ -419,9 +474,10 @@ export function ProfilePage() {
         </ProfileCard>
 
         {/*
-          Sticky on larger screens so Save is reachable without scrolling back
-          up through six sections. Static on small screens, where a sticky bar
-          costs too much of the viewport.
+          Sticky on small screens, where six sections are a long scroll and
+          Save would otherwise be a destination. From `sm` up the form is
+          short enough relative to the viewport that a pinned bar would only
+          be spending space the content wants.
         */}
         <div className="sticky bottom-0 -mx-1 rounded-t-2xl border-t border-orange-100 bg-canvas/95 px-1 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
           <button
@@ -505,6 +561,11 @@ function describeCompleteness({ skills, projects, certifications }) {
   if (parts.length === 0) return 'Saved. Add skills and projects to give Nexora something to work with.';
 
   return `Saved — ${new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(parts)}.`;
+}
+
+/** `smooth`, unless the visitor has asked for less motion. */
+function scrollBehavior() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 }
 
 function countOf(count, noun) {

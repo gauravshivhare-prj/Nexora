@@ -59,7 +59,7 @@ export function RepeatableList({
               type="button"
               onClick={() => removeAt(index)}
               disabled={disabled}
-              className="rounded-lg px-2 py-1 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-red-50 hover:text-danger"
+              className="rounded-lg px-2 py-1 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-red-50 hover:text-danger-text"
             >
               Remove
             </button>
@@ -76,7 +76,7 @@ export function RepeatableList({
           type="button"
           onClick={() => onChange([...entries, makeEntry()])}
           disabled={disabled || isFull}
-          className="rounded-xl border border-orange-200 px-4 py-2.5 text-sm font-semibold text-brand transition-colors duration-200 hover:border-brand hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:text-ink-muted"
+          className="rounded-xl border border-orange-200 px-4 py-2.5 text-sm font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:text-ink-muted"
         >
           {isFull ? `Limit of ${maxItems} reached` : addLabel}
         </button>

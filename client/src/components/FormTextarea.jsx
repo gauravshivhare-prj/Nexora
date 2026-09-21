@@ -43,7 +43,7 @@ export function FormTextarea({
           {maxLength ? (
             <p
               aria-live={isNearLimit ? 'polite' : 'off'}
-              className={`text-right text-xs ${isNearLimit ? 'font-medium text-warning' : 'text-ink-muted'}`}
+              className={`text-right text-xs ${isNearLimit ? 'font-medium text-warning-text' : 'text-ink-muted'}`}
             >
               {remaining} characters left
             </p>
