@@ -141,6 +141,7 @@ implemented yet.
 | `users` | Account identity — name, email, password hash, role, active flag | — |
 | `studentprofiles` | Student-entered profile data | `user` (unique) |
 | `resumes` | Resume text and AI-derived structured data | `user` (non-unique) |
+| `careertwins` | Derived career representation. Entirely computed | `user` (unique) |
 
 `User` and `StudentProfile` are deliberately separate documents. An
 authentication change cannot put profile data at risk, a profile migration
@@ -187,6 +188,8 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/resumes/:id` | Bearer | Owner-scoped; 404 if not the caller's |
 | `DELETE` | `/api/resumes/:id` | Bearer | Owner-scoped |
 | `POST` | `/api/resumes/:id/analysis` | Bearer | Runs the AI pipeline. 503 when unconfigured |
+| `GET` | `/api/career-twin` | Bearer | Stored twin plus `isStale`. Never regenerates |
+| `POST` | `/api/career-twin` | Bearer | Rebuilds. `?narrative=true` adds an optional summary |
 
 ### Ownership rule
 
@@ -289,6 +292,79 @@ That reading was valid when it was made and `analysedBy` records what produced
 it; deleting good data because a later attempt failed would be strictly worse
 than keeping it beside a visible failure.
 
+### Skill identity
+
+Nothing anywhere compares skill *names*. Everything compares canonical keys
+from `server/src/domain/skills/skillKey.js`.
+
+A student types "Node.js", their resume says "NodeJS", a role definition says
+"Node". As strings those are three skills, and a student would be told to
+learn something they had already listed twice. Two mechanisms resolve it:
+
+1. **Normalisation** — case, punctuation and spacing are stripped, so
+   "Node.js", "NODE JS" and "node-js" all key to `nodejs`. Mechanical, no
+   maintenance. `+` and `#` survive, or "C", "C++" and "C#" would merge.
+2. **Aliases** — a short curated list for words that normalise differently
+   but mean the same thing ("js" → JavaScript, "k8s" → Kubernetes).
+
+Every alias is a name-for-the-same-thing, never a related or broader skill.
+React and React Native are not aliases; nor are SQL and PostgreSQL. Merging
+those would erase a gap a student really has. When in doubt the pair is left
+unmerged: two keys for one skill shows up as a visible duplicate, while one
+key for two skills hides a gap.
+
+### Evidence model
+
+Defined in `server/src/domain/evidence/evidence.js`, aggregated by CareerTwin
+and consumed by skill gaps. No skill is ever recorded bare — each arrives
+attached to evidence saying where it came from.
+
+| Strength | Meaning | Produced by |
+|---|---|---|
+| `claimed` | The student said so | Profile skill entry, resume mention |
+| `supported` | They pointed at something concrete | Project technology, certification |
+| `verified` | An independent check passed | **Nothing yet** — Phase 8 |
+
+A resume is `claimed`, not `supported`: it is a document its subject wrote
+about themselves, and grounding proves the resume says it, not that it is
+true. A certification is `supported`, not `verified`: Nexora has not fetched
+the credential, and an unchecked link is not proof.
+
+A skill's strength is the **strongest** evidence behind it, never an average —
+passing an assessment is not diluted by also having typed the skill into a
+form. Every evidence item carries a required `detail` string, so a student
+reads "used in your project Nexora" rather than "supported".
+
+### CareerTwin
+
+Entirely derived from StudentProfile and analysed Resumes. Nothing is entered
+into it directly, which makes it the one collection that can safely be
+deleted and rebuilt.
+
+**Built with no AI involvement.** Aggregating a student's own data is
+arithmetic, not generation — `buildCareerTwin` is a pure function with no
+database, clock or network, so the same inputs always give the same twin. A
+student is entitled to ask why it says what it says, which is only answerable
+if the answer does not depend on what a model returned that day.
+
+The optional narrative is the only AI-touched part. It is prose, labelled
+`isModelWritten: true` in the payload, and nothing computes from it. It is
+grounded against the twin and **rejected whole** if it credits a skill the
+student does not have — not edited, because a summary is an argument and
+deleting the untrue clause leaves a sentence whose point rested on it. Every
+narrative failure is non-fatal: the twin is already complete.
+
+**No readiness score.** `indicators` holds counts of things that exist —
+skills by strength, projects, certifications, analysed resumes. Readiness is
+readiness *for* a role, and a single figure produced before career matching
+exists would be a number about nothing.
+
+Storing derived data risks staleness, so `sources` records what the twin was
+built from and `isCareerTwinStale()` compares that to the present.
+`GET /api/career-twin` reports staleness and deliberately does **not**
+regenerate: a read that rewrote stored data would make GET a mutation and
+would hide from the student that their twin was out of date.
+
 ### Not implemented
 
 - File upload. Resume text is submitted as text (`source: "pasted_text"`).
@@ -296,7 +372,10 @@ than keeping it beside a visible failure.
   schema so adding upload is a new value rather than a migration; the API
   rejects that source today rather than silently ignoring it.
 - Any AI provider adapter, per the boundary section above.
-- Any resume UI. Phase 3 is the backend domain and service contract only.
+- Any resume or CareerTwin UI. Phases 3 and 4 are backend only.
+- `verified` evidence. Assessments and AI interviews are Phase 8, and nothing
+  else may be promoted to fill the gap.
+- Any readiness score, pending a target role to measure against.
 
 ## Nexora Design & Experience Standard
 

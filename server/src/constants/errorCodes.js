@@ -39,6 +39,16 @@ export const ERROR_CODES = {
   /** Analysis was requested for a resume that is already being analysed. */
   RESUME_ANALYSIS_IN_PROGRESS: 'RESUME_ANALYSIS_IN_PROGRESS',
 
+  // --- CareerTwin ---------------------------------------------------------
+  /**
+   * Generation was requested for a student with nothing to build from. An
+   * empty twin would report zero skills as a finding about the student, when
+   * it is only a finding about how much they have entered.
+   */
+  CAREER_TWIN_NO_INPUT: 'CAREER_TWIN_NO_INPUT',
+  /** No CareerTwin has been generated yet. */
+  CAREER_TWIN_NOT_FOUND: 'CAREER_TWIN_NOT_FOUND',
+
   // --- AI -----------------------------------------------------------------
   /** No AI provider is configured, so nothing can be analysed. */
   AI_PROVIDER_NOT_CONFIGURED: 'AI_PROVIDER_NOT_CONFIGURED',

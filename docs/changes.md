@@ -117,6 +117,37 @@ failure, malformed JSON, wrong-shape output and invented content. Full
 regression green: 184 backend, 37 frontend. `npm audit` reports 0
 vulnerabilities; no dependency was added.
 
+### CHANGE-003
+Date: 2026-09-21
+Requested by: Project owner
+Feature: CareerTwin foundation (Phase 4)
+Reason: Phase 4 of the planned sequence, and the layer every later phase
+computes from. Career matching, skill gaps and the roadmap all read a
+CareerTwin rather than reaching into profiles and resumes themselves.
+Current behavior: Profile and resume data existed but nothing reconciled them.
+Requested behavior: A persistent, derived career representation with skills
+attached to traceable evidence, plus canonical skill identity so the two
+sources can be compared at all.
+Impact: Additive. No change to authentication, profiles, resumes or the
+frontend. Two new shared domain modules (skill identity, evidence) that later
+phases depend on.
+Files/modules affected:
+- `domain/skills/skillKey.js`, `domain/evidence/evidence.js`,
+  `domain/careerTwin/buildCareerTwin.js`,
+  `domain/careerTwin/careerTwinNarrative.js`, `models/CareerTwin.model.js`,
+  `services/careerTwin.service.js`, `controllers/careerTwin.controller.js`,
+  `routes/careerTwin.routes.js`.
+- Registration in `models/index.js` and `routes/index.js`; two new error codes.
+Risk: Low. Purely derived data — the collection can be deleted and rebuilt.
+The builder is a pure function, and the AI path is optional and non-fatal.
+Decision: Approved
+Implemented: Yes
+Tested: 63 new tests — 13 on skill identity, 29 pure-function tests on the
+builder and evidence model, 21 API tests covering ownership, the no-input
+case, staleness, and a narrative that is invented, malformed or unavailable.
+Full regression green: 247 backend, 37 frontend. `npm audit` reports 0
+vulnerabilities; no dependency was added.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

@@ -13,7 +13,8 @@ This document defines the controlled development sequence for Nexora.
 | 1 — Authentication | Complete |
 | 2 — Student Profile | Complete |
 | 3 — Resume Intelligence | Backend foundation complete; no upload, no provider, no UI |
-| 4 onwards | Not started |
+| 4 — CareerTwin | Backend foundation complete; no UI |
+| 5 onwards | Not started |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -128,6 +129,35 @@ rejected" and "user can correct extracted data" all depend on upload and a UI.
 - CareerTwin is generated from actual user data.
 - No fabricated student data is displayed.
 - Skill evidence is traceable to available inputs.
+
+**Delivered — backend foundation only**
+- Canonical skill identity (`domain/skills/skillKey.js`), so a profile's
+  "Node.js" and a resume's "NodeJS" are one skill everywhere downstream.
+- The evidence model (`domain/evidence/evidence.js`): `claimed` → `supported`
+  → `verified`, with a declared strength per source and a required
+  human-readable reason on every item.
+- `CareerTwin` model and a pure, deterministic builder that aggregates
+  profile and analysed resumes into skills-with-evidence, interests, target
+  roles, academic context and countable indicators.
+- Staleness detection against the inputs the twin was built from.
+- An optional AI narrative, grounded against the twin and rejected whole if
+  it overstates. Every narrative failure is non-fatal.
+- `GET` and `POST /api/career-twin`.
+- 63 tests: 13 on skill identity, 29 on the builder and evidence model as
+  pure functions, 21 through the API.
+
+All three exit criteria are met. The twin is built entirely from stored
+student data, no value is produced without a traceable source, and the one
+AI-written field is confined to prose and labelled as such.
+
+**Deliberately NOT delivered, and why**
+- **No readiness score.** Readiness is readiness *for* a role, and there is
+  no target to measure against until Phase 5. `indicators` reports counts of
+  real things instead.
+- **No `verified` evidence.** Nothing can verify a skill until assessments
+  exist in Phase 8. The level is declared so nothing is tempted to overstate
+  `supported` to fill it.
+- **No CareerTwin UI.** Phase 10 integrates the dashboard.
 
 ## Phase 5 — Career Recommendation
 - Career-role catalogue
