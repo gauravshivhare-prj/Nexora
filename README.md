@@ -2,13 +2,17 @@
 
 AI-Powered Career Readiness & Employability Platform — *From Student Profile to Career-Ready Candidate*.
 
-> **Status: Phase 2 — Student Profile complete.**
-> Implemented so far: the project foundation, authentication (register, login, logout,
-> JWT-protected routes, session restore, rate limiting) and the student profile.
-> Resume intelligence, CareerTwin, career matching, skill gap and the roadmap are not
-> built yet. See [docs/phases.md](docs/phases.md) for the sequence and
+> **Status: Phase 3 — Resume Intelligence backend foundation.**
+> Implemented: the project foundation, authentication (register, login, logout,
+> JWT-protected routes, session restore, rate limiting), the student profile, and
+> resume storage with an AI analysis pipeline.
+>
+> **No AI provider ships with Nexora**, so resume analysis answers `503 — not
+> configured` rather than returning invented data. There is no resume file upload and
+> no resume UI yet. CareerTwin, career matching, skill gap and the roadmap are not
+> built. See [docs/phases.md](docs/phases.md) for the sequence and
 > [docs/architecture.md](docs/architecture.md#7-implemented-surface) for the exact
-> data model and API surface that exist today.
+> data model, API surface and AI boundary that exist today.
 
 ## Repository layout
 
@@ -99,6 +103,7 @@ dependency — the harnesses are in `server/tests/helpers/` and `client/tests/he
 | `server/.env` | `MONGODB_URI_TEST` | Optional. Overrides the derived `_test` database |
 | `server/.env` | `JWT_SECRET` | **Required.** At least 32 random characters |
 | `server/.env` | `JWT_EXPIRES_IN` | Token lifetime, e.g. `1h`. Defaults to `1h` |
+| `server/.env` | `AI_PROVIDER` | Optional. Name of a registered AI provider; empty ships no provider |
 | `client/.env` | `VITE_API_URL` | Backend base URL, no trailing slash |
 
 Only `VITE_`-prefixed variables are exposed to the browser. Never put a secret in

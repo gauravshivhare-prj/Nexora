@@ -84,6 +84,39 @@ Tested: 38 backend tests, 15 browser end-to-end tests. Full regression green —
 109 backend, 37 frontend. Production build passes. `npm audit` reports 0
 vulnerabilities in both packages; no dependency was added.
 
+### CHANGE-002
+Date: 2026-09-21
+Requested by: Project owner
+Feature: Resume Intelligence foundation (Phase 3)
+Reason: Phase 3 of the planned sequence, and the first AI-facing feature. It
+establishes the provider boundary and the untrusted-output pipeline that
+CareerTwin and every later AI feature reuse.
+Current behavior: No resume storage and no AI integration of any kind.
+Requested behavior: A `Resume` entity with extraction and analysis states, a
+provider-agnostic AI boundary, and a validation pipeline that never stores
+unverified model output.
+Impact: Additive. Authentication, profiles and the frontend are untouched —
+this change adds no client code at all.
+Files/modules affected:
+- `constants/resumePolicy.js`, `models/Resume.model.js`,
+  `services/ai/aiProvider.js`, `services/ai/aiJson.js`,
+  `domain/resume/parsedResumeSchema.js`, `domain/resume/groundParsedResume.js`,
+  `domain/resume/resumePrompt.js`, `services/resume.service.js`,
+  `controllers/resume.controller.js`, `routes/resume.routes.js`.
+- Registration in `models/index.js` and `routes/index.js`; new error codes;
+  optional `AI_PROVIDER` in `config/env.js` and `.env.example`.
+Risk: Low as shipped. The AI path cannot run at all without a configured
+provider, so the new surface in production is resume storage and retrieval.
+Scope explicitly held back: no AI provider implementation, no file upload, no
+UI. Each is recorded in phases.md with the reason.
+Decision: Approved
+Implemented: Yes
+Tested: 75 new tests — 39 pure-function tests over the pipeline, 36 API tests
+against a provider double covering ownership, unconfigured providers, provider
+failure, malformed JSON, wrong-shape output and invented content. Full
+regression green: 184 backend, 37 frontend. `npm audit` reports 0
+vulnerabilities; no dependency was added.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

@@ -140,11 +140,20 @@ implemented yet.
 |---|---|---|
 | `users` | Account identity — name, email, password hash, role, active flag | — |
 | `studentprofiles` | Student-entered profile data | `user` (unique) |
+| `resumes` | Resume text and AI-derived structured data | `user` (non-unique) |
 
 `User` and `StudentProfile` are deliberately separate documents. An
 authentication change cannot put profile data at risk, a profile migration
 cannot lock anyone out, and the `User` load on every authenticated request
 stays small.
+
+`Resume` is non-unique per user because a resume is a dated document, not a
+property of a person — comparing this year's against last year's is the point.
+
+**No collection copies another.** Where a student's own profile answer and
+their resume disagree, both are kept and the disagreement stays visible.
+Reconciling them is CareerTwin's job, and it cannot do that if one has already
+overwritten the other.
 
 ### StudentProfile shape
 
@@ -173,6 +182,11 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/auth/me` | Bearer | Re-reads the account behind the token |
 | `GET` | `/api/profile` | Bearer | 200 with an empty profile before first save |
 | `PATCH` | `/api/profile` | Bearer | Merge semantics; upserts on first save |
+| `POST` | `/api/resumes` | Bearer | Stores resume text. Does **not** call the AI |
+| `GET` | `/api/resumes` | Bearer | Summaries only; full text is projected away |
+| `GET` | `/api/resumes/:id` | Bearer | Owner-scoped; 404 if not the caller's |
+| `DELETE` | `/api/resumes/:id` | Bearer | Owner-scoped |
+| `POST` | `/api/resumes/:id/analysis` | Bearer | Runs the AI pipeline. 503 when unconfigured |
 
 ### Ownership rule
 
@@ -194,6 +208,95 @@ well-defined merge, and inventing one would make removal impossible to express.
 Validation failures are reported together, each keyed by a dotted path
 (`skills[0].level`), so a client can mark every offending field in one pass.
 A rejected patch writes nothing.
+
+### AI provider boundary
+
+No vendor SDK is imported anywhere in the domain. Everything goes through the
+`AiProvider` contract in `server/src/services/ai/aiProvider.js`:
+
+```text
+{ name, complete({ system, user, maxOutputTokens }) → { text, model } }
+```
+
+**Nexora ships with no provider implementation.** There is deliberately no
+built-in fallback returning canned output — a fake provider would make resume
+analysis look finished while inventing a student's career data. With nothing
+registered, `POST /api/resumes/:id/analysis` answers `503
+AI_PROVIDER_NOT_CONFIGURED` and says so. Everything else works without it.
+
+To enable analysis: implement the contract, call `registerAiProvider()` at
+startup, and set `AI_PROVIDER` to its name. The provider's own API key belongs
+in its own environment variable.
+
+### The AI safety pipeline
+
+Implemented for resume analysis, and reused by every later AI feature:
+
+```text
+resume text
+   ↓  provider (untrusted from here on)
+raw response
+   ↓  parseJsonObject        services/ai/aiJson.js
+JSON object
+   ↓  validateParsedResume   domain/resume/parsedResumeSchema.js
+right shape
+   ↓  groundParsedResume     domain/resume/groundParsedResume.js
+verified against the source
+   ↓
+persistence
+```
+
+Two classes of finding, treated differently:
+
+- **Structural errors** — `skills` returned as a string, `basics` as an array.
+  The analysis fails with `502 AI_OUTPUT_INVALID`, and nothing is stored.
+- **Per-entry warnings** — one bad row in forty. That row is dropped, recorded
+  on the document, and the rest is kept.
+
+**Grounding** is the check that matters. A model asked to extract skills from a
+backend CV will sometimes add Docker because CVs like that usually mention it.
+So every value a later phase may treat as evidence — skills, technologies,
+certification names, institutions, organisations, project titles, email, phone
+— must appear in the resume text, and anything that does not is dropped and
+named in `warnings`.
+
+Matching is punctuation-insensitive for names of three characters or more
+("Node.js" matches "NodeJS") and whole-word for one or two ("C", "R", "Go"),
+because a substring test on a single letter confirms anything.
+
+Descriptions and achievements are **not** grounded: a model rewording three
+bullets into a sentence is doing its job. They are stored as model-written
+prose, and no later phase may read them as evidence.
+
+Skills carry no proficiency level anywhere in this pipeline. A resume shows
+that someone listed a skill, not how good they are at it; a model asked to
+guess would produce a number that looks like evidence and is not. The
+allow-listed output shape means a provider cannot smuggle one in.
+
+Grounding catches invention, not misreading. A model that attributes a real
+skill to the wrong project still passes, because every word it used is in the
+document. It raises the floor; it is not a correctness proof.
+
+### Resume states
+
+`extraction` (file → text) and `analysis` (text → structured data) each carry
+their own `pending | processing | completed | failed` status. Two statuses
+rather than one because "read perfectly but analysis failed" and "could not be
+read at all" are different problems, and a single field could not say which.
+
+A failed re-analysis deliberately leaves the previous parsed data in place.
+That reading was valid when it was made and `analysedBy` records what produced
+it; deleting good data because a later attempt failed would be strictly worse
+than keeping it beside a visible failure.
+
+### Not implemented
+
+- File upload. Resume text is submitted as text (`source: "pasted_text"`).
+  The `file` subdocument and the `file_upload` source value exist in the
+  schema so adding upload is a new value rather than a migration; the API
+  rejects that source today rather than silently ignoring it.
+- Any AI provider adapter, per the boundary section above.
+- Any resume UI. Phase 3 is the backend domain and service contract only.
 
 ## Nexora Design & Experience Standard
 

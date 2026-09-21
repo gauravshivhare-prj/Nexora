@@ -47,6 +47,29 @@ Regression test:
 Status: Open / In Progress / Fixed / Verified
 ```
 
+## Logged Bugs
+
+### BUG-001
+Date: 2026-09-21
+Environment: Development, backend test suite
+Severity: P3 — Low
+Feature: Resume list endpoint (Phase 3)
+Steps to reproduce: Create a resume, then `GET /api/resumes`.
+Expected: Each summary reports the resume's `textLength`.
+Actual: Every summary reported `textLength: 0`.
+Console/API error: None. The endpoint returned 200 with wrong data, which is
+why a test rather than an error surfaced it.
+Root cause: `listResumes` projects `extractedText` away so a list of ten
+resumes does not transfer ten full documents. `toResumeSummary` then measured
+a field that had not been loaded, and `undefined?.length ?? 0` gave 0.
+Fix: Store `textLength` on the document, kept in sync by a `pre('validate')`
+hook on the schema rather than by the service. Putting it on the schema means
+it holds for any future writer too, not only the one that exists today.
+Regression test: "omits the full text from the list" in
+`server/tests/resume.test.js` asserts both that the text is absent and that
+the length is correct.
+Status: Verified
+
 ## Debugging Rules
 1. Reproduce first.
 2. Read the actual error.

@@ -99,6 +99,11 @@ export async function clearProfiles() {
   await mongoose.connection.collection('studentprofiles').deleteMany({});
 }
 
+/** Removes all resumes. */
+export async function clearResumes() {
+  await mongoose.connection.collection('resumes').deleteMany({});
+}
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *
@@ -151,6 +156,14 @@ export async function requestWithHeaders(baseUrl, path, { method = 'GET', header
 export function getWithToken(baseUrl, path, token) {
   return requestWithHeaders(baseUrl, path, {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Sends a body-less request with a Bearer token — DELETE, or a bare POST. */
+export function sendWithToken(baseUrl, path, { method, token }) {
+  return requestWithHeaders(baseUrl, path, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 }
 

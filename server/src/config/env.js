@@ -124,6 +124,17 @@ export const env = {
 
   // Token lifetime is not sensitive and stays plainly visible.
   jwtExpiresIn: parseJwtExpiresIn(process.env.JWT_EXPIRES_IN, '1h'),
+
+  /**
+   * Which registered AI provider to use, or null for none.
+   *
+   * Optional, and absence is a supported state rather than a misconfiguration:
+   * everything except the analysis endpoints works without it, and those
+   * answer 503 saying so. Not validated against the registry here — that
+   * would make the server refuse to boot over a feature most requests never
+   * touch. See services/ai/aiProvider.js.
+   */
+  aiProviderName: process.env.AI_PROVIDER?.trim() || null,
 };
 
 /**

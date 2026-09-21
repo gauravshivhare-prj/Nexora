@@ -12,7 +12,8 @@ This document defines the controlled development sequence for Nexora.
 | 0 — Project Foundation | Complete |
 | 1 — Authentication | Complete |
 | 2 — Student Profile | Complete |
-| 3 onwards | Not started |
+| 3 — Resume Intelligence | Backend foundation complete; no upload, no provider, no UI |
+| 4 onwards | Not started |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -89,6 +90,32 @@ treats it as evidence. The evidence model arrives with Phase 6.
 - Invalid files are rejected.
 - AI output is schema-validated.
 - User can correct extracted data.
+
+**Delivered — backend foundation only**
+- `Resume` model: file metadata, extracted text, separate extraction and
+  analysis statuses, parsed structured data, error state, timestamps.
+- Owner-scoped CRUD: `POST/GET /api/resumes`, `GET/DELETE /api/resumes/:id`.
+- A provider-agnostic `AiProvider` boundary. No vendor SDK is imported by any
+  domain code.
+- The full AI safety pipeline — JSON parse, schema validation, then grounding
+  every extracted claim against the resume text — with invalid output never
+  stored as trusted data.
+- 75 tests: 39 on the pipeline as pure functions, 36 through the API against a
+  provider double.
+
+**Deliberately NOT delivered, and why**
+- **No AI provider implementation.** None is configured on this deployment,
+  and shipping a fake one would invent student career data. Analysis answers
+  `503 AI_PROVIDER_NOT_CONFIGURED`.
+- **No file upload.** PDF and DOCX extraction needs parsing infrastructure
+  that does not exist here yet; adding a dependency stack to fake completeness
+  was rejected. Resume text is submitted as text. The schema has the `file`
+  subdocument and the `file_upload` source value ready.
+- **No resume UI.** It would need both of the above to be worth building.
+
+Exit criteria not yet met: "supported resume formats work", "invalid files are
+rejected" and "user can correct extracted data" all depend on upload and a UI.
+"AI output is schema-validated" is met, and exceeded by grounding.
 
 ## Phase 4 — CareerTwin
 - CareerTwin profile

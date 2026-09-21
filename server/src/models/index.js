@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.js';
+import { Resume, toPublicResume, toResumeSummary } from './Resume.model.js';
 import { StudentProfile, emptyProfile, toPublicProfile } from './StudentProfile.model.js';
 import { User, toPublicUser } from './User.model.js';
 
@@ -8,7 +9,7 @@ import { User, toPublicUser } from './User.model.js';
  * Registering new models here keeps index creation in one place as the schema
  * set grows, one model per phase.
  */
-const MODELS = [User, StudentProfile];
+const MODELS = [User, StudentProfile, Resume];
 
 /**
  * Builds every declared index before the server accepts traffic.
@@ -25,4 +26,13 @@ export async function ensureModelIndexes() {
   logger.info(`Indexes ready for ${MODELS.length} model(s)`);
 }
 
-export { StudentProfile, User, emptyProfile, toPublicProfile, toPublicUser };
+export {
+  Resume,
+  StudentProfile,
+  User,
+  emptyProfile,
+  toPublicProfile,
+  toPublicResume,
+  toPublicUser,
+  toResumeSummary,
+};

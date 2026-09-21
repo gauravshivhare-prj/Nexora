@@ -31,6 +31,27 @@ export const ERROR_CODES = {
   /** Too many requests from this client within the configured window. */
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 
+  // --- Resumes ------------------------------------------------------------
+  /** No resume with that id belongs to the caller. Also returned when it
+   *  belongs to someone else: "not yours" and "not there" must look identical,
+   *  or the API becomes a way to discover which ids exist. */
+  RESUME_NOT_FOUND: 'RESUME_NOT_FOUND',
+  /** Analysis was requested for a resume that is already being analysed. */
+  RESUME_ANALYSIS_IN_PROGRESS: 'RESUME_ANALYSIS_IN_PROGRESS',
+
+  // --- AI -----------------------------------------------------------------
+  /** No AI provider is configured, so nothing can be analysed. */
+  AI_PROVIDER_NOT_CONFIGURED: 'AI_PROVIDER_NOT_CONFIGURED',
+  /** The provider failed: network, rate limit, authentication or timeout. */
+  AI_PROVIDER_FAILED: 'AI_PROVIDER_FAILED',
+  /**
+   * The provider answered, but its output could not be trusted — unparseable
+   * JSON, or a shape that failed schema validation. Distinct from
+   * AI_PROVIDER_FAILED because the fix is different: this one is a prompt or
+   * model problem, not an outage.
+   */
+  AI_OUTPUT_INVALID: 'AI_OUTPUT_INVALID',
+
   DATABASE_ERROR: 'DATABASE_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
