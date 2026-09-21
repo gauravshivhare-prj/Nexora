@@ -2,6 +2,8 @@ import { createApp } from './src/app.js';
 import { connectDatabase, disconnectDatabase } from './src/config/database.js';
 import { env } from './src/config/env.js';
 import { ensureModelIndexes } from './src/models/index.js';
+import { createGeminiProvider } from './src/services/ai/geminiProvider.js';
+import { registerAiProvider } from './src/services/ai/aiProvider.js';
 import { logger } from './src/utils/logger.js';
 
 /**
@@ -10,6 +12,23 @@ import { logger } from './src/utils/logger.js';
  */
 
 let httpServer;
+
+function registerProviders() {
+  if (env.aiProviderName === 'gemini') {
+    if (!env.geminiApiKey) {
+      throw new Error(
+        'AI_PROVIDER is set to "gemini", but GEMINI_API_KEY is not configured.',
+      );
+    }
+    const provider = createGeminiProvider({
+      apiKey: env.geminiApiKey,
+      model: env.geminiModel,
+      timeoutMs: env.geminiTimeoutMs,
+    });
+    registerAiProvider(provider);
+    logger.info(`AI provider "${provider.name}" registered for model "${env.geminiModel}"`);
+  }
+}
 
 async function shutdown(reason, exitCode = 0) {
   logger.info(`Shutting down (${reason})…`);
@@ -40,6 +59,13 @@ async function start() {
     // A missing database is a startup failure, not something to hide behind a
     // server that appears healthy. Report the real cause and stop.
     logger.error('Failed to prepare MongoDB — server not started', error.message);
+    process.exit(1);
+  }
+
+  try {
+    registerProviders();
+  } catch (error) {
+    logger.error('Failed to configure AI provider — server not started', error.message);
     process.exit(1);
   }
 

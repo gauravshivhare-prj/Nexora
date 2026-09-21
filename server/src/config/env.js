@@ -50,6 +50,13 @@ function assertRequiredVariables() {
         'Copy server/.env.example to server/.env and fill in the values.',
     );
   }
+
+  if (process.env.AI_PROVIDER?.trim() === 'gemini' && !process.env.GEMINI_API_KEY?.trim()) {
+    throw new Error(
+      'Missing required environment variable: GEMINI_API_KEY. ' +
+        'GEMINI_API_KEY is required when AI_PROVIDER is set to "gemini".',
+    );
+  }
 }
 
 function parsePort(value, fallback) {
@@ -114,6 +121,16 @@ function parseJwtExpiresIn(value, fallback) {
   return expiresIn;
 }
 
+function parseTimeoutMs(value, fallback = 60000) {
+  if (!value) return fallback;
+
+  const ms = Number(value);
+  if (!Number.isInteger(ms) || ms <= 0) {
+    throw new Error(`Invalid GEMINI_TIMEOUT_MS value: "${value}". Expected a positive integer.`);
+  }
+  return ms;
+}
+
 assertRequiredVariables();
 
 export const env = {
@@ -135,6 +152,9 @@ export const env = {
    * touch. See services/ai/aiProvider.js.
    */
   aiProviderName: process.env.AI_PROVIDER?.trim() || null,
+
+  geminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash',
+  geminiTimeoutMs: parseTimeoutMs(process.env.GEMINI_TIMEOUT_MS, 60000),
 };
 
 /**
@@ -147,6 +167,16 @@ export const env = {
  */
 Object.defineProperty(env, 'jwtSecret', {
   value: parseJwtSecret(process.env.JWT_SECRET),
+  enumerable: false,
+  writable: false,
+});
+
+/**
+ * Google AI Studio API key. Stored as a non-enumerable property so it is never
+ * leaked into logs or serialized output.
+ */
+Object.defineProperty(env, 'geminiApiKey', {
+  value: process.env.GEMINI_API_KEY?.trim() || null,
   enumerable: false,
   writable: false,
 });
