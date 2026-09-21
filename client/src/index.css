@@ -1,0 +1,69 @@
+@import 'tailwindcss';
+
+/*
+ * Nexora design tokens — "Sunset Warm".
+ *
+ * Declared here so every component references a named token (bg-surface,
+ * text-brand, …) instead of repeating raw hex values. Changing the theme
+ * means changing this block only.
+ */
+@theme {
+  --color-brand: #ea580c;
+  --color-brand-soft: #f97316;
+  --color-canvas: #fff7ed;
+  --color-surface: #ffffff;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* #1F2937 for primary copy, #6B7280 for secondary/metadata. */
+  --color-ink: #1f2937;
+  --color-ink-muted: #6b7280;
+
+  --animate-rise: rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  /*
+   * A single, consistently visible focus ring for every keyboard-focusable
+   * element. Offset keeps it legible against both canvas and surface.
+   */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+}
+
+/*
+ * Reduced-motion users get the final state immediately rather than a shortened
+ * animation. `!important` is required to beat utility-level animation classes.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
