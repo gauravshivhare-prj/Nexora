@@ -63,6 +63,13 @@ export function AuthenticatedPage() {
             Your resume
           </Link>
 
+          <Link
+            to="/career-twin"
+            className="rounded-xl border border-orange-200 bg-surface px-5 py-3 text-center text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Your CareerTwin
+          </Link>
+
           <button
             type="button"
             onClick={handleLogout}

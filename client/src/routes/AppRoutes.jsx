@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { ProtectedRoute } from '../components/ProtectedRoute.jsx';
 import { AuthenticatedPage } from '../pages/AuthenticatedPage.jsx';
+import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
 import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
@@ -58,6 +59,15 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <ResumeDetailPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/career-twin"
+        element={
+          <ProtectedRoute>
+            <CareerTwinPage />
           </ProtectedRoute>
         }
       />
