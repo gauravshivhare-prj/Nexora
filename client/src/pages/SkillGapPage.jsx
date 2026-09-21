@@ -175,6 +175,15 @@ export function SkillGapPage() {
             </ul>
           </Card>
         ) : null}
+
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to={`/careers/${gap.roleId}/roadmap`}
+            className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+          >
+            Turn this into a roadmap
+          </Link>
+        </div>
       </div>
     </PageShell>
   );

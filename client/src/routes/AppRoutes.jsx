@@ -8,6 +8,7 @@ import { FoundationPage } from '../pages/FoundationPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
+import { RoadmapPage } from '../pages/RoadmapPage.jsx';
 import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
@@ -88,6 +89,15 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <SkillGapPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/careers/:roleId/roadmap"
+        element={
+          <ProtectedRoute>
+            <RoadmapPage />
           </ProtectedRoute>
         }
       />

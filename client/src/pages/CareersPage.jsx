@@ -222,6 +222,12 @@ function MatchCard({ match }) {
         >
           See the skill gap
         </Link>
+        <Link
+          to={`/careers/${match.roleId}/roadmap`}
+          className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+        >
+          See the roadmap
+        </Link>
       </div>
     </article>
   );

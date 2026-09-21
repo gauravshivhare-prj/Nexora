@@ -59,6 +59,34 @@ export async function fetchRecommendations({ includeAll = false, limit, signal }
   };
 }
 
+/** Mirrors PRIORITY in server/src/domain/roadmap/buildRoadmap.js. */
+export const ROADMAP_PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
+
+/**
+ * GET /api/careers/roles/:roleId/roadmap
+ *
+ * Derived from the skill gap, which is derived from the CareerTwin. Nothing
+ * is persisted and — importantly — no completion state is stored anywhere.
+ * An item closes when the evidence closes the gap, so there is no flag for a
+ * client to set and none for it to invent.
+ *
+ * @param {{ maxItems?: number }} [options] The response reports how many
+ *   actionable gaps existed before this cap, so a capped plan is not
+ *   mistaken for the whole of it.
+ */
+export async function fetchRoadmap(roleId, { maxItems, signal } = {}) {
+  const suffix = maxItems ? `?maxItems=${encodeURIComponent(maxItems)}` : '';
+  const body = await request(
+    `/api/careers/roles/${encodeURIComponent(roleId)}/roadmap${suffix}`,
+    { signal },
+  );
+
+  const data = body?.data;
+  if (!data?.roadmap) throw new Error('The backend returned an unexpected response shape.');
+
+  return { roadmap: data.roadmap, basedOn: data.basedOn ?? null };
+}
+
 /** GET /api/careers/roles/:roleId/match */
 export async function fetchRoleMatch(roleId, { signal } = {}) {
   const body = await request(
