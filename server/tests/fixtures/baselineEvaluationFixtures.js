@@ -1,6 +1,6 @@
 import { skillKey } from '../../src/domain/skills/skillKey.js';
 
-function twin(skillNames, targetRole) {
+function twin(skillNames) {
   return {
     skills: skillNames.map((name) => ({
       key: skillKey(name),
@@ -17,26 +17,26 @@ function twin(skillNames, targetRole) {
       ],
     })),
     interests: [],
-    targetRoles: [{ title: targetRole, origin: 'student' }],
+    targetRoles: [],
     academic: null,
   };
 }
 
-/** Reproducible labels for evaluating the current explainable baseline. */
+/** Synthetic, reproducible labels for evaluating the current baseline. */
 export const BASELINE_EVALUATION_FIXTURES = [
   {
     id: 'backend-fit',
     expectedRoleId: 'backend-developer',
-    twin: twin(['JavaScript', 'Node.js', 'REST APIs', 'SQL', 'Express.js'], 'Backend Developer'),
+    twin: twin(['JavaScript', 'Node.js', 'REST APIs', 'SQL', 'Express.js']),
   },
   {
     id: 'frontend-fit',
     expectedRoleId: 'frontend-developer',
-    twin: twin(['HTML', 'CSS', 'JavaScript', 'React', 'TypeScript'], 'Frontend Developer'),
+    twin: twin(['HTML', 'CSS', 'JavaScript', 'React', 'TypeScript']),
   },
   {
     id: 'data-fit',
     expectedRoleId: 'data-analyst',
-    twin: twin(['SQL', 'Excel', 'Data Visualisation', 'Python', 'Statistics'], 'Data Analyst'),
+    twin: twin(['SQL', 'Excel', 'Data Visualisation', 'Python', 'Statistics']),
   },
 ];

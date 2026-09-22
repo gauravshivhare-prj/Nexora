@@ -27,6 +27,10 @@ function evaluateBaseline(fixtures) {
 
 describe('explainable recommendation baseline evaluation', () => {
   it('evaluates reproducible labeled fixtures with transparent metrics', () => {
+    for (const fixture of BASELINE_EVALUATION_FIXTURES) {
+      assert.deepEqual(fixture.twin.targetRoles, [], `${fixture.id} leaks its expected label`);
+    }
+
     const metrics = evaluateBaseline(BASELINE_EVALUATION_FIXTURES);
 
     assert.equal(metrics.predictions.length, 3);
