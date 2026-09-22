@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { rankRoles, scoreRoleMatch } from '../src/domain/careers/matchRole.js';
-import { CAREER_ROLES, CATALOGUE_SOURCE, findRole } from '../src/domain/careers/roleCatalogue.js';
+import {
+  CAREER_ROLES,
+  CATALOGUE_SOURCE,
+  CATALOGUE_VERSION,
+  ROLE_CATEGORIES,
+  findRole,
+} from '../src/domain/careers/roleCatalogue.js';
 import {
   DIMENSION_WEIGHTS,
   MINIMUM_RECOMMENDABLE_SCORE,
@@ -102,6 +108,32 @@ describe('role catalogue', () => {
       // A long required list makes every student look unqualified for
       // everything, which is a scoring failure rather than a strictness.
       assert.ok(role.requiredSkills.length <= 5, `${role.id} requires too much`);
+    }
+  });
+
+  it('keeps role contracts internally consistent and versioned', () => {
+    const categories = new Set(Object.values(ROLE_CATEGORIES));
+
+    assert.equal(CATALOGUE_SOURCE.version, CATALOGUE_VERSION);
+
+    for (const role of CAREER_ROLES) {
+      assert.ok(categories.has(role.category), `${role.id} has an unknown category`);
+
+      const required = new Set(role.requiredSkills.map(skillKey));
+      const preferred = new Set(role.preferredSkills.map(skillKey));
+      const related = new Set(role.relatedTechnologies.map(skillKey));
+
+      assert.equal(required.size, role.requiredSkills.length, `${role.id} repeats a required skill`);
+      assert.equal(preferred.size, role.preferredSkills.length, `${role.id} repeats a preferred skill`);
+      assert.equal(related.size, role.relatedTechnologies.length, `${role.id} repeats a related technology`);
+
+      for (const key of required) {
+        assert.ok(!preferred.has(key), `${role.id} scores ${key} as required and preferred`);
+        assert.ok(!related.has(key), `${role.id} scores ${key} as required and related`);
+      }
+      for (const key of preferred) {
+        assert.ok(!related.has(key), `${role.id} scores ${key} as preferred and related`);
+      }
     }
   });
 });
