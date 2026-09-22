@@ -236,6 +236,50 @@ reports 0 vulnerabilities; no dependency was added.
 Note on exit criteria: "tasks can be marked complete" is satisfied by
 evidence rather than by a flag. Recorded in phases.md with the reasoning.
 
+### CHANGE-007
+Date: 2026-09-22
+Requested by: Project owner
+Feature: Public landing experience at `/`
+Reason: `/` was the Phase 0 foundation page — a connection check and a note
+saying no product existed yet. Five stages of the loop now do, and the public
+entry point was describing a build rather than a product.
+Current behavior: `/` rendered `FoundationPage`, with an API health check.
+Requested behavior: A narrative landing page that explains the actual product
+loop — CareerTwin, evidence strengths, explainable matching, skill gap,
+roadmap, readiness — with scroll-linked motion, and with every stage labelled
+as available or in development.
+Impact: Frontend only. No backend change, no API change, no dependency added.
+Routing is unchanged apart from what `/` renders; `/login`, `/register` and
+every guarded route behave exactly as before.
+Files/modules affected:
+- New: `pages/LandingPage.jsx`, `components/landing/*` (14 sections plus
+  `Section.jsx`), `components/landing/animation/*` (four hooks and `Reveal`),
+  `components/landing/landing.css`.
+- Changed: `routes/AppRoutes.jsx` (`/` → `LandingPage`), `index.css` (smooth
+  in-page anchors, reset under reduced motion).
+- Removed as superseded: `pages/FoundationPage.jsx`,
+  `components/ApiConnectionPanel.jsx`, `hooks/useApiHealth.js`,
+  `services/health.service.js`. The client no longer calls `/api/health`; the
+  endpoint itself is untouched.
+- Tests: new `tests/landing.e2e.test.js`; `helpers/stack.js` gained
+  `startWebStack` (Vite and Chrome only — the page makes no API calls);
+  `helpers/browser.js` gained viewport, emulated-media and selector-click
+  support. `auth.e2e.test.js`'s foundation-page assertion was rewritten
+  against the new root; one sampling race in `dashboard.e2e.test.js` became a
+  wait.
+Risk: Low. Nothing behind the login changed, and no claim on the page asserts
+a capability the backend does not have — assessments, AI interviews and
+opportunity matching are shown as in development at each stage rather than in
+a footnote. Every example figure is labelled as an example.
+Decision: Approved
+Implemented: Yes
+Tested: 18 new browser tests covering rendering, both calls to action, the
+navigation, the phone disclosure, horizontal overflow at six widths, the
+reduced-motion path and the absence of signed-in content on a public page.
+Full frontend regression green: 134 tests. Production build passes. No
+dependency added — the motion is CSS, SVG, IntersectionObserver and one
+requestAnimationFrame-coalesced pointer handler.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

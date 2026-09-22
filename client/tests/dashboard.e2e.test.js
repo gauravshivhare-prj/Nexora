@@ -47,7 +47,9 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
   beforeEach(async () => {
     await page.goto(`${stack.appUrl}/`);
     await page.clearStorage();
-    await page.setViewport?.(1280, 900);
+    // Positional arguments here were a no-op for as long as the driver had
+    // no setViewport at all; it has one now, and it takes an object.
+    await page.setViewport({ width: 1280, height: 900 });
   });
 
   async function signUp() {
@@ -410,11 +412,13 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     })()`);
     await page.waitFor('location.pathname === "/profile"', { description: 'navigation to /profile' });
 
-    // The panel should have auto-closed.
-    const panelHidden = await page.evaluate(
-      `document.querySelector('#app-nav-panel')?.hidden ?? null`,
-    );
-    assert.equal(panelHidden, true, 'the mobile menu did not close after navigation');
+    // The panel should have auto-closed. Waited for rather than sampled:
+    // the close runs in an effect after the route change, so reading it on
+    // the same turn as the navigation is a race the nav can lose while
+    // behaving correctly.
+    await page.waitFor(`document.querySelector('#app-nav-panel')?.hidden === true`, {
+      description: 'the mobile menu to close after navigation',
+    });
   });
 
   // ------------------------------------------------------- accessibility

@@ -341,13 +341,26 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
       assert.ok(!html.includes(PASSWORD), 'the password is present in the DOM');
     });
 
-    it('keeps the public foundation page and health check working', async () => {
+    /*
+     * This used to drive the Phase 0 foundation page's connection check. The
+     * root path is now the public landing page and the client no longer calls
+     * /api/health from anywhere, so what is worth asserting here is what the
+     * auth suite actually depends on: that the root stays public, and that
+     * both doors into the session are reachable from it. The landing page's
+     * own behaviour is covered in landing.e2e.test.js.
+     */
+    it('keeps the root path public and linked to both auth routes', async () => {
+      await page.clearStorage();
       await page.goto(`${stack.appUrl}/`);
-      await page.clickText('Check API Connection');
 
-      await page.waitFor('document.body.innerText.includes("Nexora API is connected")', {
-        description: 'a successful health check',
-      });
+      assert.equal(await page.path(), '/');
+
+      const targets = await page.evaluate(`(() => {
+        const hrefs = [...document.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+        return { register: hrefs.includes('/register'), login: hrefs.includes('/login') };
+      })()`);
+
+      assert.deepEqual(targets, { register: true, login: true });
     });
 
     it('labels every auth form control for assistive technology', async () => {

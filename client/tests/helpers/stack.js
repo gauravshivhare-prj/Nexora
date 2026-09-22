@@ -140,6 +140,94 @@ async function dropTestDatabase(uri) {
 }
 
 /**
+ * Starts the Vite dev server.
+ *
+ * Vite's JS entry is launched directly rather than through npx or a shell. A
+ * shell wrapper makes the real Vite process a grandchild that child.kill()
+ * cannot reach on Windows, leaving it alive with its stdio pipe attached —
+ * which holds the test runner's event loop open forever.
+ *
+ * VITE_-prefixed variables are read from the environment, so the client talks
+ * to this run's backend rather than whatever client/.env says.
+ */
+async function spawnWeb(webPort, apiUrl) {
+  const web = spawn(
+    process.execPath,
+    [join(CLIENT_DIR, 'node_modules/vite/bin/vite.js'), '--port', String(webPort), '--strictPort'],
+    {
+      cwd: CLIENT_DIR,
+      env: { ...process.env, ...(apiUrl ? { VITE_API_URL: apiUrl } : {}) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+
+  await waitForOutput(web, 'ready in', 'Vite dev server');
+  return web;
+}
+
+/** Starts headless Chrome with the DevTools protocol exposed. */
+function spawnChrome(debugPort, chromeProfile) {
+  return spawn(
+    findChrome(),
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debugPort}`,
+      `--user-data-dir=${chromeProfile}`,
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+}
+
+/** Kills every child of a run and releases its stdio handles. */
+async function stopChildren(children, chromeProfile) {
+  for (const child of children.reverse()) {
+    if (child.exitCode === null) {
+      child.kill('SIGKILL');
+      await once(child, 'exit').catch(() => {});
+    }
+    // Piped stdio keeps the parent's event loop alive even after the child
+    // is gone, so the runner would never exit. Release the handles.
+    child.stdout?.destroy();
+    child.stderr?.destroy();
+  }
+  rmSync(chromeProfile, { recursive: true, force: true });
+}
+
+/**
+ * Starts frontend + browser only.
+ *
+ * For pages that make no API calls — the public landing page is the whole of
+ * that list. It needs neither the backend nor a database, and booting them
+ * anyway would make a test of static markup depend on MongoDB being
+ * installed.
+ *
+ * @returns {Promise<{ appUrl, debugPort, stop }>}
+ */
+export async function startWebStack() {
+  const webPort = await findFreePort();
+  const debugPort = await findFreePort();
+
+  const children = [];
+  const chromeProfile = mkdtempSync(join(tmpdir(), 'nexora-web-e2e-'));
+
+  const stop = () => stopChildren(children, chromeProfile);
+
+  try {
+    children.push(await spawnWeb(webPort));
+    children.push(spawnChrome(debugPort, chromeProfile));
+
+    return { appUrl: `http://localhost:${webPort}`, debugPort, stop };
+  } catch (error) {
+    await stop();
+    throw error;
+  }
+}
+
+/**
  * Starts backend + frontend + browser.
  *
  * @returns {Promise<{ apiUrl, appUrl, debugPort, mongoUri, stop }>}
@@ -157,17 +245,7 @@ export async function startStack() {
   const chromeProfile = mkdtempSync(join(tmpdir(), 'nexora-e2e-'));
 
   async function stop() {
-    for (const child of children.reverse()) {
-      if (child.exitCode === null) {
-        child.kill('SIGKILL');
-        await once(child, 'exit').catch(() => {});
-      }
-      // Piped stdio keeps the parent's event loop alive even after the child
-      // is gone, so the runner would never exit. Release the handles.
-      child.stdout?.destroy();
-      child.stderr?.destroy();
-    }
-    rmSync(chromeProfile, { recursive: true, force: true });
+    await stopChildren(children, chromeProfile);
     await dropTestDatabase(mongoUri);
   }
 
@@ -187,39 +265,8 @@ export async function startStack() {
     children.push(api);
     await waitForOutput(api, 'Nexora API listening', 'Backend');
 
-    // Vite's JS entry is launched directly rather than through npx or a
-    // shell. A shell wrapper makes the real Vite process a grandchild that
-    // child.kill() cannot reach on Windows, leaving it alive with its stdio
-    // pipe attached — which holds the test runner's event loop open forever.
-    //
-    // VITE_-prefixed variables are read from the environment, so the client
-    // talks to this run's backend rather than whatever client/.env says.
-    const web = spawn(
-      process.execPath,
-      [join(CLIENT_DIR, 'node_modules/vite/bin/vite.js'), '--port', String(webPort), '--strictPort'],
-      {
-        cwd: CLIENT_DIR,
-        env: { ...process.env, VITE_API_URL: apiUrl },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    );
-    children.push(web);
-    await waitForOutput(web, 'ready in', 'Vite dev server');
-
-    const chrome = spawn(
-      findChrome(),
-      [
-        '--headless=new',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-default-browser-check',
-        `--remote-debugging-port=${debugPort}`,
-        `--user-data-dir=${chromeProfile}`,
-        'about:blank',
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
-    );
-    children.push(chrome);
+    children.push(await spawnWeb(webPort, apiUrl));
+    children.push(spawnChrome(debugPort, chromeProfile));
 
     return { apiUrl, appUrl, debugPort, mongoUri, stop };
   } catch (error) {

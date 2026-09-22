@@ -1,0 +1,366 @@
+/*
+ * Landing page motion and atmosphere.
+ *
+ * Kept out of index.css because none of it is part of the application's
+ * design system — the signed-in product uses the tokens and `animate-rise`,
+ * and nothing in here. Imported by LandingPage.jsx alone.
+ *
+ * Rules this file follows throughout:
+ *
+ *  - Animate `opacity` and `transform` only. Nothing here animates width,
+ *    height, top, box-shadow or a filter, so no animation on this page can
+ *    trigger layout or paint on every frame.
+ *  - Prefer `transition` over `animation` for anything triggered once, so
+ *    the reduced-motion override at the bottom of index.css already collapses
+ *    it without this file having to repeat itself.
+ *  - Nothing loops indefinitely except the hero graph, and that is gated on
+ *    the hero actually being on screen.
+ */
+
+/* ------------------------------------------------------------- reveals */
+
+.nx-reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--nx-delay, 0ms);
+}
+
+.nx-reveal[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * Words arriving in sequence, for the hero headline only.
+ *
+ * The headline is three clauses that are meant to be read as three steps, so
+ * the stagger is the sentence's own structure rather than decoration.
+ */
+.nx-line {
+  display: block;
+  opacity: 0;
+  transform: translate3d(0, 0.35em, 0);
+  animation: nx-line-in 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--nx-delay, 0ms) both;
+}
+
+@keyframes nx-line-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Scattered things settling into order.
+ *
+ * Used where the section's argument is that a student's information exists
+ * but is not organised. Each item starts displaced and rotated by its own
+ * offsets and resolves into the grid, so the composition itself makes the
+ * point before the copy is read.
+ */
+.nx-scatter {
+  opacity: 0;
+  transform: translate3d(var(--nx-dx, 0), var(--nx-dy, 0), 0) rotate(var(--nx-rot, 0deg));
+  transition:
+    opacity 520ms ease,
+    transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--nx-delay, 0ms);
+}
+
+[data-visible='true'] .nx-scatter {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-scatter {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------- atmospheric surfaces */
+
+/*
+ * The warm glow behind the hero and the closing call to action.
+ *
+ * Radial gradients rather than blurred shapes: a `filter: blur()` over a
+ * viewport-sized element is one of the most expensive things a page can ask
+ * a compositor for, and at this softness it is indistinguishable.
+ */
+.nx-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(52rem 32rem at 18% 12%, rgba(249, 115, 22, 0.18), transparent 70%),
+    radial-gradient(40rem 28rem at 88% 4%, rgba(234, 88, 12, 0.14), transparent 72%),
+    radial-gradient(36rem 26rem at 62% 92%, rgba(251, 146, 60, 0.12), transparent 70%);
+}
+
+/* A faint technical grid. Static — an animated grid is motion with nothing
+   to say, and a repeating background is cheap only while it holds still. */
+.nx-grid-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(234, 88, 12, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(234, 88, 12, 0.07) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(70% 60% at 50% 30%, black, transparent 100%);
+}
+
+/* The dark closing surface, so the final CTA reads as an ending. */
+.nx-ink-surface {
+  background:
+    radial-gradient(48rem 30rem at 50% -10%, rgba(249, 115, 22, 0.28), transparent 70%),
+    linear-gradient(180deg, #1f2937 0%, #161d27 100%);
+}
+
+/* --------------------------------------------------------- hero graph */
+
+/*
+ * Pointer parallax.
+ *
+ * The two custom properties are written by a single rAF-throttled pointer
+ * handler in CareerTwinVisual. Because they are only ever consumed by a
+ * `translate3d`, moving the pointer costs one composited transform and no
+ * React render at all.
+ */
+.nx-parallax {
+  transform: translate3d(
+    calc(var(--nx-px, 0) * var(--nx-depth, 1) * 1px),
+    calc(var(--nx-py, 0) * var(--nx-depth, 1) * 1px),
+    0
+  );
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Connections drawing themselves in, once, when the graph appears. */
+.nx-edge {
+  stroke-dasharray: var(--nx-length);
+  stroke-dashoffset: var(--nx-length);
+  transition: stroke-dashoffset 900ms ease-out;
+  transition-delay: var(--nx-delay, 0ms);
+}
+
+[data-graph-drawn='true'] .nx-edge {
+  stroke-dashoffset: 0;
+}
+
+/*
+ * Node breathing.
+ *
+ * The one indefinite animation on the page. Held to a 0.04 opacity swing and
+ * a 3% scale — enough to read as alive, not enough to compete with the copy —
+ * and suspended entirely whenever the hero is scrolled away.
+ */
+.nx-node-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nx-breathe 4200ms ease-in-out var(--nx-delay, 0ms) infinite;
+}
+
+[data-graph-live='false'] .nx-node-halo {
+  animation-play-state: paused;
+}
+
+@keyframes nx-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.54;
+  }
+}
+
+/* A single travelling pulse per evidence edge, to say "this feeds that". */
+.nx-flow {
+  /* Pulse, then a gap longer than the path, so each edge carries one
+     travelling dot per cycle rather than a dotted line. */
+  stroke-dasharray: 4 56;
+  animation: nx-flow 3600ms linear var(--nx-delay, 0ms) infinite;
+}
+
+[data-graph-live='false'] .nx-flow {
+  animation-play-state: paused;
+}
+
+@keyframes nx-flow {
+  from {
+    stroke-dashoffset: 60;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/*
+ * A row arriving because something changed, rather than because it scrolled
+ * into view. Used for evidence appearing under a skill as the sequence
+ * advances, which is a cause-and-effect the product standard asks for.
+ */
+.nx-pop {
+  animation: nx-pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes nx-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------ flow diagrams */
+
+/*
+ * The progress spine shared by the product loop and the roadmap.
+ *
+ * Filled with scaleY against a fixed-height track rather than by animating
+ * height, so the fill never reflows the stages beside it.
+ */
+.nx-spine-fill {
+  transform-origin: top;
+  transform: scaleY(var(--nx-progress, 0));
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * A score bar filling in.
+ *
+ * `scaleX` against a full-width track, not an animated `width`: a width
+ * transition relayouts the bar on every frame, and with a dozen bars on
+ * screen that is a dozen layouts per frame for a decorative fill.
+ */
+.nx-bar {
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--nx-delay, 0ms);
+}
+
+[data-visible='true'] .nx-bar {
+  transform: scaleX(var(--nx-fill, 0));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-bar {
+    transform: scaleX(var(--nx-fill, 0));
+  }
+}
+
+/*
+ * A stage of a scroll-linked flow.
+ *
+ * Three states, set by the section from one integer: upcoming (dimmed),
+ * active (lifted) and complete (settled). All three differ by opacity and
+ * translate only.
+ */
+.nx-stage {
+  opacity: 0.55;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity 420ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nx-stage[data-state='active'] {
+  opacity: 1;
+  transform: translate3d(0, -2px, 0);
+}
+
+.nx-stage[data-state='complete'] {
+  opacity: 0.9;
+}
+
+/* ------------------------------------------------------- interactions */
+
+/*
+ * Depth on hover, for cards that lead somewhere or reveal something.
+ *
+ * The shadow is present at rest and only its opacity changes, because
+ * animating a box-shadow's geometry repaints the element every frame.
+ */
+.nx-lift {
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 260ms ease;
+}
+
+.nx-lift:hover,
+.nx-lift:focus-within {
+  transform: translate3d(0, -4px, 0);
+}
+
+/* The primary CTA's weight shift. Scale, not padding. */
+.nx-cta {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 220ms ease;
+}
+
+.nx-cta:hover {
+  transform: scale(1.025);
+}
+
+.nx-cta:active {
+  transform: scale(0.99);
+}
+
+/* ------------------------------------------------------ reduced motion */
+
+/*
+ * index.css already collapses durations globally. What it cannot do is stop
+ * an element that starts at `opacity: 0` from being revealed by a transition
+ * that no longer runs — so the final state is asserted here directly.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .nx-reveal,
+  .nx-line {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .nx-edge {
+    stroke-dashoffset: 0;
+  }
+
+  .nx-node-halo,
+  .nx-flow {
+    animation: none;
+  }
+
+  .nx-flow {
+    /* Without the travelling pulse the dash pattern would leave a stub. */
+    stroke-dasharray: none;
+    opacity: 0.35;
+  }
+
+  .nx-parallax {
+    transform: none;
+  }
+
+  .nx-stage {
+    opacity: 1;
+    transform: none;
+  }
+
+  .nx-lift:hover,
+  .nx-cta:hover {
+    transform: none;
+  }
+}

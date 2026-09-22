@@ -51,6 +51,14 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+
+    /*
+     * In-page anchors glide rather than jump. The landing page's navigation
+     * and its "see how it works" link are both anchors, and an instant jump
+     * loses the sense of having moved within one page. The reduced-motion
+     * block below resets this to `auto`.
+     */
+    scroll-behavior: smooth;
   }
 
   body {

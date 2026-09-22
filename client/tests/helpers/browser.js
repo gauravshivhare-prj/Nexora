@@ -202,6 +202,26 @@ export async function connectBrowser(debugPort) {
       if (!ok) throw new Error(`No clickable element with text "${text}".`);
     },
 
+    /**
+     * Clicks the first element matching a CSS selector.
+     *
+     * `clickText` cannot reach a control whose label is broken up by markup —
+     * a button with an arrow glyph in its own span has newlines in its
+     * textContent and will never match an exact string. Rather than loosen
+     * the text matching for every existing test, those cases name what they
+     * are clicking.
+     */
+    async clickSelector(selector) {
+      const ok = await evaluate(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return false;
+        el.click();
+        return true;
+      })()`);
+
+      if (!ok) throw new Error(`No element matched "${selector}".`);
+    },
+
     bodyText() {
       return evaluate('document.body.innerText');
     },
@@ -219,6 +239,40 @@ export async function connectBrowser(debugPort) {
 
     clearStorage() {
       return evaluate('window.localStorage.clear()');
+    },
+
+    /**
+     * Emulates a device viewport.
+     *
+     * Needed because the landing page is not one composition scaled down: it
+     * drops graph nodes, swaps the navigation for a disclosure and reduces
+     * the number of things moving. None of that is testable at whatever size
+     * the headless window happens to be.
+     */
+    async setViewport({ width, height, mobile = false }) {
+      await send('Emulation.setDeviceMetricsOverride', {
+        width,
+        height,
+        deviceScaleFactor: 1,
+        mobile,
+      });
+    },
+
+    clearViewport() {
+      return send('Emulation.clearDeviceMetricsOverride');
+    },
+
+    /**
+     * Forces `prefers-reduced-motion: reduce` for the page.
+     *
+     * The honest way to test the reduced-motion path: assert what the browser
+     * computes under the real media query rather than what a component claims
+     * it would do.
+     */
+    setReducedMotion(reduce) {
+      return send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-motion', value: reduce ? 'reduce' : 'no-preference' }],
+      });
     },
 
     close() {

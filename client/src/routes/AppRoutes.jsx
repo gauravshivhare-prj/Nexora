@@ -4,7 +4,7 @@ import { AppLayout } from '../layouts/AppLayout.jsx';
 import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
 import { CareersPage } from '../pages/CareersPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
-import { FoundationPage } from '../pages/FoundationPage.jsx';
+import { LandingPage } from '../pages/LandingPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { RegisterPage } from '../pages/RegisterPage.jsx';
@@ -32,7 +32,7 @@ import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<FoundationPage />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
