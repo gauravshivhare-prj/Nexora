@@ -1,110 +1,69 @@
-import { ApiRequestError } from './apiClient.js';
-import { fetchCareerTwin } from './careerTwin.service.js';
-import { fetchRecommendations, fetchRoadmap, fetchSkillGap } from './career.service.js';
-import { fetchProfile } from './profile.service.js';
-import { fetchResumes } from './resume.service.js';
+import { request } from './apiClient.js';
 
 /**
- * Everything the dashboard shows, gathered in one place.
+ * Everything the dashboard shows, in one read.
  *
- * There is no summary endpoint yet, so this composes the five that exist.
- * It is deliberately the *only* place that composition happens: when a
- * server-side aggregate lands, this module is the single file that changes
- * and the page above it does not.
+ * This module used to compose five endpoints client-side, two of which
+ * depended on the result of a third — six round trips to render one page.
+ * `GET /api/summary` now returns the same figures in one, so this is the
+ * single file that changed and the page above it did not.
  *
- * Nothing is computed here beyond picking which role to drill into. Every
- * count, score, status and priority on the dashboard is a value the backend
- * returned — duplicating any of that scoring would give the dashboard an
- * opinion that could disagree with the page it links to.
+ * Nothing is computed here. Every count, score, status and next-step comes
+ * from the endpoint, which in turn takes each figure from the domain service
+ * that owns it — so the dashboard cannot disagree with the page it links to.
  */
 
 /**
- * A section that could not be loaded, or that has nothing to show yet.
+ * A section's state.
  *
- * Distinguished on purpose. "You have not built a CareerTwin" and "the
- * CareerTwin request failed" are different things to tell a student, and a
- * dashboard that renders both as an empty box is lying about one of them.
+ * `EMPTY` and `FAILED` stay distinct, as they did before: "you have not
+ * built a CareerTwin" and "the request failed" are different things to tell
+ * a student, and rendering both as an empty box lies about one of them.
  */
+export const SECTION_STATUS = { READY: 'ready', EMPTY: 'empty', FAILED: 'failed' };
+
+const { READY, EMPTY, FAILED } = SECTION_STATUS;
+
 function section(status, value = null, error = null) {
   return { status, value, error };
 }
 
-const READY = 'ready';
-const EMPTY = 'empty';
-const FAILED = 'failed';
-
 /**
  * Loads the dashboard.
  *
- * Every request is independent and allowed to fail on its own: a resume
- * service outage should cost the student the resume tile, not the whole
- * page. Each section therefore reports its own state.
+ * One request, so unlike the previous version there are no longer
+ * independent per-section failures to report: either the summary arrives or
+ * it does not. The section shape is kept because emptiness is still
+ * per-section, and because the page renders against it.
  *
  * @returns {Promise<object>} Sections, each `{ status, value, error }`.
  */
 export async function fetchDashboard({ signal } = {}) {
-  const [profile, twin, resumes, recommendations] = await Promise.allSettled([
-    fetchProfile({ signal }),
-    fetchCareerTwin({ signal }),
-    fetchResumes({ signal }),
-    fetchRecommendations({ limit: 3, signal }),
-  ]);
+  const body = await request('/api/summary', { signal });
 
-  const dashboard = {
-    profile: fromSettled(profile, (value) => (value.exists ? section(READY, value) : section(EMPTY))),
+  const data = body?.data;
+  if (!data) throw new Error('The backend returned an unexpected response shape.');
 
-    careerTwin: fromSettled(twin, (value) =>
-      value.exists ? section(READY, value.twin) : section(EMPTY),
-    ),
+  return {
+    profile: data.profile.exists ? section(READY, data.profile) : section(EMPTY),
+    resumes: data.resumes.total > 0 ? section(READY, data.resumes) : section(EMPTY),
+    careerTwin: data.careerTwin.exists ? section(READY, data.careerTwin) : section(EMPTY),
+    matches: data.matches.exists ? section(READY, data.matches) : section(EMPTY),
+    focusRole: data.focusRole ? section(READY, data.focusRole) : section(EMPTY),
+    skillGap: data.skillGap ? section(READY, data.skillGap) : section(EMPTY),
+    roadmap: data.roadmap ? section(READY, data.roadmap) : section(EMPTY),
 
-    resumes: fromSettled(resumes, (value) =>
-      value.length > 0 ? section(READY, value) : section(EMPTY),
-    ),
-
-    matches: fromSettled(recommendations, (value) =>
-      value.matches.length > 0 ? section(READY, value) : section(EMPTY),
-    ),
-
-    // Filled in below, if there is a role to fill them from.
-    focusRole: section(EMPTY),
-    skillGap: section(EMPTY),
-    roadmap: section(EMPTY),
+    /**
+     * What to do next, decided by the backend.
+     *
+     * Previously worked out in the page from the shape of the other
+     * sections. Moving it server-side removes the second implementation of
+     * an ordering that the pipeline already imposes, and gives the client a
+     * stable code to branch on instead of matching on English.
+     */
+    nextStep: data.nextStep ?? null,
   };
-
-  // Recommendations depend on a twin, so this section stays empty rather
-  // than failed when there simply is not one yet.
-  if (recommendations.status === 'rejected' && isMissingTwin(recommendations.reason)) {
-    dashboard.matches = section(EMPTY);
-  }
-
-  const focus = dashboard.matches.value?.matches?.[0];
-  if (!focus) return dashboard;
-
-  dashboard.focusRole = section(READY, { roleId: focus.roleId, title: focus.title });
-
-  // Only for the top-ranked role. Loading a gap and a roadmap for all ten
-  // would be twenty requests to render four numbers.
-  const [gap, roadmap] = await Promise.allSettled([
-    fetchSkillGap(focus.roleId, { signal }),
-    fetchRoadmap(focus.roleId, { signal }),
-  ]);
-
-  dashboard.skillGap = fromSettled(gap, (value) => section(READY, value));
-  dashboard.roadmap = fromSettled(roadmap, (value) => section(READY, value));
-
-  return dashboard;
 }
 
-function fromSettled(settled, toSection) {
-  if (settled.status === 'fulfilled') return toSection(settled.value);
-  if (isMissingTwin(settled.reason)) return section(EMPTY);
-
-  return section(FAILED, null, settled.reason);
-}
-
-/** A 409 saying the student has no CareerTwin — a state, not a failure. */
-function isMissingTwin(error) {
-  return error instanceof ApiRequestError && error.errorCode === 'CAREER_TWIN_NOT_FOUND';
-}
-
-export const SECTION_STATUS = { READY, EMPTY, FAILED };
+/** Exported for the failure branch the page still renders. */
+export const FAILED_SECTION = FAILED;

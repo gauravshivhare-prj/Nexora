@@ -6,6 +6,7 @@ import careerTwinRoutes from './careerTwin.routes.js';
 import healthRoutes from './health.routes.js';
 import profileRoutes from './profile.routes.js';
 import resumeRoutes from './resume.routes.js';
+import summaryRoutes from './summary.routes.js';
 
 /** Root API router. Future feature routers mount here, one per phase. */
 const router = Router();
@@ -16,5 +17,6 @@ router.use('/profile', profileRoutes);
 router.use('/resumes', resumeRoutes);
 router.use('/career-twin', careerTwinRoutes);
 router.use('/careers', careerRoutes);
+router.use('/summary', summaryRoutes);
 
 export default router;

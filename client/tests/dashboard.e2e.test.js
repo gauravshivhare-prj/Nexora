@@ -178,7 +178,9 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await openDashboard();
 
     const text = await page.bodyText();
-    assert.match(text, /Start by filling in your profile/);
+    // The wording is the backend's — nextStep is decided server-side so the
+    // ordering is not implemented twice.
+    assert.match(text, /Add some skills or projects to your profile/);
     assert.match(text, /No CareerTwin built yet/);
     assert.match(text, /No resumes saved yet/);
   });
@@ -194,7 +196,7 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await openDashboard();
 
     const text = await page.bodyText();
-    assert.doesNotMatch(text, /Start by filling in your profile/);
+    assert.doesNotMatch(text, /Add some skills or projects to your profile/);
     assert.doesNotMatch(text, /No CareerTwin built yet/);
   });
 
@@ -255,44 +257,43 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
 
   // ------------------------------------------------- independent failure
 
-  it('loses one tile rather than the page when a section fails', async () => {
+  it('shows a page-level failure with a retry when the summary is unreachable', async () => {
     await signUp();
     await addSkillAndProject();
     await buildTwin();
     await openDashboard();
 
-    // Break only the resumes endpoint, then reload the dashboard in-app.
+    // The dashboard is one request now, so a failure is page-level rather
+    // than per-tile. What must not happen is a blank or half-drawn page.
     await page.evaluate(`(() => {
       const original = window.fetch;
       window.fetch = (input, init) => {
-        const url = String(input);
-        if (url.includes('/api/resumes')) return Promise.reject(new TypeError('Failed to fetch'));
+        if (String(input).includes('/api/summary')) {
+          return Promise.reject(new TypeError('Failed to fetch'));
+        }
         return original(input, init);
       };
     })()`);
 
     await page.evaluate(`(() => {
-      const link = [...document.querySelectorAll('a')]
-        .find((a) => a.getAttribute('href') === '/profile');
-      link.click();
+      [...document.querySelectorAll('a')]
+        .find((a) => a.getAttribute('href') === '/profile').click();
     })()`);
     await page.waitFor('location.pathname === "/profile"', { description: 'the profile page' });
 
     await page.evaluate(`(() => {
-      const link = [...document.querySelectorAll('a')]
-        .find((a) => a.getAttribute('href') === '/app');
-      link.click();
+      [...document.querySelectorAll('a')]
+        .find((a) => a.getAttribute('href') === '/app').click();
     })()`);
-    await page.waitFor(`document.body.innerText.includes("Welcome, ${NAME}")`, {
-      description: 'the dashboard again',
+
+    await page.waitFor('document.querySelector("[role=alert]") !== null', {
+      description: 'the dashboard error state',
     });
 
-    const text = await page.bodyText();
-    // The broken section says so and offers a retry...
-    assert.match(text, /Could not reach the Nexora backend|trouble right now/);
-    // ...and the rest of the dashboard is still there.
-    assert.match(text, /Top career matches/);
-    assert.match(text, /CareerTwin/);
+    const alert = await page.evaluate('document.querySelector("[role=alert]").innerText');
+    assert.match(alert, /could not be loaded/i);
+    assert.match(alert, /Try again/);
+    assert.ok(!/at\s+\w+\s+\(/.test(alert), 'a stack trace was displayed');
   });
 
   // ------------------------------------------------------------- nav

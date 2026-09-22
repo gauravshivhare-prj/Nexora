@@ -17,8 +17,11 @@ import { toMessage } from './ResumePage.jsx';
  * and inventing a headline number by combining these sections would give
  * the dashboard an opinion that could contradict every page it links to.
  *
- * Sections load independently and fail independently, so one service being
- * down costs a tile rather than the page.
+ * Loaded from GET /api/summary in one request. That replaced a client-side
+ * composition of five endpoints, which did give each section its own
+ * failure state — the trade is deliberate: six round trips, two of them
+ * serialised behind a third, cost every student on every visit, whereas
+ * partial failure is rare and the page-level retry below covers it.
  */
 
 export function DashboardPage() {
@@ -59,8 +62,6 @@ export function DashboardPage() {
     );
   }
 
-  // Only reached if the composition itself threw — the individual sections
-  // handle their own failures below.
   if (loadError) {
     return (
       <PageShell width="max-w-5xl">
@@ -79,7 +80,11 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight text-balance text-ink sm:text-3xl">
           Welcome, {user.name}
         </h1>
-        <p className="mt-2 text-sm text-ink-muted">{describeNextStep(data)}</p>
+        {/*
+          The backend decides this. Working it out here as well would be a
+          second implementation of an ordering the pipeline already imposes.
+        */}
+        <p className="mt-2 text-sm text-ink-muted">{data.nextStep?.message}</p>
       </header>
 
       <div className="flex flex-col gap-5">
@@ -107,32 +112,6 @@ export function DashboardPage() {
       </div>
     </PageShell>
   );
-}
-
-/**
- * One line answering "what should I do next?".
- *
- * Follows the order the product's own pipeline imposes — a twin needs a
- * profile, matches need a twin — so the suggestion is the first genuinely
- * blocking thing rather than a ranked guess.
- */
-function describeNextStep(data) {
-  if (data.profile.status === SECTION_STATUS.EMPTY) {
-    return 'Start by filling in your profile — everything else is built from it.';
-  }
-  if (data.careerTwin.status === SECTION_STATUS.EMPTY) {
-    return 'Build your CareerTwin to see which roles fit what you can demonstrate.';
-  }
-  if (data.careerTwin.value?.isStale) {
-    return 'Your data has changed since your CareerTwin was built. Regenerate it to bring the rest up to date.';
-  }
-  if (data.matches.status === SECTION_STATUS.EMPTY) {
-    return 'Nothing matched strongly yet. Adding projects gives Nexora more to go on.';
-  }
-  if (data.roadmap.value?.roadmap?.summary?.totalItems > 0) {
-    return 'Your roadmap below has the next concrete thing to work on.';
-  }
-  return 'Everything is up to date.';
 }
 
 /**
@@ -228,9 +207,9 @@ function ProfileTile({ section, onRetry }) {
         <div className="flex flex-col gap-4">
           <Stats
             items={[
-              ['Skills', section.value.values.skills.length],
-              ['Projects', section.value.values.projects.length],
-              ['Certifications', section.value.values.certifications.length],
+              ['Skills', section.value.skillCount],
+              ['Projects', section.value.projectCount],
+              ['Certifications', section.value.certificationCount],
             ]}
           />
           <div>
@@ -243,8 +222,7 @@ function ProfileTile({ section, onRetry }) {
 }
 
 function ResumeTile({ section, onRetry }) {
-  const resumes = section.value ?? [];
-  const analysed = resumes.filter((resume) => resume.hasParsedData).length;
+  const counts = section.value ?? { total: 0, analysed: 0 };
 
   return (
     <Tile
@@ -261,8 +239,8 @@ function ResumeTile({ section, onRetry }) {
       <div className="flex flex-col gap-4">
         <Stats
           items={[
-            ['Saved', resumes.length],
-            ['Analysed', analysed],
+            ['Saved', counts.total],
+            ['Analysed', counts.analysed],
           ]}
         />
         <div>
@@ -381,7 +359,7 @@ function MatchesTile({ section, onRetry }) {
 }
 
 function SkillGapTile({ section, role, onRetry }) {
-  const summary = section.value?.gap?.summary;
+  const summary = section.value?.summary;
 
   return (
     <Tile
@@ -425,7 +403,7 @@ function SkillGapTile({ section, role, onRetry }) {
  * is a number nothing in the system can produce honestly.
  */
 function RoadmapTile({ section, role, onRetry }) {
-  const summary = section.value?.roadmap?.summary;
+  const summary = section.value?.summary;
 
   return (
     <Tile
