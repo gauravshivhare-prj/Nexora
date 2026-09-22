@@ -181,6 +181,24 @@ describe('theme', { timeout: 180_000 }, () => {
       description: 'the dark theme to apply',
     });
 
+    /*
+     * Waited for rather than sampled once.
+     *
+     * The colour is what this test is about, so it is the colour that gets
+     * waited on: reading it a fixed moment after the switch races the
+     * 200ms cross-fade, whose first frame is still exactly the old value —
+     * which made this fail intermittently while the page was demonstrably
+     * repainting. The assertions below still have to hold.
+     */
+    await page.waitFor(
+      `(() => {
+        const channels = getComputedStyle(document.body).backgroundColor
+          .match(/\\d+/g).slice(0, 3).map(Number);
+        return channels.every((channel) => channel < 80);
+      })()`,
+      { description: 'the canvas to finish repainting dark' },
+    );
+
     const darkCanvas = await canvas();
     assert.notEqual(darkCanvas, lightCanvas, 'the canvas colour did not change');
 

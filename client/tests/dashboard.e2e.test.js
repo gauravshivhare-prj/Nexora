@@ -307,6 +307,14 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await page.clickText('Careers');
     await page.waitFor('location.pathname === "/careers"', { description: 'the careers page' });
 
+    // NavLink moves the marker on its next commit, which is after the URL
+    // has changed — so this waits for the marker rather than reading it on
+    // the same turn as the navigation.
+    await page.waitFor(
+      `document.querySelector('[aria-current="page"]')?.textContent.trim() === 'Careers'`,
+      { description: 'the current-page marker to move to Careers' },
+    );
+
     const current = await page.evaluate(`(() => {
       const link = document.querySelector('[aria-current="page"]');
       return link ? link.textContent.trim() : null;
