@@ -95,9 +95,9 @@ function ResultMessage({ status, message, detail }) {
   const isSuccess = status === HEALTH_STATUS.SUCCESS;
 
   const tone = isError
-    ? 'border-red-200 bg-red-50 text-danger'
+    ? 'border-red-200 bg-red-50 text-danger-text'
     : isSuccess
-      ? 'border-green-200 bg-green-50 text-success'
+      ? 'border-green-200 bg-green-50 text-green-700'
       : 'border-orange-200 bg-orange-50 text-ink-muted';
 
   return (

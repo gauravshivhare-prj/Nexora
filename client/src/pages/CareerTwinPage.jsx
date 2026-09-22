@@ -6,7 +6,12 @@ import { FormAlert } from '../components/FormAlert.jsx';
 import { SkillRow, StrengthBadge, strengthExplanation } from '../components/careerTwin/SkillEvidence.jsx';
 import { ApiRequestError } from '../services/apiClient.js';
 import { STRENGTH_ORDER, fetchCareerTwin, generateCareerTwin } from '../services/careerTwin.service.js';
-import { toMessage } from './ResumePage.jsx';
+import { formatDateTime } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
+
+// Re-export for backward compatibility — other pages historically imported
+// formatDateTime from CareerTwinPage. New code should import from utils/ directly.
+export { formatDateTime };
 
 /**
  * /career-twin — what Nexora has actually observed about a student.
@@ -461,19 +466,4 @@ function describeSources(sources, indicators) {
 
   if (parts.length === 0) return 'no recorded sources';
   return new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(parts);
-}
-
-export function formatDateTime(value) {
-  if (!value) return 'an unknown time';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'an unknown time';
-
-  return date.toLocaleString('en', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

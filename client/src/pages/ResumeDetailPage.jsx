@@ -7,7 +7,8 @@ import { ParsedResume } from '../components/resume/ParsedResume.jsx';
 import { ProcessingStatus, StepFailure } from '../components/resume/ProcessingStatus.jsx';
 import { ApiRequestError } from '../services/apiClient.js';
 import { PROCESSING_STATUS, analyseResume, deleteResume, fetchResume } from '../services/resume.service.js';
-import { formatDate, toMessage } from './ResumePage.jsx';
+import { formatDate } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /resume/:resumeId — one stored resume, and what analysing it produced.

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
 import { ApiRequestError } from '../services/apiClient.js';
 import { fetchRecommendations, fetchRoles } from '../services/career.service.js';
-import { toMessage } from './ResumePage.jsx';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /careers — roles ranked against the student's CareerTwin.

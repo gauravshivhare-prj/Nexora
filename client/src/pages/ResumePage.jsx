@@ -18,6 +18,12 @@ import {
 } from '../constants/resumeOptions.js';
 import { ApiRequestError } from '../services/apiClient.js';
 import { createResume, createResumeFromFile, fetchResumes } from '../services/resume.service.js';
+import { formatDate } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
+
+// Re-export for backward compatibility — other pages historically imported
+// these from ResumePage. New code should import from utils/ directly.
+export { formatDate, toMessage };
 
 /**
  * /resume — the student's stored resumes, and the form that adds one.
@@ -375,38 +381,4 @@ function validateUploadFile(file) {
 function shortMessage(length) {
   const needed = RESUME_TEXT_LIMITS.min - length;
   return `Too short to be a resume — ${needed} more character${needed === 1 ? '' : 's'} needed.`;
-}
-
-export function formatDate(value) {
-  if (!value) return '';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
-  return date.toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-/**
- * Turns a failure into something a student can act on.
- *
- * Same rule as the profile page: the backend writes its 4xx messages for
- * display, so they are shown as-is; anything unexpected gets a generic line
- * rather than risking internals on screen.
- */
-export function toMessage(error, fallback) {
-  if (error instanceof ApiRequestError) {
-    if (error.status === null) return error.message; // network / timeout
-
-    // 502 and 503 are the AI pipeline's own answers — "the provider is not
-    // configured", "its output could not be trusted" — and the backend
-    // writes both for display. Replacing them with a generic line would
-    // hide the one thing that tells a student whether to wait or give up.
-    if (error.status >= 500 && error.status !== 502 && error.status !== 503) {
-      return 'Nexora is having trouble right now. Please try again in a moment.';
-    }
-    return error.message;
-  }
-
-  console.error(fallback, error);
-  return fallback;
 }

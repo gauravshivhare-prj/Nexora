@@ -5,8 +5,8 @@ import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } fro
 import { GapStatusBadge, GapStatusLegend, GapSummary } from '../components/careers/GapStatus.jsx';
 import { ApiRequestError } from '../services/apiClient.js';
 import { GAP_STATUS, fetchSkillGap } from '../services/career.service.js';
-import { formatDateTime } from './CareerTwinPage.jsx';
-import { toMessage } from './ResumePage.jsx';
+import { formatDateTime } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /careers/:roleId/skill-gap — every skill a role names, and where the

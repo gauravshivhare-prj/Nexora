@@ -6,10 +6,10 @@
  */
 
 const TONES = {
-  ready: { glyph: '✓', dot: 'bg-success', text: 'text-success' },
+  ready: { glyph: '✓', dot: 'bg-success', text: 'text-green-700' },
   unknown: { glyph: '?', dot: 'bg-ink-muted', text: 'text-ink-muted' },
-  pending: { glyph: '…', dot: 'bg-warning', text: 'text-warning' },
-  failed: { glyph: '✕', dot: 'bg-danger', text: 'text-danger' },
+  pending: { glyph: '…', dot: 'bg-warning', text: 'text-warning-text' },
+  failed: { glyph: '✕', dot: 'bg-danger', text: 'text-danger-text' },
 };
 
 export function StatusRow({ label, state, tone = 'unknown', note }) {

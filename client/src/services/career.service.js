@@ -87,19 +87,6 @@ export async function fetchRoadmap(roleId, { maxItems, signal } = {}) {
   return { roadmap: data.roadmap, basedOn: data.basedOn ?? null };
 }
 
-/** GET /api/careers/roles/:roleId/match */
-export async function fetchRoleMatch(roleId, { signal } = {}) {
-  const body = await request(
-    `/api/careers/roles/${encodeURIComponent(roleId)}/match`,
-    { signal },
-  );
-
-  const data = body?.data;
-  if (!data?.match) throw new Error('The backend returned an unexpected response shape.');
-
-  return { match: data.match, basedOn: data.basedOn ?? null, method: data.method ?? null };
-}
-
 /**
  * GET /api/careers/roles/:roleId/skill-gap
  *

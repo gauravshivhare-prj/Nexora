@@ -226,22 +226,50 @@ describe('career twin page', { timeout: 180_000 }, () => {
     // Evidence is collapsed by default, and the button says how much there is.
     assert.match(await page.bodyText(), /Show 1 source/);
 
-    // Scoped to a list item: the navigation's "Menu" disclosure is also an
-    // aria-expanded button and comes first in the document, so an unscoped
-    // query would open the menu and never touch the evidence.
-    const opened = await page.evaluate(`(() => {
+    // Verify the disclosure starts collapsed with correct ARIA attributes.
+    const before = await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('li button[aria-expanded]')]
+        .find((b) => /source/.test(b.textContent));
+      if (!button) return null;
+      const panelId = button.getAttribute('aria-controls');
+      const panel = panelId ? document.getElementById(panelId) : null;
+      return {
+        expanded: button.getAttribute('aria-expanded'),
+        panelHidden: panel?.hidden ?? null,
+        hasControls: Boolean(panelId),
+      };
+    })()`);
+    assert.ok(before, 'no expandable evidence control was rendered');
+    assert.equal(before.expanded, 'false', 'evidence should start collapsed');
+    assert.equal(before.hasControls, true, 'button must have aria-controls');
+    assert.equal(before.panelHidden, true, 'controlled panel should be hidden');
+
+    // Click to expand.
+    await page.evaluate(`(() => {
       const button = [...document.querySelectorAll('li button[aria-expanded="false"]')]
         .find((b) => /source/.test(b.textContent));
-      if (!button) return false;
-      button.click();
-      return true;
+      if (button) button.click();
     })()`);
-    assert.equal(opened, true, 'no expandable evidence control was rendered');
 
     await page.waitFor(
       'document.body.innerText.includes("Used in a project") || document.body.innerText.includes("Listed on your profile")',
       { description: 'the evidence detail' },
     );
+
+    // Verify the button now reports expanded and the panel is visible.
+    const after = await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('li button[aria-expanded]')]
+        .find((b) => /source/.test(b.textContent));
+      if (!button) return null;
+      const panelId = button.getAttribute('aria-controls');
+      const panel = panelId ? document.getElementById(panelId) : null;
+      return {
+        expanded: button.getAttribute('aria-expanded'),
+        panelHidden: panel?.hidden ?? null,
+      };
+    })()`);
+    assert.equal(after.expanded, 'true', 'aria-expanded did not toggle to true');
+    assert.equal(after.panelHidden, false, 'evidence panel should be visible after click');
   });
 
   it('reports zero verified skills as a fact about the product', async () => {

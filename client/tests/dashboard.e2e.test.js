@@ -340,7 +340,7 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     assert.equal(expanded, 'true');
   });
 
-  it('offers a skip link before the navigation', async () => {
+  it('offers a skip link whose target is focusable', async () => {
     await signUp();
     await openDashboard();
 
@@ -350,8 +350,71 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     })()`);
 
     assert.deepEqual(first, { text: 'Skip to content', href: '#main-content' });
-    const target = await page.evaluate('Boolean(document.getElementById("main-content"))');
-    assert.equal(target, true, 'the skip link points at nothing');
+    const target = await page.evaluate(`(() => {
+      const el = document.getElementById('main-content');
+      if (!el) return null;
+      return { exists: true, tabIndex: el.tabIndex };
+    })()`);
+    assert.ok(target, 'the skip link points at nothing');
+    assert.equal(target.tabIndex, -1, 'skip target must be programmatically focusable');
+  });
+
+  it('marks only the current page with aria-current', async () => {
+    await signUp();
+    await openDashboard();
+
+    // Both the desktop and the hidden mobile nav render NavLinks, so
+    // aria-current="page" appears once per nav.  The check that matters is
+    // that every marked link agrees on the current page.
+    const ariaCurrentLabels = await page.evaluate(`(() => {
+      return [...document.querySelectorAll('[aria-current="page"]')]
+        .map((el) => el.textContent.trim());
+    })()`);
+    assert.ok(ariaCurrentLabels.length >= 1, 'no aria-current link found');
+    assert.ok(
+      ariaCurrentLabels.every((label) => label === 'Dashboard'),
+      `expected all aria-current links to say Dashboard, got ${JSON.stringify(ariaCurrentLabels)}`,
+    );
+
+    // Navigate away and verify it moves.
+    await page.clickText('Careers');
+    await page.waitFor('location.pathname === "/careers"', { description: 'the careers page' });
+
+    const afterNav = await page.evaluate(`(() => {
+      return [...document.querySelectorAll('[aria-current="page"]')]
+        .map((el) => el.textContent.trim());
+    })()`);
+    assert.ok(afterNav.length >= 1, 'no aria-current link after navigation');
+    assert.ok(
+      afterNav.every((label) => label === 'Careers'),
+      `expected all aria-current links to say Careers, got ${JSON.stringify(afterNav)}`,
+    );
+  });
+
+  it('closes the mobile menu when a destination is chosen', async () => {
+    await signUp();
+    await openDashboard();
+
+    // Open the menu.
+    await page.clickText('Menu');
+    await page.waitFor(
+      `document.querySelector('#app-nav-panel')?.hidden === false`,
+      { description: 'the menu panel to open' },
+    );
+
+    // Click a destination inside the mobile panel.
+    await page.evaluate(`(() => {
+      const panel = document.getElementById('app-nav-panel');
+      const link = panel.querySelector('a[href="/profile"]');
+      if (link) link.click();
+    })()`);
+    await page.waitFor('location.pathname === "/profile"', { description: 'navigation to /profile' });
+
+    // The panel should have auto-closed.
+    const panelHidden = await page.evaluate(
+      `document.querySelector('#app-nav-panel')?.hidden ?? null`,
+    );
+    assert.equal(panelHidden, true, 'the mobile menu did not close after navigation');
   });
 
   // ------------------------------------------------------- accessibility
@@ -361,6 +424,10 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await addSkillAndProject();
     await buildTwin();
     await openDashboard();
+
+    // Exactly one h1, heading hierarchy.
+    const h1Count = await page.evaluate('document.querySelectorAll("h1").length');
+    assert.equal(h1Count, 1, `expected exactly one h1, found ${h1Count}`);
 
     const headings = await page.evaluate('document.querySelectorAll("h1, h2").length');
     assert.ok(headings >= 5, `expected a heading per tile, found ${headings}`);

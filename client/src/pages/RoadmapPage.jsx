@@ -5,8 +5,8 @@ import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } fro
 import { GapStatusBadge } from '../components/careers/GapStatus.jsx';
 import { ApiRequestError } from '../services/apiClient.js';
 import { fetchRoadmap } from '../services/career.service.js';
-import { formatDateTime } from './CareerTwinPage.jsx';
-import { toMessage } from './ResumePage.jsx';
+import { formatDateTime } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /careers/:roleId/roadmap — an ordered plan towards one role.

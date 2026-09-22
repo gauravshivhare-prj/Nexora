@@ -350,6 +350,40 @@ describe('frontend authentication', { timeout: 180_000 }, () => {
       });
     });
 
+    it('labels every auth form control for assistive technology', async () => {
+      // Register page.
+      await page.goto(`${stack.appUrl}/register`);
+      await page.waitFor('document.querySelector("form") !== null', {
+        description: 'the register form',
+      });
+
+      const registerUnlabelled = await page.evaluate(`(() => {
+        const controls = [...document.querySelectorAll('input, select, textarea')];
+        return controls.filter((c) => {
+          if (c.type === 'hidden') return false;
+          if (c.getAttribute('aria-label')) return false;
+          return !document.querySelector('label[for="' + CSS.escape(c.id) + '"]');
+        }).length;
+      })()`);
+      assert.equal(registerUnlabelled, 0, 'register page has unlabelled controls');
+
+      // Login page.
+      await page.goto(`${stack.appUrl}/login`);
+      await page.waitFor('document.querySelector("form") !== null', {
+        description: 'the login form',
+      });
+
+      const loginUnlabelled = await page.evaluate(`(() => {
+        const controls = [...document.querySelectorAll('input, select, textarea')];
+        return controls.filter((c) => {
+          if (c.type === 'hidden') return false;
+          if (c.getAttribute('aria-label')) return false;
+          return !document.querySelector('label[for="' + CSS.escape(c.id) + '"]');
+        }).length;
+      })()`);
+      assert.equal(loginUnlabelled, 0, 'login page has unlabelled controls');
+    });
+
     it('produced no console errors during the run', async () => {
       // Genuine failures are asserted individually above; this catches the
       // React warnings and stray exceptions that no single test looks for.

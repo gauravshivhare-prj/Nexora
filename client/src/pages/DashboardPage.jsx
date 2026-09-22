@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { Card, EmptyState, ErrorState, LoadingState, PageShell } from '../components/PageShell.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { SECTION_STATUS, fetchDashboard } from '../services/dashboard.service.js';
-import { formatDateTime } from './CareerTwinPage.jsx';
-import { toMessage } from './ResumePage.jsx';
+import { formatDateTime } from '../utils/dateFormat.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /app — the signed-in dashboard.
