@@ -176,7 +176,10 @@ const careerTwinSchema = new mongoose.Schema(
  *   stand now.
  * @returns {{ isStale: boolean, reasons: string[] }}
  */
-export function isCareerTwinStale(twin, { profileUpdatedAt, analysedResumeIds }) {
+export function isCareerTwinStale(
+  twin,
+  { profileUpdatedAt, analysedResumeIds, latestAnalysisAt = null },
+) {
   const reasons = [];
 
   const builtFrom = twin.sources?.profileUpdatedAt ?? null;
@@ -189,6 +192,23 @@ export function isCareerTwinStale(twin, { profileUpdatedAt, analysedResumeIds })
 
   if (now.size !== before.size || [...now].some((id) => !before.has(id))) {
     reasons.push('Your analysed resumes have changed since this was generated.');
+  } else if (
+    /*
+     * The same resumes, analysed again.
+     *
+     * Comparing the *set* of ids cannot see this: re-running the analysis
+     * keeps the id and replaces the parsed data, so every skill the twin
+     * rests on can change while the set stays identical. The twin would
+     * then quietly present evidence that no longer exists.
+     *
+     * Only checked when the ids match, so a student who added a resume gets
+     * the more specific reason above rather than both.
+     */
+    latestAnalysisAt &&
+    twin.generatedAt &&
+    new Date(latestAnalysisAt) > new Date(twin.generatedAt)
+  ) {
+    reasons.push('A resume has been analysed again since this was generated.');
   }
 
   return { isStale: reasons.length > 0, reasons };

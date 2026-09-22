@@ -168,6 +168,34 @@ function collectSkills(profile, analysedResumes) {
         );
       }
     }
+
+    /*
+     * Certifications named in a resume.
+     *
+     * Treated exactly as a profile certification is: it does not introduce a
+     * skill of its own, it corroborates one the student already has. A
+     * certification whose name mentions no known skill adds nothing, which
+     * is why this attaches to existing entries rather than calling `add`.
+     *
+     * These are as grounded as the skills beside them — the analysis
+     * pipeline already checked every one against the resume text — so
+     * dropping them was discarding evidence Nexora had earned.
+     */
+    for (const certification of resume.parsed.certifications ?? []) {
+      if (!certification.name) continue;
+
+      for (const entry of bySkill.values()) {
+        if (!mentions(certification.name, entry.name)) continue;
+
+        entry.evidence.push(
+          makeEvidence({
+            source: EVIDENCE_SOURCES.CERTIFICATION,
+            detail: `Covered by "${certification.name}", from ${label}.`,
+            reference: resume.id,
+          }),
+        );
+      }
+    }
   }
 
   return [...bySkill.values()]

@@ -60,6 +60,18 @@ async function loadInputs(userId) {
     profile: profileDocument ? toPublicProfile(profileDocument) : null,
     profileUpdatedAt: profileDocument?.updatedAt ?? null,
     resumes: resumeDocuments.map(toPublicResume),
+    /**
+     * When any of these resumes was most recently analysed.
+     *
+     * Carried separately because the set of resume ids cannot express it: a
+     * re-analysis keeps the id and replaces the parsed data, so this is the
+     * only signal that the evidence under an unchanged set has moved.
+     */
+    latestAnalysisAt: resumeDocuments.reduce((latest, resume) => {
+      const completedAt = resume.analysis?.completedAt;
+      if (!completedAt) return latest;
+      return !latest || completedAt > latest ? completedAt : latest;
+    }, null),
   };
 }
 
@@ -76,10 +88,11 @@ export async function getCareerTwin(userId) {
   const stored = await CareerTwin.findOne({ user: userId });
   if (!stored) return { twin: null, exists: false };
 
-  const { profileUpdatedAt, resumes } = await loadInputs(userId);
+  const { profileUpdatedAt, resumes, latestAnalysisAt } = await loadInputs(userId);
   const staleness = isCareerTwinStale(stored, {
     profileUpdatedAt,
     analysedResumeIds: resumes.map((resume) => resume.id),
+    latestAnalysisAt,
   });
 
   return { twin: toPublicCareerTwin(stored, staleness), exists: true };
