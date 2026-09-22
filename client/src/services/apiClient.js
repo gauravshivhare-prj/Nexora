@@ -8,8 +8,26 @@ import { readToken } from './tokenStorage.js';
  * header, error shape and response parsing in one file.
  */
 
-/** How long to wait before treating a request as unreachable. */
+/**
+ * How long to wait before treating a request as unreachable.
+ *
+ * Eight seconds suits a database read. It does not suit a call that waits on
+ * a language model: the backend's own AI timeout is measured in tens of
+ * seconds, so a client that gave up at eight would report a timeout for
+ * every analysis that was still perfectly on track — and the resume would
+ * be left marked `processing` with nobody watching.
+ */
 const REQUEST_TIMEOUT_MS = 8000;
+
+/**
+ * The budget for a request that waits on an AI provider.
+ *
+ * Deliberately longer than the server's own provider timeout, so the server
+ * is always the one that decides a model call has failed. If the client gave
+ * up first it would turn a recorded, explainable failure into an unexplained
+ * one, and the student would never see what actually went wrong.
+ */
+export const AI_REQUEST_TIMEOUT_MS = 90_000;
 
 /**
  * The configured backend origin, or null when VITE_API_URL is missing.
@@ -80,8 +98,8 @@ export async function request(path, options = {}) {
     );
   }
 
-  const { signal, body, auth = true, ...rest } = options;
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const { signal, body, auth = true, timeoutMs = REQUEST_TIMEOUT_MS, ...rest } = options;
+  const timeout = AbortSignal.timeout(timeoutMs);
 
   // Attached here, once, so no caller has to remember it and no component
   // ever handles the token itself. Read per request rather than captured, so
@@ -115,7 +133,7 @@ export async function request(path, options = {}) {
 
     if (error.name === 'TimeoutError') {
       throw new ApiRequestError(
-        `The request to ${baseUrl} timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`,
+        `The request to ${baseUrl} timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
         { cause: error },
       );
     }

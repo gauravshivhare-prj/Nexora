@@ -1,4 +1,4 @@
-import { post, request } from './apiClient.js';
+import { AI_REQUEST_TIMEOUT_MS, post, request } from './apiClient.js';
 
 /**
  * Resume calls against the Nexora API.
@@ -99,7 +99,12 @@ export async function createResume({ label, text }) {
  * costs money and a student who only wanted to keep a copy should not pay it.
  */
 export async function analyseResume(resumeId) {
-  const body = await post(`/api/resumes/${encodeURIComponent(resumeId)}/analysis`);
+  // Waits on a provider, so it gets the long budget. The server must be the
+  // one that decides a model call has failed, or a client-side timeout
+  // would turn a recorded failure into an unexplained one.
+  const body = await post(`/api/resumes/${encodeURIComponent(resumeId)}/analysis`, undefined, {
+    timeoutMs: AI_REQUEST_TIMEOUT_MS,
+  });
   return toResume(unwrap(body, 'resume'));
 }
 

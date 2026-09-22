@@ -7,6 +7,7 @@ import {
   listResumes,
 } from '../services/resume.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { clientGoneSignal } from '../utils/requestSignal.js';
 
 /**
  * POST /api/resumes
@@ -90,7 +91,12 @@ export const remove = asyncHandler(async (req, res) => {
  * endpoint says so rather than returning invented data.
  */
 export const analyse = asyncHandler(async (req, res) => {
-  const resume = await analyseResume(req.auth.userId, req.params.resumeId);
+  // Giving up on the page stops the provider call rather than leaving
+  // Nexora paying for an answer nobody will read. See requestSignal.js for
+  // why this is derived from the response rather than the request.
+  const resume = await analyseResume(req.auth.userId, req.params.resumeId, {
+    signal: clientGoneSignal(res),
+  });
 
   res.status(200).json({
     success: true,

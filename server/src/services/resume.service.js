@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import {
   ACCEPTED_RESUME_SOURCES,
   PARSED_SCHEMA_VERSION,
+  PROCESSING_STALE_AFTER_MS,
   PROCESSING_STATUS,
   RESUME_LIMITS,
   RESUME_SOURCES,
@@ -301,10 +302,10 @@ export async function deleteResume(userId, resumeId) {
  *   503 if no provider is configured or the provider failed,
  *   502 if the provider's output could not be trusted.
  */
-export async function analyseResume(userId, resumeId) {
+export async function analyseResume(userId, resumeId, { signal } = {}) {
   const resume = await findOwned(userId, resumeId);
 
-  if (resume.analysis?.status === PROCESSING_STATUS.PROCESSING) {
+  if (isAnalysisRunning(resume.analysis)) {
     throw new ApiError(
       409,
       'This resume is already being analysed. Wait for it to finish.',
@@ -320,7 +321,7 @@ export async function analyseResume(userId, resumeId) {
   await resume.save();
 
   try {
-    const result = await runAnalysisPipeline(resume.extractedText, provider);
+    const result = await runAnalysisPipeline(resume.extractedText, provider, signal);
 
     resume.parsed = result.parsed;
     resume.warnings = result.warnings;
@@ -345,6 +346,28 @@ export async function analyseResume(userId, resumeId) {
 }
 
 /**
+ * Whether a run is genuinely still going.
+ *
+ * `processing` alone is not enough to answer this. Analysis runs inline, so
+ * the status can only be left set by a process that died holding it — and a
+ * student waiting on a run that no longer exists would wait forever. Past
+ * the staleness window the claim is treated as abandoned and a fresh
+ * attempt is allowed, which is the only way back for that resume.
+ *
+ * A missing `startedAt` counts as stale rather than as running. It means the
+ * document was written by something that did not follow this path, and the
+ * safe reading is the one that leaves the student a way forward.
+ */
+function isAnalysisRunning(analysis) {
+  if (analysis?.status !== PROCESSING_STATUS.PROCESSING) return false;
+
+  const startedAt = analysis.startedAt ? new Date(analysis.startedAt).getTime() : null;
+  if (!startedAt || Number.isNaN(startedAt)) return false;
+
+  return Date.now() - startedAt < PROCESSING_STALE_AFTER_MS;
+}
+
+/**
  * The untrusted half of analysis, with no database access.
  *
  * Separated so the rule is visible rather than remembered: this function can
@@ -353,8 +376,14 @@ export async function analyseResume(userId, resumeId) {
  *
  * @throws {ApiError} 502 when the output cannot be trusted.
  */
-async function runAnalysisPipeline(resumeText, provider) {
-  const { text, model } = await requestCompletion(buildResumeExtractionRequest(resumeText));
+async function runAnalysisPipeline(resumeText, provider, signal) {
+  // The signal is the request's own. If the student gave up and closed the
+  // tab there is nobody left to receive the answer, and a provider call is
+  // the one part of this that costs money to finish for no reason.
+  const { text, model } = await requestCompletion({
+    ...buildResumeExtractionRequest(resumeText),
+    signal,
+  });
 
   const json = parseJsonObject(text);
   if (json.error) throw untrustedOutput(json.error);

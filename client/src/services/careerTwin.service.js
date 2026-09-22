@@ -1,4 +1,4 @@
-import { post, request } from './apiClient.js';
+import { AI_REQUEST_TIMEOUT_MS, post, request } from './apiClient.js';
 
 /**
  * CareerTwin calls against the Nexora API.
@@ -99,7 +99,12 @@ export async function fetchCareerTwin({ signal } = {}) {
  */
 export async function generateCareerTwin({ withNarrative = false } = {}) {
   const query = withNarrative ? '?narrative=true' : '';
-  const body = await post(`/api/career-twin${query}`);
+
+  // Only the narrative calls a model; the twin itself is deterministic. The
+  // longer budget is therefore applied only when one was asked for.
+  const body = await post(`/api/career-twin${query}`, undefined, {
+    ...(withNarrative ? { timeoutMs: AI_REQUEST_TIMEOUT_MS } : {}),
+  });
 
   const twin = body?.data?.careerTwin;
   if (!twin) throw new Error('The backend returned an unexpected response shape.');

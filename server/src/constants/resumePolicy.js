@@ -49,6 +49,21 @@ export const PROCESSING_STATUS = {
 
 export const PROCESSING_STATUS_VALUES = Object.values(PROCESSING_STATUS);
 
+/**
+ * How long a `processing` step is believed before it is treated as abandoned.
+ *
+ * Analysis runs inline, so the only thing that can leave a step stuck at
+ * `processing` is the process dying between marking it and finishing —
+ * a deploy, a crash, an OOM kill. Without this, that resume answers 409
+ * "already being analysed" forever and the student has no way back: there
+ * is nothing still running for them to wait for.
+ *
+ * Generously above the longest a provider call can take (the AI timeout is
+ * measured in tens of seconds), so a run that is genuinely in flight is
+ * never mistaken for a dead one.
+ */
+export const PROCESSING_STALE_AFTER_MS = 10 * 60 * 1000;
+
 export const RESUME_LIMITS = {
   /**
    * Resume text length.
