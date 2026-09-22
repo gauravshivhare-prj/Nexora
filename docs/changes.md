@@ -280,6 +280,67 @@ Full frontend regression green: 134 tests. Production build passes. No
 dependency added — the motion is CSS, SVG, IntersectionObserver and one
 requestAnimationFrame-coalesced pointer handler.
 
+### CHANGE-008
+Date: 2026-09-22
+Requested by: Project owner
+Feature: User-controlled theme (light / dark / system) and landing visual polish
+Reason: The product had one theme. A career tool students use at night on
+their own machines should follow the preference their machine already
+expresses, and the landing page's visual language had not yet reached the
+auth screens.
+Current behavior: Light theme only, hard-coded through the design tokens. The
+sign-in and register screens were plain forms that did not look like the rest
+of the product.
+Requested behavior: A switcher offering Light, Dark and System; the choice
+persisted across reloads; System following `prefers-color-scheme` live; the
+theme applied to the whole application rather than to the landing page alone.
+Impact: Frontend only. No backend change, no API change, no dependency added.
+No change to authentication behaviour, validation, error handling or routing.
+Files/modules affected:
+- New: `theme/themeStorage.js`, `theme/ThemeProvider.jsx`, `hooks/useTheme.js`,
+  `components/ThemeToggle.jsx`, `components/landing/animation/useActiveSection.js`,
+  `tests/theme.e2e.test.js`.
+- `index.css`: a `[data-theme='dark']` block that remaps the semantic tokens
+  **and** the light end of the orange/red/green ramps, plus two new intent
+  tokens — `--color-on-brand` (the label on a filled accent) and
+  `--color-on-ink*` (copy on the permanently dark closing section).
+- `index.html`: a blocking inline script that applies the stored theme before
+  first paint, so a dark-theme visitor sees no white flash.
+- `App.jsx`: `ThemeProvider` above the router, since the theme belongs to the
+  browser rather than to the session.
+- Switcher placed in `LandingNavbar`, `AppNav` and `AuthLayout`.
+- `AuthLayout` restyled to the landing page's vocabulary (wordmark,
+  atmospheric wash, elevated card). Form markup untouched.
+- Landing polish: hero type scale and rhythm, a stress on "exactly", CTA
+  hierarchy, graph centre-card depth and node hierarchy, a finer background
+  grid, a scroll-spy active state in the navbar, and theme-aware edge and
+  glow strengths.
+- 24 `text-white` usages across 19 files became `text-on-brand`. Every one of
+  them sat on a filled accent, so this is one decision expressed once.
+Risk: Low, and concentrated in one file. The remap is why: because every
+Tailwind utility resolves through a custom property, the dark theme is a
+token-level change rather than 330 per-component variants, so no component
+can be left behind in light mode.
+Two defects were found by measuring rather than by looking:
+- White on the dark theme's brightened accent is 2.8:1. Fixed by
+  `--color-on-brand`, which is dark in the dark theme (6.5:1).
+- `--color-warning-text` measured 4.38:1 on the `orange-100` tint it is
+  actually used on, in the **existing light theme**. Darkened to amber-800.
+Decision: Approved
+Implemented: Yes
+Tested: 19 new browser tests. They cover the three modes, persistence across
+reload, System tracking a live `prefers-color-scheme` change, an unusable
+localStorage, the pre-paint script, the radio-group semantics, arrow-key
+operation, the focus ring, the theme reaching the auth screens' cards, dark
+mode under reduced motion, no horizontal overflow in dark at six widths, and
+computed WCAG contrast for every text token in both themes. Full frontend
+regression green: 153 tests. Production build passes. No dependency added.
+
+Note on the light theme's primary button: white on `#EA580C` is 3.56:1, which
+passes AA only at large text sizes. It is the accepted design and predates
+this change, so the contrast test excludes that one pair by name rather than
+by a lowered threshold.
+
 ## Freeze Rule
 Once a phase is approved, do not modify its requirements casually.
 

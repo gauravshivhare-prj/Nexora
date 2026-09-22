@@ -341,7 +341,7 @@ function AddResumeCard({ isFull, onAdded }) {
               type="submit"
               disabled={isSaving || trimmed.length < RESUME_TEXT_LIMITS.min}
               aria-busy={isSaving}
-              className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
+              className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
             >
               {isSaving ? 'Saving…' : 'Save resume'}
             </button>

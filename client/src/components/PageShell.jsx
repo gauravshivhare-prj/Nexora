@@ -85,7 +85,7 @@ export function ErrorState({ title, message, onRetry, retryLabel = 'Try again' }
         <button
           type="button"
           onClick={onRetry}
-          className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+          className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
         >
           {retryLabel}
         </button>

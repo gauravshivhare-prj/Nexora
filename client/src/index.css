@@ -29,10 +29,44 @@
    * (#EA580C on white is 3.6:1, #EF4444 is 3.8:1, #F59E0B is 2.2:1). These are
    * the darkened equivalents, each ≥4.5:1 on both surface and canvas, for
    * anything the student has to read rather than just notice.
+   *
+   * `--color-warning-text` is darker than the amber-700 it used to be: the
+   * old value cleared 4.5:1 on white and on canvas, but the places it is
+   * actually used — the "out of date" notice, the roadmap's `high` priority
+   * chip — sit on an `orange-100` tint, where it measured 4.38:1. The
+   * contrast check in tests/theme.e2e.test.js now covers that pairing.
    */
   --color-brand-text: #c2410c;
   --color-danger-text: #b91c1c;
-  --color-warning-text: #b45309;
+  --color-warning-text: #92400e;
+
+  /*
+   * Copy that sits on a permanently dark surface — the closing call to
+   * action, which is the page's one deliberately dark section in both
+   * themes.
+   *
+   * These exist because that section used `text-orange-100` and
+   * `text-orange-200` to mean "light warm text". The dark theme remaps those
+   * ramp steps to dark surfaces, which would have turned the CTA's copy
+   * invisible. Naming the intent instead makes the section theme-independent
+   * by construction.
+   */
+  --color-on-ink: #fff7ed;
+  --color-on-ink-muted: #e7d4c0;
+
+  /*
+   * The label on a filled accent — a brand button, a danger button, a status
+   * dot.
+   *
+   * Every `text-on-brand` in this codebase was one of those, so the intent is
+   * named instead. It has to be a token because the answer is
+   * theme-dependent: the dark theme brightens the accent to hold its own
+   * against charcoal, and white on that bright orange is 2.8:1 — worse than
+   * the light theme it replaced. Dark text on it is 6.5:1.
+   *
+   * Light keeps white, which is the accepted design.
+   */
+  --color-on-brand: #ffffff;
 
   --animate-rise: rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
 
@@ -48,9 +82,180 @@
   }
 }
 
+/*
+ * Atmosphere: strength, not kind.
+ *
+ * The warm radial washes and the measurement grid are used by the landing
+ * page and by the auth screens. They read very differently against warm
+ * off-white and against charcoal — at light-theme opacity they turn a dark
+ * hero into an orange haze, and at dark-theme opacity they vanish in light —
+ * so the effect is one thing with two sets of numbers, and the numbers live
+ * here with the rest of the theme.
+ */
+:root {
+  --nx-glow-a: 0.18;
+  --nx-glow-b: 0.14;
+  --nx-glow-c: 0.12;
+  --nx-grid-line: rgba(234, 88, 12, 0.07);
+
+  /* The CareerTwin graph's connections. Warm and confident against
+     off-white; they need both more colour and more opacity to read as
+     connections against charcoal. */
+  --nx-edge-color: #ea580c;
+  --nx-edge-strong: 0.55;
+  --nx-edge-weak: 0.18;
+}
+
+/*
+ * The auth screens' background.
+ *
+ * In index.css rather than landing.css because the auth pages must not pull
+ * in the landing page's motion stylesheet for one gradient. Fixed rather than
+ * absolute: these screens are a single viewport, and a fixed layer cannot be
+ * scrolled away from the card it sits behind.
+ */
+.nx-auth-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 26rem at 20% 0%, rgba(249, 115, 22, var(--nx-glow-a)), transparent 70%),
+    radial-gradient(34rem 24rem at 86% 10%, rgba(234, 88, 12, var(--nx-glow-b)), transparent 72%),
+    radial-gradient(30rem 22rem at 50% 100%, rgba(251, 146, 60, var(--nx-glow-c)), transparent 70%);
+}
+
+/*
+ * Dark theme.
+ *
+ * ## Why this is one block and not `dark:` on every element
+ *
+ * Tailwind v4 compiles every utility through a custom property —
+ * `.bg-orange-100` is `background-color: var(--color-orange-100)`. Redefining
+ * those properties therefore re-themes the whole application from here:
+ * landing page, dashboard, profile forms, auth screens, every card and
+ * hairline, including any component written before this block existed. The
+ * alternative — a `dark:` variant beside each of the ~330 palette usages
+ * across 39 files — is the same design decision repeated 330 times, and the
+ * one that gets missed is a white card glowing in a dark page.
+ *
+ * ## This is a remap, not an inversion
+ *
+ * The codebase uses the light end of each ramp semantically: `orange-50` is a
+ * subtle tint, `orange-100` a hairline border, `green-700` accent text on a
+ * `green-50` chip. So in dark mode the light steps become progressively
+ * elevated dark surfaces and borders, and the one step used as text becomes
+ * light. Inverting the ramp arithmetically would turn hairlines into glowing
+ * edges and tinted panels into saturated blocks.
+ *
+ * ## The hue
+ *
+ * Warm charcoal — red ≥ green ≥ blue at every step — rather than the cool
+ * slate a generic dark theme reaches for. Sunset Warm is the product's
+ * identity in both themes, and orange accents on a cool grey read as a
+ * mismatch rather than as a palette.
+ *
+ * Contrast: every text token below is ≥4.5:1 against the surfaces it is
+ * used on. There is a check for this in tests/theme.e2e.test.js.
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Base surfaces. */
+  --color-canvas: #181614;
+  --color-surface: #211e1b;
+
+  /* Copy. Warm white rather than pure white, which glares on dark. */
+  --color-ink: #f5efe8;
+  --color-ink-muted: #aca69d;
+
+  /*
+   * Accent. Lifted one step from the light theme's #EA580C: the darker
+   * orange is tuned for contrast against white and loses too much against
+   * charcoal.
+   */
+  --color-brand: #f97316;
+  --color-brand-soft: #fb923c;
+
+  /*
+   * Text-weight accents. The light theme darkens these for contrast against
+   * white; dark mode needs the opposite move, so they lighten instead.
+   */
+  --color-brand-text: #fdba74;
+  --color-danger-text: #fca5a5;
+  --color-warning-text: #fcd34d;
+
+  /* Fills keep their meaning; danger lifts slightly to stay visible. */
+  --color-danger: #f87171;
+
+  /*
+   * Labels on those fills go dark rather than white: 6.5:1 against the
+   * brightened orange, against 2.8:1 for white. This is the one place where
+   * the dark theme deliberately looks different from a tinted version of the
+   * light one, and it is the difference between a readable button and a
+   * fashionable one.
+   */
+  --color-on-brand: #1c1411;
+
+  /*
+   * The warm ramp, remapped to elevation. 50 is a tint on a card, 100 the
+   * hairline that appears on almost every border in the product, 200 and 300
+   * the stronger borders and hover states.
+   */
+  --color-orange-50: #262220;
+  --color-orange-100: #332e28;
+  --color-orange-200: #413930;
+  --color-orange-300: #574b3e;
+
+  /* Shadows are cast in black here. Orange-tinted shadow is invisible on
+     charcoal, and depth is most of what separates the surfaces above. */
+  --color-orange-900: #000000;
+
+  /* Status ramps, same treatment: surface, border, then the text step. */
+  --color-red-50: #2a1b1a;
+  --color-red-200: #4f2e2c;
+  --color-red-300: #623936;
+
+  --color-green-50: #17241d;
+  --color-green-200: #2d4638;
+  --color-green-700: #86efac;
+
+  /* Atmosphere, dialled back for charcoal. */
+  --nx-glow-a: 0.1;
+  --nx-glow-b: 0.08;
+  --nx-glow-c: 0.07;
+  --nx-grid-line: rgba(253, 186, 116, 0.06);
+
+  --nx-edge-color: #fb923c;
+  --nx-edge-strong: 0.8;
+  --nx-edge-weak: 0.3;
+}
+
+/*
+ * Colour transitions, only while the theme is actually changing.
+ *
+ * A permanent global transition on colour would fire on every hover and
+ * every scroll-linked state change on the landing page — hundreds of
+ * elements, for an effect nobody asked for. The provider sets this attribute
+ * for the length of the switch and then removes it.
+ */
+[data-theme-changing] *,
+[data-theme-changing] *::before,
+[data-theme-changing] *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    fill 200ms ease,
+    stroke 200ms ease !important;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+
+    /* Native widgets and scrollbars follow the theme. Set on the light path
+       explicitly so the dark override above has something to replace. */
+    color-scheme: light;
 
     /*
      * In-page anchors glide rather than jump. The landing page's navigation

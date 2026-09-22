@@ -172,7 +172,7 @@ export function ResumeDetailPage() {
                 onClick={analyse}
                 disabled={isAnalysing}
                 aria-busy={isAnalysing}
-                className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
+                className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
               >
                 {isAnalysing ? 'Analysing…' : hasRun ? 'Analyse again' : 'Analyse this resume'}
               </button>
@@ -244,7 +244,7 @@ export function ResumeDetailPage() {
                 onClick={remove}
                 disabled={isDeleting}
                 aria-busy={isDeleting}
-                className="rounded-xl bg-danger px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-ink-muted"
+                className="rounded-xl bg-danger px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-ink-muted"
               >
                 {isDeleting ? 'Deleting…' : 'Yes, delete this resume'}
               </button>

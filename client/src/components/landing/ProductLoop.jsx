@@ -176,7 +176,7 @@ export function ProductLoop() {
                     className={`flex size-9 shrink-0 items-center justify-center rounded-xl border text-sm font-bold transition-colors duration-300 ${
                       state === 'upcoming'
                         ? 'border-orange-200 bg-canvas text-ink-muted'
-                        : 'border-brand bg-brand text-white'
+                        : 'border-brand bg-brand text-on-brand'
                     }`}
                   >
                     {index + 1}

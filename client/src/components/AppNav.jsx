@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
+import { ThemeToggle } from './ThemeToggle.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 
 /**
@@ -52,7 +53,7 @@ export function AppNav() {
       */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-20 focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-20 focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-on-brand"
       >
         Skip to content
       </a>
@@ -78,6 +79,11 @@ export function AppNav() {
 
         <div className="flex items-center gap-2">
           <p className="hidden text-sm text-ink-muted lg:block">{user.name}</p>
+
+          {/* Same control as the public pages: the theme belongs to the
+              browser, so it must be reachable from inside the product too
+              rather than only from the landing page. */}
+          <ThemeToggle className="hidden sm:inline-flex" />
 
           <button
             type="button"
@@ -116,6 +122,16 @@ export function AppNav() {
             </li>
           ))}
         </ul>
+
+        {/* The switcher is hidden beside the logout button at this width, so
+            it lives here instead — otherwise the theme would be unreachable
+            from inside the product on a phone. */}
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 border-t border-orange-100 px-5 py-3">
+          <span className="text-xs font-semibold tracking-[0.18em] text-ink-muted uppercase">
+            Theme
+          </span>
+          <ThemeToggle showLabels />
+        </div>
       </nav>
     </header>
   );

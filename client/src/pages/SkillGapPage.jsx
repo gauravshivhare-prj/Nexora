@@ -88,7 +88,7 @@ export function SkillGapPage() {
             <div>
               <Link
                 to="/career-twin"
-                className="inline-block rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+                className="inline-block rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
               >
                 Go to CareerTwin
               </Link>
@@ -179,7 +179,7 @@ export function SkillGapPage() {
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/careers/${gap.roleId}/roadmap`}
-            className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+            className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
           >
             Turn this into a roadmap
           </Link>

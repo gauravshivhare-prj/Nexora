@@ -10,7 +10,7 @@ export function SubmitButton({ isSubmitting, busyLabel, children }) {
       type="submit"
       disabled={isSubmitting}
       aria-busy={isSubmitting}
-      className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted"
+      className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted"
     >
       {isSubmitting ? busyLabel : children}
     </button>

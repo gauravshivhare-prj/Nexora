@@ -166,7 +166,7 @@ function Action({ to, children, primary = false }) {
       to={to}
       className={
         primary
-          ? 'inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft'
+          ? 'inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft'
           : 'inline-block rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text'
       }
     >

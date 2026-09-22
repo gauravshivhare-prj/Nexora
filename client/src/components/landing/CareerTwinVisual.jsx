@@ -142,11 +142,20 @@ const NODES = [
 /** Nodes whose edge carries a travelling pulse: the ones that feed evidence. */
 const FLOWING = new Set(['projects', 'resume', 'certifications']);
 
+/*
+ * Node weight follows evidence weight.
+ *
+ * Supported skills are the strongest thing in the graph — they are what the
+ * product is about — then the sources that feed them, then a bare claim,
+ * then the assessment route that does not exist yet. Reading the graph
+ * top-down should tell you the hierarchy before you read a single label,
+ * and it has to survive the animation being paused.
+ */
 const NODE_STYLES = {
-  supported: 'border-orange-300 bg-orange-100 text-brand-text',
+  supported: 'border-orange-300 bg-orange-100 text-brand-text shadow-sm shadow-orange-900/10',
   claimed: 'border-orange-200 bg-surface text-ink-muted',
-  source: 'border-orange-200 bg-surface text-ink',
-  planned: 'border-dashed border-ink-muted/40 bg-surface/70 text-ink-muted',
+  source: 'border-orange-200 bg-surface font-medium text-ink',
+  planned: 'border-dashed border-ink-muted/40 bg-canvas/60 text-ink-muted',
 };
 
 const STATE_LABELS = {
@@ -258,10 +267,17 @@ export function CareerTwinVisual() {
           className="nx-parallax absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{ '--nx-depth': 0.4 }}
         >
-          <div className="relative flex flex-col items-center rounded-2xl border border-orange-300 bg-surface px-4 py-3 text-center shadow-lg shadow-orange-900/10 sm:px-6 sm:py-4">
+          {/*
+            The intelligence hub, and it should read as one: a ring in the
+            accent, two stacked shadows for real depth, and a breathing halo
+            behind it. Everything else in the graph is deliberately flatter,
+            because a diagram where every node has the same weight has no
+            centre.
+          */}
+          <div className="relative flex flex-col items-center rounded-2xl border border-orange-300 bg-surface px-4 py-3 text-center ring-1 ring-brand/25 shadow-xl shadow-orange-900/15 sm:px-6 sm:py-4">
             <span
               aria-hidden="true"
-              className="nx-node-halo absolute -inset-3 -z-10 rounded-3xl bg-brand/15"
+              className="nx-node-halo nx-center-halo absolute -inset-3 -z-10 rounded-3xl"
             />
             <span className="text-[10px] font-semibold tracking-[0.18em] text-brand-text uppercase">
               Nexora
@@ -374,8 +390,11 @@ function Edges() {
     >
       <defs>
         <linearGradient id="nx-edge-gradient" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#EA580C" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#F97316" stopOpacity="0.18" />
+          {/* Theme tokens rather than literals: the same two stops are
+              invisible on charcoal at the opacities that are right on
+              off-white. */}
+          <stop offset="0%" stopColor="var(--nx-edge-color)" stopOpacity="var(--nx-edge-strong)" />
+          <stop offset="100%" stopColor="var(--nx-edge-color)" stopOpacity="var(--nx-edge-weak)" />
         </linearGradient>
       </defs>
 
@@ -408,7 +427,7 @@ function Edges() {
               <path
                 d={`M ${node.x} ${node.y} Q ${controlX} ${controlY} 50 50`}
                 fill="none"
-                stroke="#EA580C"
+                stroke="var(--color-brand)"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ThemeToggle } from '../ThemeToggle.jsx';
 import { useAuth } from '../../hooks/useAuth.js';
+import { useActiveSection } from './animation/useActiveSection.js';
 
 /**
  * The public navigation.
@@ -22,8 +24,19 @@ const SECTIONS = [
   { id: 'roadmap', label: 'Roadmap' },
 ];
 
+/*
+ * The same four ids in the order they appear in the document, which is not
+ * the order they are listed in above: "How It Works" is the loop, and the
+ * loop is the payoff that sits after the individual stages. The active-state
+ * hook resolves ties by taking the last qualifying section, so it needs
+ * document order to be right, and the navigation needs its own order to stay
+ * as designed.
+ */
+const SECTION_IDS = ['career-twin', 'evidence', 'roadmap', 'how-it-works'];
+
 export function LandingNavbar() {
   const { isAuthenticated, isRestoring } = useAuth();
+  const activeSection = useActiveSection(SECTION_IDS);
 
   const [isCondensed, setIsCondensed] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -91,7 +104,7 @@ export function LandingNavbar() {
     >
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-on-brand"
       >
         Skip to content
       </a>
@@ -106,21 +119,44 @@ export function LandingNavbar() {
         </Link>
 
         <nav aria-label="Page sections" className="hidden lg:block">
-          <ul className="flex items-center gap-1">
-            {SECTIONS.map((section) => (
-              <li key={section.id}>
-                <a
-                  href={`#${section.id}`}
-                  className="inline-block rounded-lg px-3 py-1.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-orange-100/70 hover:text-ink"
-                >
-                  {section.label}
-                </a>
-              </li>
-            ))}
+          <ul className="flex items-center gap-0.5">
+            {SECTIONS.map((section) => {
+              const isActive = activeSection === section.id;
+
+              return (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    // Announced, not only tinted. Four links that look
+                    // different and read identically is the same failure the
+                    // signed-in nav avoids with NavLink's aria-current.
+                    aria-current={isActive ? 'true' : undefined}
+                    className={`relative inline-block rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                      isActive
+                        ? 'text-ink'
+                        : 'text-ink-muted hover:bg-orange-100/70 hover:text-ink'
+                    }`}
+                  >
+                    {section.label}
+
+                    {/* The indicator: a short rule under the active label,
+                        scaled in rather than appearing, and transform-only. */}
+                    <span
+                      aria-hidden="true"
+                      className={`absolute inset-x-3 -bottom-0.5 h-0.5 origin-center rounded-full bg-brand transition-transform duration-300 ${
+                        isActive ? 'scale-x-100' : 'scale-x-0'
+                      }`}
+                    />
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <ThemeToggle className="hidden sm:inline-flex" />
+
           <Link
             to={sessionLink}
             className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:text-brand-text sm:inline-block"
@@ -130,7 +166,7 @@ export function LandingNavbar() {
 
           <Link
             to="/register"
-            className="nx-cta hidden rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-soft sm:inline-block"
+            className="nx-cta hidden rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-on-brand shadow-sm shadow-orange-900/20 hover:bg-brand-soft sm:inline-block"
           >
             Build Your CareerTwin
           </Link>
@@ -174,11 +210,20 @@ export function LandingNavbar() {
             ))}
           </ul>
 
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-orange-100 pt-4">
+            <span className="text-xs font-semibold tracking-[0.18em] text-ink-muted uppercase">
+              Theme
+            </span>
+            {/* Labels shown here: the panel has the width for them, and a
+                row of three unlabelled glyphs on a phone is a guess. */}
+            <ThemeToggle showLabels />
+          </div>
+
           <div className="mt-4 flex flex-col gap-2 border-t border-orange-100 pt-4">
             <Link
               to="/register"
               onClick={() => setIsMenuOpen(false)}
-              className="rounded-xl bg-brand px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+              className="rounded-xl bg-brand px-4 py-2.5 text-center text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
             >
               Build Your CareerTwin
             </Link>

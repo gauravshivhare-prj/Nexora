@@ -68,6 +68,27 @@ export async function connectBrowser(debugPort) {
   await send('Runtime.enable');
   await send('Page.enable');
 
+  /**
+   * Emulated media features, accumulated.
+   *
+   * `Emulation.setEmulatedMedia` replaces the whole feature list on every
+   * call, so setting a colour scheme would silently drop an emulated
+   * reduced-motion preference — and a test asserting both would quietly be
+   * asserting one.
+   */
+  const emulatedFeatures = new Map();
+
+  function setEmulatedFeature(name, value) {
+    emulatedFeatures.set(name, value);
+
+    return send('Emulation.setEmulatedMedia', {
+      features: [...emulatedFeatures].map(([feature, featureValue]) => ({
+        name: feature,
+        value: featureValue,
+      })),
+    });
+  }
+
   /** Polls an expression until it is truthy, or fails with context. */
   async function waitFor(expression, { timeoutMs = 10_000, description } = {}) {
     const deadline = Date.now() + timeoutMs;
@@ -258,6 +279,30 @@ export async function connectBrowser(debugPort) {
       });
     },
 
+    /**
+     * Sends a real key press to the focused element.
+     *
+     * Needed for controls whose keyboard behaviour belongs to the browser
+     * rather than to our code — a radio group's arrow-key navigation is the
+     * reason the theme switcher is radios, and a synthetic KeyboardEvent
+     * dispatched from script would not exercise it.
+     */
+    async pressKey(key) {
+      const codes = {
+        ArrowRight: 39,
+        ArrowLeft: 37,
+        ArrowDown: 40,
+        ArrowUp: 38,
+        Escape: 27,
+        Enter: 13,
+        ' ': 32,
+      };
+
+      const params = { key, windowsVirtualKeyCode: codes[key], nativeVirtualKeyCode: codes[key] };
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', ...params });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...params });
+    },
+
     clearViewport() {
       return send('Emulation.clearDeviceMetricsOverride');
     },
@@ -270,9 +315,18 @@ export async function connectBrowser(debugPort) {
      * it would do.
      */
     setReducedMotion(reduce) {
-      return send('Emulation.setEmulatedMedia', {
-        features: [{ name: 'prefers-reduced-motion', value: reduce ? 'reduce' : 'no-preference' }],
-      });
+      return setEmulatedFeature(
+        'prefers-reduced-motion',
+        reduce ? 'reduce' : 'no-preference',
+      );
+    },
+
+    /**
+     * Forces `prefers-color-scheme`, so "system" can be tested as the
+     * browser actually reports it rather than by calling the hook directly.
+     */
+    setColorScheme(scheme) {
+      return setEmulatedFeature('prefers-color-scheme', scheme);
     },
 
     close() {

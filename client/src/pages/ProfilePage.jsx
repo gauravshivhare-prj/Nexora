@@ -200,7 +200,7 @@ export function ProfilePage() {
           <button
             type="button"
             onClick={() => load()}
-            className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft"
+            className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
           >
             Try again
           </button>
@@ -484,7 +484,7 @@ export function ProfilePage() {
             type="submit"
             disabled={isSaving}
             aria-busy={isSaving}
-            className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
+            className="w-full rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted sm:w-auto sm:px-8"
           >
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>

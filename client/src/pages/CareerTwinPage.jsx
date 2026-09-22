@@ -425,7 +425,7 @@ function GenerateControls({ exists, isGenerating, onGenerate, error, isRetryable
           onClick={() => onGenerate({ withNarrative: false })}
           disabled={isGenerating}
           aria-busy={isGenerating}
-          className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted"
+          className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:bg-ink-muted"
         >
           {isGenerating ? 'Building…' : exists ? 'Regenerate' : 'Build my CareerTwin'}
         </button>

@@ -27,7 +27,7 @@ export function StatusRow({ label, state, tone = 'unknown', note }) {
       >
         <span
           aria-hidden="true"
-          className={`flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-bold text-white ${dot}`}
+          className={`flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-bold text-on-brand ${dot}`}
         >
           {glyph}
         </span>

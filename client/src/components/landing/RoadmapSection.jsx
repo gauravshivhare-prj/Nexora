@@ -134,7 +134,7 @@ export function RoadmapSection() {
                     className={`absolute top-3 left-0 flex size-6 items-center justify-center rounded-full border text-[11px] font-bold transition-colors duration-300 sm:left-1 ${
                       state === 'upcoming'
                         ? 'border-orange-200 bg-surface text-ink-muted'
-                        : 'border-brand bg-brand text-white'
+                        : 'border-brand bg-brand text-on-brand'
                     }`}
                   >
                     {index + 1}

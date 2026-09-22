@@ -127,7 +127,7 @@ export function EvidenceSection() {
                   aria-pressed={index === step}
                   className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-200 ${
                     index === step
-                      ? 'border-brand bg-brand text-white'
+                      ? 'border-brand bg-brand text-on-brand'
                       : 'border-orange-200 bg-surface text-ink-muted hover:border-brand hover:text-brand-text'
                   }`}
                 >

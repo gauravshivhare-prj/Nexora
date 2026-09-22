@@ -382,6 +382,21 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await page.clickText('Careers');
     await page.waitFor('location.pathname === "/careers"', { description: 'the careers page' });
 
+    // The marker moves when NavLink re-renders, which is a commit after the
+    // URL has already changed — so this waits for it rather than reading it
+    // on the same turn as the navigation. The assertion below is unchanged:
+    // every marked link must agree, and it must say Careers.
+    await page.waitFor(
+      `(() => {
+        const marked = [...document.querySelectorAll('[aria-current="page"]')]
+          .map((el) => el.textContent.trim());
+        // Length checked here too: \`every\` is true for an empty list, and
+        // "no marker at all" must not satisfy a wait for the marker.
+        return marked.length > 0 && marked.every((label) => label === 'Careers');
+      })()`,
+      { description: 'the current-page marker to move to Careers' },
+    );
+
     const afterNav = await page.evaluate(`(() => {
       return [...document.querySelectorAll('[aria-current="page"]')]
         .map((el) => el.textContent.trim());

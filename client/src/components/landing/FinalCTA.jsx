@@ -25,14 +25,14 @@ export function FinalCTA() {
 
           <h2
             id="final-cta-heading"
-            className="mt-8 text-3xl font-bold tracking-tight text-balance text-white sm:text-5xl"
+            className="mt-8 text-3xl font-bold tracking-tight text-balance text-on-ink sm:text-5xl"
           >
             Stop guessing.
             <br />
             Start building toward your career.
           </h2>
 
-          <p className="mx-auto mt-5 max-w-xl text-base text-pretty text-orange-100/80 sm:text-lg">
+          <p className="mx-auto mt-5 max-w-xl text-base text-pretty text-on-ink-muted sm:text-lg">
             Build your CareerTwin, see where you stand against real roles, and get a plan whose
             every step ends in evidence you can point at.
           </p>
@@ -41,17 +41,17 @@ export function FinalCTA() {
         <Reveal delay={120} className="mt-10 flex flex-col items-center gap-4">
           <Link
             to="/register"
-            className="nx-cta inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-7 py-4 text-base font-semibold text-white shadow-xl shadow-black/25 hover:bg-brand-soft"
+            className="nx-cta inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-7 py-4 text-base font-semibold text-on-brand shadow-xl shadow-black/25 hover:bg-brand-soft"
           >
             Build Your CareerTwin
             <span aria-hidden="true">→</span>
           </Link>
 
-          <p className="text-sm text-orange-100/70">
+          <p className="text-sm text-on-ink-muted">
             Already have an account?{' '}
             <Link
               to="/login"
-              className="font-semibold text-white underline decoration-brand-soft decoration-2 underline-offset-4 transition-colors duration-200 hover:text-orange-200"
+              className="font-semibold text-on-ink underline decoration-brand-soft decoration-2 underline-offset-4 transition-colors duration-200 hover:text-brand-soft"
             >
               Sign in
             </Link>

@@ -96,10 +96,16 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(52rem 32rem at 18% 12%, rgba(249, 115, 22, 0.18), transparent 70%),
-    radial-gradient(40rem 28rem at 88% 4%, rgba(234, 88, 12, 0.14), transparent 72%),
-    radial-gradient(36rem 26rem at 62% 92%, rgba(251, 146, 60, 0.12), transparent 70%);
+    radial-gradient(52rem 32rem at 18% 12%, rgba(249, 115, 22, var(--nx-glow-a)), transparent 70%),
+    radial-gradient(40rem 28rem at 88% 4%, rgba(234, 88, 12, var(--nx-glow-b)), transparent 72%),
+    radial-gradient(36rem 26rem at 62% 92%, rgba(251, 146, 60, var(--nx-glow-c)), transparent 70%);
 }
+
+/*
+ * The gradient strengths and the grid colour are theme tokens and live in
+ * index.css beside the rest of them — the auth screens use the same
+ * atmosphere, and they do not load this file.
+ */
 
 /* A faint technical grid. Static — an animated grid is motion with nothing
    to say, and a repeating background is cheap only while it holds still. */
@@ -108,17 +114,39 @@
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(234, 88, 12, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(234, 88, 12, 0.07) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(70% 60% at 50% 30%, black, transparent 100%);
+    linear-gradient(to right, var(--nx-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--nx-grid-line) 1px, transparent 1px);
+  /*
+   * Finer than it was. A 64px grid behind large display type reads as a
+   * notebook page; 40px sits far enough below the type's own rhythm to read
+   * as measurement, which is what a product built on evidence should feel
+   * like.
+   */
+  background-size: 40px 40px;
+  mask-image: radial-gradient(72% 62% at 50% 28%, black, transparent 100%);
 }
 
-/* The dark closing surface, so the final CTA reads as an ending. */
+/*
+ * The dark closing surface, so the final CTA reads as an ending.
+ *
+ * Warm near-black rather than the cool slate this used to be: Sunset Warm is
+ * the identity, and a blue-grey band under an orange page was the one place
+ * the palette contradicted itself.
+ *
+ * In the dark theme it goes deeper than the canvas rather than lighter, so it
+ * still separates from the section above it instead of merging into it.
+ */
 .nx-ink-surface {
   background:
-    radial-gradient(48rem 30rem at 50% -10%, rgba(249, 115, 22, 0.28), transparent 70%),
-    linear-gradient(180deg, #1f2937 0%, #161d27 100%);
+    radial-gradient(48rem 30rem at 50% -10%, rgba(249, 115, 22, 0.26), transparent 70%),
+    linear-gradient(180deg, #221d18 0%, #17130f 100%);
+}
+
+[data-theme='dark'] .nx-ink-surface {
+  background:
+    radial-gradient(48rem 30rem at 50% -10%, rgba(249, 115, 22, 0.14), transparent 70%),
+    linear-gradient(180deg, #100e0c 0%, #0b0a09 100%);
+  border-top: 1px solid var(--color-orange-100);
 }
 
 /* --------------------------------------------------------- hero graph */
@@ -164,6 +192,26 @@
   transform-box: fill-box;
   transform-origin: center;
   animation: nx-breathe 4200ms ease-in-out var(--nx-delay, 0ms) infinite;
+}
+
+/*
+ * The glow behind the graph's centre card.
+ *
+ * Its own class rather than a `bg-brand/15` utility, because the right alpha
+ * is theme-dependent: the value that is a soft warm lift on off-white is a
+ * visible orange smudge on charcoal, which is exactly the "glowing blob" a
+ * dark theme should not have.
+ */
+.nx-center-halo {
+  background-color: rgba(249, 115, 22, var(--nx-halo-a));
+}
+
+:root {
+  --nx-halo-a: 0.15;
+}
+
+[data-theme='dark'] {
+  --nx-halo-a: 0.07;
 }
 
 [data-graph-live='false'] .nx-node-halo {
