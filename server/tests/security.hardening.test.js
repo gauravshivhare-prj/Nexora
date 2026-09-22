@@ -251,26 +251,26 @@ describe('security hardening', () => {
     const id = await createResume(token, INJECTION_TEXT);
 
     // Worth stating plainly, because it looks like a hole and is not one.
-    // The injection text names Rust, so grounding finds it and keeps it —
+    // The injection text names Node.js, so grounding finds it and keeps it —
     // which is correct: grounding answers "is this in the document?", not
     // "is this true". A skill that reaches the twin this way is CLAIMED,
     // the weakest strength there is, exactly like any other word typed into
     // a resume. Writing "Rust" on your CV has always been a claim; nothing
     // here upgrades it, and no assessment has been passed.
-    response = { skills: [{ name: 'Rust' }] };
+    response = { skills: [{ name: 'Node.js' }] };
 
     const { status, body } = await analyse(token, id);
     assert.equal(status, 200);
     assert.deepEqual(
       body.data.resume.parsed.skills.map((skill) => skill.name),
-      ['Rust'],
+      ['Node.js'],
     );
 
     await sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token });
     const twin = await getWithToken(server.baseUrl, '/api/career-twin', token);
-    const rust = twin.body.data.careerTwin.skills.find((skill) => skill.name === 'Rust');
+    const node = twin.body.data.careerTwin.skills.find((skill) => skill.name === 'Node.js');
 
-    assert.equal(rust.strength, 'claimed', 'a smuggled skill was treated as demonstrated');
+    assert.equal(node.strength, 'claimed', 'a smuggled skill was treated as demonstrated');
   });
 
   // -------------------------------------------------------- secret safety

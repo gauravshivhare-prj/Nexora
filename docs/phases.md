@@ -157,9 +157,9 @@ AI-written field is confined to prose and labelled as such.
 - **No readiness score.** Readiness is readiness *for* a role, and there is
   no target to measure against until Phase 5. `indicators` reports counts of
   real things instead.
-- **No `verified` evidence.** Nothing can verify a skill until assessments
-  exist in Phase 8. The level is declared so nothing is tempted to overstate
-  `supported` to fill it.
+- **Verified evidence is limited to the assessment contract.** Passing a
+  deterministic assessment or a human-evaluated interview can produce it;
+  AI-only interview feedback remains `uncertain` and never verifies a skill.
 - **No CareerTwin UI.** Phase 10 integrates the dashboard.
 
 ## Phase 5 — Career Recommendation
@@ -225,9 +225,8 @@ in the catalogue.
 
 **Deliberately NOT delivered, and why**
 - **No coverage percentage.** Counts only — see architecture.md.
-- **No assessments or interviews.** Phase 8. The evidence model already has
-  the `verified` level and the sources reserved, and suggestions referring
-  to assessments are marked `available: false`.
+- **No assessment or interview UI.** Phase 8 provides only the minimal
+  owner-scoped backend contract; the client flow remains a later integration.
 - **No skill gap UI.** Phase 10 integrates the dashboard.
 
 ## Phase 7 — Personalized Roadmap
@@ -276,6 +275,18 @@ the thing this architecture exists to prevent. Items expose
 - Evaluation
 - Weak-area extraction
 - CareerTwin update
+
+**Delivered — backend contract only**
+- `POST /api/skill-evidence/assessments` stores a canonical skill, score,
+  pass mark, outcome, owner and completion timestamp. Only a passing result
+  can produce verified evidence.
+- `POST /api/skill-evidence/interviews` stores pass/fail/uncertain outcomes.
+  AI evaluation is advisory and never produces verified evidence; a human
+  pass is required.
+- `GET /api/skill-evidence` is owner-scoped and exposes provenance without
+  exposing the owning user id.
+- CareerTwin consumes only eligible passing results. No UI or AI question
+  generation is included in this slice.
 
 **Exit criteria**
 - Interview results are stored.

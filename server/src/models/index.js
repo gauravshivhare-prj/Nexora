@@ -3,6 +3,7 @@ import { CareerTwin, isCareerTwinStale, toPublicCareerTwin } from './CareerTwin.
 import { Resume, toPublicResume, toResumeSummary } from './Resume.model.js';
 import { StudentProfile, emptyProfile, toPublicProfile } from './StudentProfile.model.js';
 import { User, toPublicUser } from './User.model.js';
+import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from './SkillEvidenceCheck.model.js';
 
 /**
  * Model registry and index management.
@@ -10,7 +11,7 @@ import { User, toPublicUser } from './User.model.js';
  * Registering new models here keeps index creation in one place as the schema
  * set grows, one model per phase.
  */
-const MODELS = [User, StudentProfile, Resume, CareerTwin];
+const MODELS = [User, StudentProfile, Resume, CareerTwin, SkillEvidenceCheck];
 
 /**
  * Builds every declared index before the server accepts traffic.
@@ -30,6 +31,7 @@ export async function ensureModelIndexes() {
 export {
   CareerTwin,
   Resume,
+  SkillEvidenceCheck,
   StudentProfile,
   User,
   emptyProfile,
@@ -37,6 +39,7 @@ export {
   toPublicCareerTwin,
   toPublicProfile,
   toPublicResume,
+  toPublicSkillEvidenceCheck,
   toPublicUser,
   toResumeSummary,
 };

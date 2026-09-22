@@ -38,6 +38,8 @@
  * student profile that spell a skill differently still agree on one label to
  * show, rather than whichever happened to be read first.
  */
+export const SKILL_TAXONOMY_VERSION = 2;
+
 const ALIASES = new Map([
   // --- Languages ---
   ['js', 'JavaScript'],
@@ -60,6 +62,10 @@ const ALIASES = new Map([
   ['nextjs', 'Next.js'],
   ['vuejs', 'Vue.js'],
   ['springboot', 'Spring Boot'],
+  ['tailwind', 'Tailwind CSS'],
+  ['scikitlearn', 'scikit-learn'],
+  ['powerbi', 'Power BI'],
+  ['dataanalytics', 'Data Analytics'],
 
   // --- Data ---
   ['postgres', 'PostgreSQL'],
@@ -76,6 +82,7 @@ const ALIASES = new Map([
   ['restapi', 'REST APIs'],
   ['rest', 'REST APIs'],
   ['restfulapis', 'REST APIs'],
+  ['githubactions', 'GitHub Actions'],
 
   // --- Practice ---
   ['dsa', 'Data Structures and Algorithms'],
@@ -86,9 +93,105 @@ const ALIASES = new Map([
   ['oops', 'Object-Oriented Programming'],
 ]);
 
+/**
+ * Versioned vocabulary of names Nexora is prepared to ground as skills.
+ * Tools remain distinct from the skills they support: Git is not GitHub,
+ * Docker is not Docker Compose, and AWS is not AWS Lambda.
+ */
+const TAXONOMY_NAMES = [
+  'JavaScript',
+  'TypeScript',
+  'Python',
+  'Go',
+  'C++',
+  'C#',
+  'Java',
+  'HTML',
+  'CSS',
+  'Node.js',
+  'Express.js',
+  'React',
+  'React Native',
+  'Next.js',
+  'Vue.js',
+  'Spring Boot',
+  'Tailwind CSS',
+  'SQL',
+  'PostgreSQL',
+  'MongoDB',
+  'MySQL',
+  'Redis',
+  'AWS',
+  'Google Cloud',
+  'Azure',
+  'Kubernetes',
+  'Docker',
+  'Docker Compose',
+  'Terraform',
+  'CloudFormation',
+  'Linux',
+  'Bash',
+  'Git',
+  'GitHub',
+  'GitHub Actions',
+  'CI/CD',
+  'REST APIs',
+  'GraphQL',
+  'Machine Learning',
+  'Deep Learning',
+  'Artificial Intelligence',
+  'Data Structures and Algorithms',
+  'Statistics',
+  'Data Analytics',
+  'Data Visualisation',
+  'Excel',
+  'Power BI',
+  'Tableau',
+  'Pandas',
+  'NumPy',
+  'scikit-learn',
+  'Testing',
+  'Test Automation',
+  'Selenium',
+  'Cypress',
+  'Playwright',
+  'Mobile Development',
+  'Flutter',
+  'Kotlin',
+  'Swift',
+  'UI Design',
+  'UX Research',
+  'Figma',
+  'Accessibility',
+  'Prototyping',
+  'Design Systems',
+  'Cloud Computing',
+  'Networking',
+  'Nginx',
+  'RabbitMQ',
+  'Jenkins',
+  'Prometheus',
+  'Ansible',
+  'BigQuery',
+  'Looker',
+  'TensorFlow',
+  'PyTorch',
+  'Jupyter',
+  'Firebase',
+  'Android Studio',
+  'Xcode',
+  'Postman',
+  'JUnit',
+  'Webpack',
+  'Vite',
+  'Adobe XD',
+  'Sketch',
+  'Framer',
+];
+
 /** Normalised alias keys, so a canonical name is recognised as its own alias. */
 const CANONICAL_KEYS = new Map(
-  [...new Set(ALIASES.values())].map((name) => [normalise(name), name]),
+  [...new Set([...ALIASES.values(), ...TAXONOMY_NAMES])].map((name) => [normalise(name), name]),
 );
 
 /**
@@ -138,6 +241,18 @@ export function skillDisplayName(name) {
 }
 
 /**
+ * Resolves a name only when this version of Nexora knows it as a skill.
+ * Grounding and taxonomy membership are separate checks: a word can appear
+ * in a resume and still be unsafe to turn into structured skill evidence.
+ */
+export function canonicalSkill(name) {
+  const key = skillKey(name);
+  const canonicalName = CANONICAL_KEYS.get(key);
+
+  return canonicalName ? { key, name: canonicalName } : null;
+}
+
+/**
  * Whether two skill names refer to the same skill.
  *
  * Empty names never match — including each other. "No skill" is not a skill
@@ -162,7 +277,7 @@ export function isSameSkill(left, right) {
  * @returns {string[]}
  */
 export function knownSkillNames() {
-  return [...CANONICAL_KEYS.values()];
+  return [...new Set(CANONICAL_KEYS.values())];
 }
 
 /**

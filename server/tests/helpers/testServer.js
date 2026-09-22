@@ -112,6 +112,11 @@ export async function clearResumes() {
   await mongoose.connection.collection('resumes').deleteMany({});
 }
 
+/** Removes persisted assessment/interview results. */
+export async function clearSkillEvidenceChecks() {
+  return mongoose.connection.collection('skillevidencechecks').deleteMany({});
+}
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *

@@ -30,12 +30,12 @@ import { skillDisplayName, skillKey, uniqueSkills } from '../skills/skillKey.js'
  *   public resume shape; those without parsed data are ignored.
  * @returns {object} The CareerTwin content, ready for persistence.
  */
-export function buildCareerTwin({ profile, resumes = [] }) {
+export function buildCareerTwin({ profile, resumes = [], verifiedEvidence = [] }) {
   // Only analysed resumes carry structured data. An unanalysed one is a wall
   // of text, and guessing at it here would be the invention this avoids.
   const analysed = resumes.filter((resume) => resume?.parsed);
 
-  const skills = collectSkills(profile, analysed);
+  const skills = collectSkills(profile, analysed, verifiedEvidence);
 
   return {
     skills,
@@ -61,7 +61,7 @@ export function buildCareerTwin({ profile, resumes = [] }) {
  * A student reading their own twin should see what they can best stand behind
  * at the top, not whatever happened to be alphabetically first.
  */
-function collectSkills(profile, analysedResumes) {
+function collectSkills(profile, analysedResumes, verifiedEvidence) {
   /** @type {Map<string, { key: string, name: string, evidence: object[], selfDeclaredLevel: string|null }>} */
   const bySkill = new Map();
 
@@ -85,6 +85,10 @@ function collectSkills(profile, analysedResumes) {
       selfDeclaredLevel,
     });
   };
+
+  for (const item of verifiedEvidence) {
+    add(item.skill, item.evidence);
+  }
 
   // --- Profile: skills the student listed ---
   for (const skill of profile?.skills ?? []) {

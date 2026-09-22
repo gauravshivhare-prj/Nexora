@@ -178,6 +178,7 @@ describe('role roadmap page', { timeout: 240_000 }, () => {
 
     const text = await page.bodyText();
     assert.match(text, /Critical/);
+    assert.doesNotMatch(text, /\[object Object\]/);
     assert.match(text, /Effort/);
     // Each step is traced back to why it is on the plan at all.
     assert.match(text, /Backend Developer lists it as required/);

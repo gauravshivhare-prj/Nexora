@@ -3,6 +3,9 @@ import { describe, it } from 'node:test';
 
 import {
   isSameSkill,
+  canonicalSkill,
+  knownSkillNames,
+  SKILL_TAXONOMY_VERSION,
   skillDisplayName,
   skillKey,
   uniqueSkills,
@@ -18,6 +21,11 @@ import {
  */
 
 describe('skillKey', () => {
+  it('exposes a versioned canonical taxonomy', () => {
+    assert.equal(SKILL_TAXONOMY_VERSION, 2);
+    assert.ok(knownSkillNames().includes('Docker'));
+    assert.deepEqual(canonicalSkill('NODE JS'), { key: 'nodejs', name: 'Node.js' });
+  });
   it('ignores case, punctuation and spacing', () => {
     const key = skillKey('Node.js');
 
@@ -49,6 +57,8 @@ describe('skillKey', () => {
       ['Java', 'JavaScript'],
       ['Machine Learning', 'Deep Learning'],
       ['AWS', 'Azure'],
+      ['Git', 'GitHub'],
+      ['Docker', 'Docker Compose'],
     ];
 
     for (const [left, right] of distinct) {

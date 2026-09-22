@@ -256,7 +256,7 @@ AWS Certified Cloud Practitioner`;
     // The resume says "Node.js"; the model wrote "NodeJS". Same skill.
     const { value, warnings } = ground({ skills: [{ name: 'NodeJS' }] });
 
-    assert.deepEqual(value.skills, [{ name: 'NodeJS' }]);
+    assert.deepEqual(value.skills, [{ name: 'Node.js' }]);
     assert.deepEqual(warnings, []);
   });
 
@@ -309,7 +309,7 @@ AWS Certified Cloud Practitioner`;
       projects: [{ title: 'Nexora', technologies: ['React', 'Express', 'Kafka'] }],
     });
 
-    assert.deepEqual(value.projects[0].technologies, ['React', 'Express']);
+    assert.deepEqual(value.projects[0].technologies, ['React', 'Express.js']);
     assert.equal(value.projects[0].title, 'Nexora');
     assert.match(warnings[0], /Kafka/);
   });

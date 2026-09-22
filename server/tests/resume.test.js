@@ -501,7 +501,7 @@ describe('resumes', () => {
       double.state.respond = () => JSON.stringify({ skills: [{ name: 'Express' }] });
       const { body } = await analyse(token, id);
 
-      assert.deepEqual(body.data.resume.parsed.skills, [{ name: 'Express' }]);
+      assert.deepEqual(body.data.resume.parsed.skills, [{ name: 'Express.js' }]);
       assert.equal(double.state.calls, 2);
     });
   });

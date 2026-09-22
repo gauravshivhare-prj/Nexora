@@ -273,7 +273,9 @@ function RoadmapStep({ item, position }) {
         {item.prerequisites?.length > 0 ? (
           <div className="flex flex-wrap gap-x-2">
             <dt className="font-semibold text-ink-muted">Do first</dt>
-            <dd className="text-ink">{item.prerequisites.join(', ')}</dd>
+            <dd className="text-ink">
+              {item.prerequisites.map((prerequisite) => prerequisite.name).join(', ')}
+            </dd>
           </div>
         ) : null}
       </dl>

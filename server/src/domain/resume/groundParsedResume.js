@@ -1,3 +1,5 @@
+import { canonicalSkill } from '../skills/skillKey.js';
+
 /**
  * Business validation for AI-parsed resume data.
  *
@@ -52,6 +54,21 @@ export function groundParsedResume(parsed, sourceText) {
   const keepAll = (values, path) =>
     values.filter((value, index) => keep(value, `${path}[${index}]`) !== null);
 
+  const keepCanonicalSkill = (value, path) => {
+    if (keep(value, path) === null) return null;
+
+    const canonical = canonicalSkill(value);
+    if (canonical) return canonical.name;
+
+    warnings.push(`Dropped ${path} "${value}": it is not in the canonical skill taxonomy.`);
+    return null;
+  };
+
+  const keepCanonicalSkills = (values, path) =>
+    values
+      .map((value, index) => keepCanonicalSkill(value, `${path}[${index}]`))
+      .filter((value) => value !== null);
+
   return {
     value: {
       basics: {
@@ -70,14 +87,17 @@ export function groundParsedResume(parsed, sourceText) {
       })),
 
       // The set that matters most: these become claimed skills downstream.
-      skills: parsed.skills.filter(
-        (skill, index) => keep(skill.name, `skills[${index}].name`) !== null,
-      ),
+      skills: parsed.skills
+        .map((skill, index) => {
+          const name = keepCanonicalSkill(skill.name, `skills[${index}].name`);
+          return name ? { ...skill, name } : null;
+        })
+        .filter(Boolean),
 
       projects: parsed.projects.map((entry, index) => ({
         ...entry,
         title: keep(entry.title, `projects[${index}].title`),
-        technologies: keepAll(entry.technologies, `projects[${index}].technologies`),
+        technologies: keepCanonicalSkills(entry.technologies, `projects[${index}].technologies`),
       })),
 
       experience: parsed.experience.map((entry, index) => ({

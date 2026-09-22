@@ -9,6 +9,7 @@ import {
   toPublicProfile,
   toPublicResume,
 } from '../models/index.js';
+import { loadVerifiedEvidence } from './skillEvidence.service.js';
 import { buildCareerTwin } from '../domain/careerTwin/buildCareerTwin.js';
 import {
   buildNarrativeRequest,
@@ -49,17 +50,19 @@ import { logger } from '../utils/logger.js';
  * with no structure to aggregate, and guessing at it here would be invention.
  */
 async function loadInputs(userId) {
-  const [profileDocument, resumeDocuments] = await Promise.all([
+  const [profileDocument, resumeDocuments, verifiedEvidence] = await Promise.all([
     StudentProfile.findOne({ user: userId }),
     Resume.find({ user: userId, 'analysis.status': PROCESSING_STATUS.COMPLETED }).sort({
       createdAt: -1,
     }),
+    loadVerifiedEvidence(userId),
   ]);
 
   return {
     profile: profileDocument ? toPublicProfile(profileDocument) : null,
     profileUpdatedAt: profileDocument?.updatedAt ?? null,
     resumes: resumeDocuments.map(toPublicResume),
+    verifiedEvidence,
     /**
      * When any of these resumes was most recently analysed.
      *
@@ -112,9 +115,9 @@ export async function getCareerTwin(userId) {
  * @throws {ApiError} 409 when there is no input data.
  */
 export async function generateCareerTwin(userId, { withNarrative = false } = {}) {
-  const { profile, profileUpdatedAt, resumes } = await loadInputs(userId);
+  const { profile, profileUpdatedAt, resumes, verifiedEvidence } = await loadInputs(userId);
 
-  if (!hasEnoughInput(profile, resumes)) {
+  if (!hasEnoughInput(profile, resumes, verifiedEvidence)) {
     throw new ApiError(
       409,
       'There is not enough in your profile yet to build a CareerTwin. Add some skills or projects, or analyse a resume, and try again.',
@@ -122,7 +125,7 @@ export async function generateCareerTwin(userId, { withNarrative = false } = {})
     );
   }
 
-  const content = buildCareerTwin({ profile, resumes });
+  const content = buildCareerTwin({ profile, resumes, verifiedEvidence });
 
   const narrative = withNarrative
     ? await generateNarrative(content)
@@ -156,7 +159,8 @@ export async function generateCareerTwin(userId, { withNarrative = false } = {})
  * One skill, one project or one analysed resume is enough — the bar is "we
  * have observed something", not "the profile is complete".
  */
-function hasEnoughInput(profile, resumes) {
+function hasEnoughInput(profile, resumes, verifiedEvidence) {
+  if (verifiedEvidence.length > 0) return true;
   if (resumes.length > 0) return true;
   if (!profile) return false;
 
