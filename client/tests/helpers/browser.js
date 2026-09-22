@@ -139,6 +139,22 @@ export async function connectBrowser(debugPort) {
       if (!ok) throw new Error(`No field found for label "${labelText}" (nth=${nth}).`);
     },
 
+    /** Selects one in-memory file in the page's file input. */
+    async setFileInput(fileName, content, type) {
+      const ok = await evaluate(`(() => {
+        const input = document.querySelector('input[type="file"]');
+        if (!input) return false;
+        const file = new File([${JSON.stringify(content)}], ${JSON.stringify(fileName)}, { type: ${JSON.stringify(type)} });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`);
+
+      if (!ok) throw new Error('No file input was rendered.');
+    },
+
     /**
      * Chooses an option in the <select> belonging to a label.
      *

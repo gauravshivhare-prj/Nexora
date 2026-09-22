@@ -136,18 +136,94 @@ describe('resume page', { timeout: 180_000 }, () => {
     });
   });
 
-  it('says that file upload is not available rather than offering it', async () => {
+  it('shows the enabled file upload control', async () => {
     await signUp();
     await openResumes();
 
-    assert.match(await page.bodyText(), /Uploading a PDF is not available yet/);
-
-    // No file input exists: the backend accepts only pasted text, and a
-    // picker that cannot succeed is worse than none.
     const fileInputs = await page.evaluate(
       'document.querySelectorAll(\'input[type="file"]\').length',
     );
-    assert.equal(fileInputs, 0, 'a file input was rendered for an endpoint that does not exist');
+    assert.equal(fileInputs, 1, 'the enabled upload control was not rendered');
+    assert.match(await page.bodyText(), /PDF, DOCX or plain text/);
+  });
+
+  it('rejects an invalid file before making an upload request', async () => {
+    await signUp();
+    await openResumes();
+
+    await page.setFileInput('resume.exe', 'not a resume', 'application/octet-stream');
+
+    await page.waitFor('document.body.innerText.includes("Choose a PDF, DOCX or plain text")', {
+      description: 'the invalid file message',
+    });
+    const uploadCalls = await page.evaluate('window.__uploadCalls ?? 0');
+    assert.equal(uploadCalls, 0);
+  });
+
+  it('shows upload loading state and calls the upload endpoint', async () => {
+    await signUp();
+    await openResumes();
+    await page.setFileInput('resume.txt', RESUME_TEXT, 'text/plain');
+
+    await page.evaluate(`(() => {
+      const original = window.fetch;
+      window.__uploadCalls = 0;
+      window.__releaseUpload = null;
+      window.fetch = (input, init) => {
+        if (String(input).endsWith('/api/resumes/upload')) {
+          window.__uploadCalls += 1;
+          return new Promise((resolve) => {
+            window.__releaseUpload = () => original(input, init).then(resolve);
+          });
+        }
+        return original(input, init);
+      };
+    })()`);
+
+    await page.clickText('Upload resume');
+    await page.waitFor('document.body.innerText.includes("Uploading…")', {
+      description: 'the upload loading state',
+    });
+    assert.equal(await page.evaluate('window.__uploadCalls'), 1);
+    await page.evaluate('window.__releaseUpload()');
+  });
+
+  it('reflects a successful uploaded resume and its real processing status', async () => {
+    await signUp();
+    await openResumes();
+    await page.setFileInput('resume.txt', RESUME_TEXT, 'text/plain');
+    await page.clickText('Upload resume');
+
+    await page.waitFor('document.body.innerText.includes("Uploaded")', {
+      description: 'the upload confirmation',
+    });
+    const text = await page.bodyText();
+    assert.match(text, /resume.txt/);
+    assert.match(text, /Text: Done/);
+    assert.match(text, /Analysis: Not started/);
+  });
+
+  it('displays a server upload error and offers retry', async () => {
+    await signUp();
+    await openResumes();
+    await page.setFileInput('resume.txt', RESUME_TEXT, 'text/plain');
+
+    await page.evaluate(`(() => {
+      const original = window.fetch;
+      window.fetch = (input, init) => String(input).endsWith('/api/resumes/upload')
+        ? Promise.resolve(new Response(JSON.stringify({
+            success: false,
+            message: 'The upload was rejected by the server.',
+            errorCode: 'VALIDATION_ERROR',
+          }), { status: 400, headers: { 'Content-Type': 'application/json' } }))
+        : original(input, init);
+    })()`);
+
+    await page.clickText('Upload resume');
+    await page.waitFor('document.body.innerText.includes("The upload was rejected by the server")', {
+      description: 'the server upload error',
+    });
+    assert.match(await page.bodyText(), /Try again/);
   });
 
   // ---------------------------------------------------------- saving text

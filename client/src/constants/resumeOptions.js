@@ -19,15 +19,20 @@ export const RESUME_LABEL_MAX = 120;
 /** RESUME_LIMITS.perUser — how many resumes one student may keep. */
 export const RESUMES_PER_USER = 10;
 
-/**
- * Whether the backend accepts an uploaded file yet.
- *
- * Derived from ACCEPTED_RESUME_SOURCES, which still lists only pasted text.
- * The UI says so plainly instead of offering a file picker that would fail:
- * a control that cannot work is worse than an absent one.
- *
- * There is no capability endpoint to read this from, so flipping it is a
- * manual step when the upload route lands. That is recorded as debt rather
- * than solved by probing the API with a request designed to fail.
- */
-export const FILE_UPLOAD_AVAILABLE = false;
+/** The client-side mirror of the backend's upload policy. */
+export const RESUME_UPLOAD_TYPES = {
+  'application/pdf': { extensions: ['.pdf'], label: 'PDF' },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+    extensions: ['.docx'],
+    label: 'Word document (.docx)',
+  },
+  'text/plain': { extensions: ['.txt'], label: 'plain text' },
+};
+
+export const RESUME_UPLOAD_ACCEPT = Object.entries(RESUME_UPLOAD_TYPES)
+  .flatMap(([mimeType, type]) => [mimeType, ...type.extensions])
+  .join(',');
+
+export const RESUME_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+export const FILE_UPLOAD_AVAILABLE = true;

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
+import { FieldShell, controlClassName } from '../components/FieldShell.jsx';
 import { FormAlert } from '../components/FormAlert.jsx';
 import { FormField } from '../components/FormField.jsx';
 import { FormTextarea } from '../components/FormTextarea.jsx';
@@ -11,17 +12,21 @@ import {
   RESUMES_PER_USER,
   RESUME_LABEL_MAX,
   RESUME_TEXT_LIMITS,
+  RESUME_UPLOAD_ACCEPT,
+  RESUME_UPLOAD_MAX_BYTES,
+  RESUME_UPLOAD_TYPES,
 } from '../constants/resumeOptions.js';
 import { ApiRequestError } from '../services/apiClient.js';
-import { createResume, fetchResumes } from '../services/resume.service.js';
+import { createResume, createResumeFromFile, fetchResumes } from '../services/resume.service.js';
 
 /**
  * /resume — the student's stored resumes, and the form that adds one.
  *
  * Storing a resume and analysing it are separate actions on the backend, and
- * they stay separate here: this page only ever stores text. Analysis lives on
- * the detail page, behind a deliberate press, because it costs money and a
- * student who only wanted to keep a copy should not spend it by accident.
+ * they stay separate here: this page only ever stores pasted or extracted
+ * text. Analysis lives on the detail page, behind a deliberate press, because
+ * it costs money and a student who only wanted to keep a copy should not spend
+ * it by accident.
  */
 
 const LOAD_STATUS = { LOADING: 'loading', READY: 'ready', FAILED: 'failed' };
@@ -145,6 +150,8 @@ function ResumeRow({ resume }) {
 function AddResumeCard({ isFull, onAdded }) {
   const [label, setLabel] = useState('');
   const [text, setText] = useState('');
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [isRetryable, setIsRetryable] = useState(false);
@@ -193,6 +200,55 @@ function AddResumeCard({ isFull, onAdded }) {
     submit();
   }
 
+  async function submitFile() {
+    if (!file) return;
+
+    setIsSaving(true);
+    setError(null);
+    setFieldErrors({});
+    setSaved(null);
+
+    try {
+      const resume = await createResumeFromFile({ label: label.trim(), file });
+
+      onAdded(resume);
+      setSaved(resume);
+      setLabel('');
+      setFile(null);
+      fileInputRef.current.value = '';
+    } catch (failure) {
+      if (failure instanceof ApiRequestError && failure.details) {
+        setFieldErrors(Object.fromEntries(failure.details.map((d) => [d.field, d.message])));
+        setError('Some fields need attention. They are marked below.');
+      } else {
+        setError(toMessage(failure, 'Your resume could not be uploaded.'));
+        setIsRetryable(!(failure instanceof ApiRequestError) || failure.status !== 409);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleFileChange(event) {
+    const nextFile = event.target.files?.[0] ?? null;
+    clearResult();
+
+    if (!nextFile) {
+      setFile(null);
+      setFieldErrors({});
+      return;
+    }
+
+    const validationError = validateUploadFile(nextFile);
+    if (validationError) {
+      setFile(null);
+      setFieldErrors({ file: validationError });
+      return;
+    }
+
+    setFile(nextFile);
+    setFieldErrors({});
+  }
   return (
     <Card
       title="Add a resume"
@@ -207,13 +263,17 @@ function AddResumeCard({ isFull, onAdded }) {
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           <FormAlert
             message={error}
-            action={isRetryable && !isSaving ? { label: 'Try again', onClick: submit } : undefined}
+            action={
+              isRetryable && !isSaving
+                ? { label: 'Try again', onClick: file ? submitFile : submit }
+                : undefined
+            }
           />
 
           {saved ? (
             <FormAlert
               tone="success"
-              message={`Saved “${saved.label ?? 'Untitled resume'}”. Open it to run the analysis.`}
+              message={`${saved.source === 'file_upload' ? 'Uploaded' : 'Saved'} “${saved.label ?? 'Untitled resume'}”. Open it to run the analysis.`}
             />
           ) : null}
 
@@ -247,18 +307,30 @@ function AddResumeCard({ isFull, onAdded }) {
             disabled={isSaving}
           />
 
-          {!FILE_UPLOAD_AVAILABLE ? (
-            // Stated rather than offered. The backend accepts only pasted
-            // text today, so a file picker here would be a control that
-            // cannot succeed.
-            <p className="rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3 text-xs text-ink-muted">
-              <span className="font-semibold text-ink">Uploading a PDF is not available yet.</span>{' '}
-              Nexora only accepts pasted text for now — copy the text out of your document and
-              paste it above.
-            </p>
+          {FILE_UPLOAD_AVAILABLE ? (
+            <FieldShell
+              label="Resume file"
+              error={fieldErrors.file}
+              hint="PDF, DOCX or plain text. Maximum size: 5 MB."
+              required={false}
+            >
+              {({ id, describedBy, invalid }) => (
+                <input
+                  id={id}
+                  ref={fileInputRef}
+                  type="file"
+                  accept={RESUME_UPLOAD_ACCEPT}
+                  onChange={handleFileChange}
+                  disabled={isSaving}
+                  aria-invalid={invalid ? 'true' : undefined}
+                  aria-describedby={describedBy}
+                  className={controlClassName(invalid)}
+                />
+              )}
+            </FieldShell>
           ) : null}
 
-          <div>
+          <div className="flex flex-wrap gap-3">
             <button
               type="submit"
               disabled={isSaving || trimmed.length < RESUME_TEXT_LIMITS.min}
@@ -267,11 +339,37 @@ function AddResumeCard({ isFull, onAdded }) {
             >
               {isSaving ? 'Saving…' : 'Save resume'}
             </button>
+
+            {FILE_UPLOAD_AVAILABLE ? (
+              <button
+                type="button"
+                onClick={submitFile}
+                disabled={isSaving || !file}
+                aria-busy={isSaving}
+                className="w-full rounded-xl border border-brand px-5 py-3 text-sm font-semibold text-brand transition-colors duration-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-ink-muted disabled:text-ink-muted sm:w-auto sm:px-8"
+              >
+                {isSaving ? 'Uploading…' : 'Upload resume'}
+              </button>
+            ) : null}
           </div>
         </form>
       )}
     </Card>
   );
+}
+
+function validateUploadFile(file) {
+  if (file.size > RESUME_UPLOAD_MAX_BYTES) {
+    return 'That file is larger than the 5 MB limit.';
+  }
+
+  const type = RESUME_UPLOAD_TYPES[file.type];
+  const name = file.name.toLowerCase();
+  if (!type || !type.extensions.some((extension) => name.endsWith(extension))) {
+    return 'Choose a PDF, DOCX or plain text resume file.';
+  }
+
+  return null;
 }
 
 function shortMessage(length) {

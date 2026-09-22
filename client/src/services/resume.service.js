@@ -6,9 +6,8 @@ import { AI_REQUEST_TIMEOUT_MS, post, request } from './apiClient.js';
  * Same job as profile.service.js: unwrap the envelope, and guarantee a
  * complete shape so no component has to write `resume.analysis?.status ?? …`.
  *
- * Every endpoint here already exists on the backend. Nothing is invented —
- * in particular there is no upload call, because `ACCEPTED_RESUME_SOURCES`
- * in server/src/constants/resumePolicy.js still lists only pasted text.
+ * Every endpoint here already exists on the backend. Uploads use FormData so
+ * the browser supplies the multipart boundary required by the server.
  */
 
 /** Mirrors PROCESSING_STATUS in server/src/constants/resumePolicy.js. */
@@ -89,6 +88,16 @@ export async function fetchResume(resumeId, { signal } = {}) {
  */
 export async function createResume({ label, text }) {
   const body = await post('/api/resumes', { label, text });
+  return toResume(unwrap(body, 'resume'));
+}
+
+/** POST /api/resumes/upload — stores text extracted from one supported file. */
+export async function createResumeFromFile({ label, file }) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (label) formData.append('label', label);
+
+  const body = await post('/api/resumes/upload', formData);
   return toResume(unwrap(body, 'resume'));
 }
 

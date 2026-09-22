@@ -105,6 +105,7 @@ export async function request(path, options = {}) {
   // ever handles the token itself. Read per request rather than captured, so
   // a login or logout takes effect on the very next call.
   const token = auth ? readToken() : null;
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
   // Combine the caller's cancellation (e.g. unmount) with our own timeout.
   const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -120,11 +121,11 @@ export async function request(path, options = {}) {
       ...rest,
       headers: {
         Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...rest.headers,
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
       signal: abortSignal,
     });
   } catch (error) {
