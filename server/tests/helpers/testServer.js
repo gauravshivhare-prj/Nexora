@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import { createApp } from '../../src/app.js';
 import { ensureModelIndexes } from '../../src/models/index.js';
 import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
+import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
+import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
 
 /**
  * Integration-test harness.
@@ -55,8 +57,14 @@ function deriveTestUri(baseUri) {
  * — otherwise counters accumulated in earlier tests can cause unexpected 429s.
  */
 export function resetRateLimiters() {
+  // Every limiter in the app. A new one that is not reset here leaks
+  // counters between tests, which shows up as an unrelated suite failing
+  // with a 429 once it happens to run late enough.
   loginLimiter.reset();
   registerLimiter.reset();
+  analysisLimiter.reset();
+  uploadLimiter.reset();
+  generateLimiter.reset();
 }
 
 /**

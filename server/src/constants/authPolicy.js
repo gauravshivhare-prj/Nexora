@@ -78,4 +78,44 @@ export const RATE_LIMIT_POLICY = {
     windowMs: 15 * 60 * 1000,   // 15 minutes
     maxAttempts: 20,
   },
+
+  /**
+   * Resume analysis.
+   *
+   * The only endpoint in Nexora that spends money on every call, and the
+   * limit that matters most: without it a signed-in student can loop the
+   * request and run the deployment's provider budget to zero. Ten an hour is
+   * far more than anyone re-analysing a resume in earnest needs — the usual
+   * number is one — while capping what a script can cost.
+   *
+   * Keyed by user rather than by IP, because the cost follows the account.
+   */
+  aiAnalysis: {
+    windowMs: 60 * 60 * 1000,   // 1 hour
+    maxAttempts: 10,
+  },
+
+  /**
+   * File upload.
+   *
+   * Cheaper than analysis but not free: parsing an untrusted PDF is real
+   * CPU, and the per-user resume cap of ten does not bound it because a
+   * rejected upload is parsed and then discarded without ever counting.
+   */
+  upload: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 30,
+  },
+
+  /**
+   * CareerTwin generation.
+   *
+   * Deterministic, so nothing is spent unless `?narrative=true` — but it
+   * reads a profile and every analysed resume and rebuilds from scratch, so
+   * it is the most database work any single request does.
+   */
+  careerTwin: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 60,
+  },
 };

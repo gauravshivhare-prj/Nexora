@@ -1,6 +1,8 @@
 import { Router } from 'express';
 
+import { RATE_LIMIT_POLICY } from '../constants/authPolicy.js';
 import { generate, read } from '../controllers/careerTwin.controller.js';
+import { createRateLimiter } from '../middleware/rateLimiter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 /**
@@ -18,7 +20,14 @@ const router = Router();
 
 router.use(requireAuth);
 
+/**
+ * Generation rebuilds from the profile and every analysed resume, and with
+ * `?narrative=true` also calls a provider. Reads are not limited: they load
+ * one document.
+ */
+export const generateLimiter = createRateLimiter(RATE_LIMIT_POLICY.careerTwin);
+
 router.get('/', read);
-router.post('/', generate);
+router.post('/', generateLimiter, generate);
 
 export default router;

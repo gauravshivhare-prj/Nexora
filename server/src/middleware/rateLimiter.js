@@ -22,8 +22,31 @@ import { logger } from '../utils/logger.js';
  * @param {{ windowMs: number, maxAttempts: number }} options
  * @returns {function} Express middleware
  */
+/**
+ * What a request counts against.
+ *
+ * The authenticated user when there is one, otherwise the address. This
+ * matters for the expensive endpoints: the cost of an analysis follows the
+ * account, not the connection, so keying on IP alone is wrong in both
+ * directions — students sharing a campus NAT would exhaust each other's
+ * allowance, while one account moving between networks would get a fresh
+ * allowance with every address.
+ *
+ * The prefixes keep the two namespaces apart, so a user id can never
+ * collide with an address.
+ *
+ * Only works when the limiter is mounted *after* requireAuth. Mounting it
+ * before would silently fall back to IP keying, which is why the routes
+ * that use it order them deliberately.
+ */
+function identify(req) {
+  if (req.auth?.userId) return `user:${req.auth.userId}`;
+
+  return `ip:${req.ip || req.socket?.remoteAddress || 'unknown'}`;
+}
+
 export function createRateLimiter({ windowMs, maxAttempts }) {
-  /** @type {Map<string, number[]>} IP → array of request timestamps */
+  /** @type {Map<string, number[]>} key → array of request timestamps */
   const store = new Map();
 
   // Periodic sweep: every `windowMs` ms, drop entries that are entirely
@@ -50,11 +73,11 @@ export function createRateLimiter({ windowMs, maxAttempts }) {
    * records the new timestamp or rejects the request with 429.
    */
   function rateLimitMiddleware(req, _res, next) {
-    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const key = identify(req);
     const now = Date.now();
 
     // Prune timestamps outside the window.
-    const existing = store.get(ip) || [];
+    const existing = store.get(key) || [];
     const windowStart = now - windowMs;
     const recent = existing.filter((t) => t > windowStart);
 
@@ -65,7 +88,7 @@ export function createRateLimiter({ windowMs, maxAttempts }) {
       const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
 
       logger.warn(
-        `Rate limit exceeded: ${ip} on ${req.method} ${req.originalUrl} ` +
+        `Rate limit exceeded: ${key} on ${req.method} ${req.originalUrl} ` +
           `(${recent.length}/${maxAttempts} in ${windowMs / 1000}s window)`,
       );
 
@@ -81,7 +104,7 @@ export function createRateLimiter({ windowMs, maxAttempts }) {
     }
 
     recent.push(now);
-    store.set(ip, recent);
+    store.set(key, recent);
     next();
   }
 
