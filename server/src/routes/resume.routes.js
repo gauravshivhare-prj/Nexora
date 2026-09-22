@@ -1,7 +1,8 @@
 import { Router } from 'express';
 
-import { analyse, create, list, read, remove } from '../controllers/resume.controller.js';
+import { analyse, create, list, read, remove, upload } from '../controllers/resume.controller.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { uploadResumeFile } from '../middleware/uploadResume.js';
 
 /**
  * Resume routes.
@@ -18,6 +19,11 @@ const router = Router();
 router.use(requireAuth);
 
 router.post('/', create);
+
+// The multipart parser sits behind requireAuth, so an anonymous request is
+// refused before a single byte of its body is read.
+router.post('/upload', uploadResumeFile, upload);
+
 router.get('/', list);
 
 router.get('/:resumeId', read);

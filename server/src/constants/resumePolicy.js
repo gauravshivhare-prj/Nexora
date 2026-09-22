@@ -17,7 +17,15 @@ export const RESUME_SOURCES = {
   FILE_UPLOAD: 'file_upload',
 };
 
-/** The sources a client may actually submit right now. */
+/**
+ * The sources a client may name in a JSON create body.
+ *
+ * Still pasted text alone, now that uploads exist. `file_upload` is set by
+ * the upload route itself, from the fact that a file arrived — never from
+ * something the client said. Accepting it here would let a plain JSON
+ * request store pasted text labelled as an extracted document, which is a
+ * lie about provenance and the kind that later phases would act on.
+ */
 export const ACCEPTED_RESUME_SOURCES = [RESUME_SOURCES.PASTED_TEXT];
 
 export const RESUME_SOURCE_VALUES = Object.values(RESUME_SOURCES);
@@ -56,6 +64,61 @@ export const RESUME_LIMITS = {
 
   /** How many resumes one student may keep. Versions, not a document store. */
   perUser: 10,
+};
+
+/**
+ * What may be uploaded, keyed by MIME type.
+ *
+ * An allow-list, not a deny-list: the question "is this dangerous?" has no
+ * stable answer, whereas "is this one of the three things we can read?"
+ * does. Each entry names the extensions that legitimately carry that type,
+ * so a `.exe` renamed to `.pdf` and a `.pdf` renamed to `.exe` are both
+ * rejected — the declared type and the file name have to agree, and both
+ * have to be on the list.
+ *
+ * The browser supplies the MIME type, so neither of those is trustworthy on
+ * its own. They are a cheap first gate; the real check is whether the
+ * extractor can actually read the bytes, which happens afterwards.
+ */
+export const ACCEPTED_UPLOAD_TYPES = {
+  'application/pdf': { extensions: ['.pdf'], label: 'PDF' },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+    extensions: ['.docx'],
+    label: 'Word document (.docx)',
+  },
+  'text/plain': { extensions: ['.txt'], label: 'plain text' },
+};
+
+export const ACCEPTED_UPLOAD_MIME_TYPES = Object.keys(ACCEPTED_UPLOAD_TYPES);
+
+/** Human-readable list, for an error message that says what would work. */
+export const ACCEPTED_UPLOAD_LABELS = Object.values(ACCEPTED_UPLOAD_TYPES).map(
+  (type) => type.label,
+);
+
+export const UPLOAD_LIMITS = {
+  /**
+   * Largest file accepted, in bytes.
+   *
+   * Five megabytes is generously above any real resume — a text-heavy CV is
+   * tens of kilobytes, and a design-heavy one with embedded images rarely
+   * passes two megabytes. The bound exists because parsing untrusted
+   * documents costs CPU and memory in proportion to their size, and an
+   * unbounded upload is the cheapest denial-of-service there is.
+   */
+  maxBytes: 5 * 1024 * 1024,
+
+  /**
+   * Pages read from a PDF.
+   *
+   * A separate bound from the byte size: a small file can declare thousands
+   * of pages, and page count rather than file size is what the extraction
+   * time tracks.
+   */
+  maxPdfPages: 50,
+
+  /** One file per request. A resume is one document. */
+  maxFiles: 1,
 };
 
 /**

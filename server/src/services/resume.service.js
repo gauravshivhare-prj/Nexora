@@ -9,6 +9,7 @@ import {
 } from '../constants/resumePolicy.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { Resume, toPublicResume, toResumeSummary } from '../models/index.js';
+import { checkUploadedFile, extractTextFromFile } from '../domain/resume/extractText.js';
 import { groundParsedResume } from '../domain/resume/groundParsedResume.js';
 import { validateParsedResume } from '../domain/resume/parsedResumeSchema.js';
 import { buildResumeExtractionRequest } from '../domain/resume/resumePrompt.js';
@@ -116,6 +117,101 @@ export async function createResume(userId, payload) {
     extraction: {
       status: PROCESSING_STATUS.COMPLETED,
       startedAt: new Date(),
+      completedAt: new Date(),
+    },
+    analysis: { status: PROCESSING_STATUS.PENDING },
+  });
+
+  return toPublicResume(resume);
+}
+
+/**
+ * Stores a resume from an uploaded file.
+ *
+ * ```text
+ * file → policy check → text extraction → the same pipeline as pasted text
+ * ```
+ *
+ * Deliberately converges on `Resume.create` with the same shape the pasted
+ * path produces, so everything downstream — analysis, grounding, the
+ * CareerTwin — sees one kind of resume and cannot behave differently for an
+ * uploaded one. The only differences are the two things that are genuinely
+ * different: `source` says where the text came from, and `file` records
+ * what it came from.
+ *
+ * `source` is set here, from the fact that a file arrived. It is never read
+ * from the request: a client that could name its own source could store
+ * pasted text labelled as an extracted document.
+ *
+ * Extraction is recorded as completed because it *did* complete, in this
+ * request. A failure never reaches here — it is a 400 before anything is
+ * written, since a resume row whose text could not be read has nothing in
+ * it worth keeping.
+ *
+ * @param {string} userId From requireAuth.
+ * @param {{ originalname: string, mimetype: string, size: number, buffer: Buffer }} file
+ * @param {{ label?: unknown }} [fields] The non-file parts of the form.
+ * @throws {ApiError} 400 on a rejected or unreadable file, 409 at the limit.
+ */
+export async function createResumeFromFile(userId, file, fields = {}) {
+  const collector = new ValidationCollector();
+
+  let label = null;
+  if (!isBlank(fields.label)) {
+    const checked = checkString(fields.label, { max: RESUME_LIMITS.label });
+    if (checked.error) collector.add('label', checked.error);
+    else label = checked.value;
+  }
+
+  const allowed = checkUploadedFile(file);
+  if (!allowed.ok) collector.add('file', allowed.reason);
+
+  // Both are reported together: a student who picked the wrong file and
+  // typed too long a label should learn that once, not twice.
+  collector.throwIfInvalid();
+
+  // Checked before the parser runs. Doing the expensive thing first and
+  // then refusing to store the result would burn CPU on an upload that was
+  // never going to be kept.
+  const existing = await Resume.countDocuments({ user: userId });
+  if (existing >= RESUME_LIMITS.perUser) {
+    throw ApiError.conflict(
+      `You can keep up to ${RESUME_LIMITS.perUser} resumes. Delete one before adding another.`,
+      ERROR_CODES.CONFLICT,
+    );
+  }
+
+  const startedAt = new Date();
+  const extracted = await extractTextFromFile(file);
+
+  if (!extracted.ok) {
+    // Logged with the cause, returned without it: the parser's own message
+    // is derived from bytes the uploader chose.
+    if (extracted.cause) {
+      logger.warn(`Resume extraction failed for user ${userId}: ${extracted.cause.message}`);
+    }
+
+    const failure = new ValidationCollector();
+    failure.add('file', extracted.reason);
+    failure.throwIfInvalid();
+  }
+
+  const resume = await Resume.create({
+    user: userId,
+    label,
+    source: RESUME_SOURCES.FILE_UPLOAD,
+    file: {
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size ?? file.buffer.length,
+      // Nothing is persisted anywhere, so there is no key to record. Null
+      // rather than a made-up path, which would imply a file exists.
+      storageKey: null,
+    },
+    extractedText: extracted.text,
+    extraction: {
+      status: PROCESSING_STATUS.COMPLETED,
+      startedAt,
       completedAt: new Date(),
     },
     analysis: { status: PROCESSING_STATUS.PENDING },

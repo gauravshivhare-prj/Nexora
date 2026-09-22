@@ -194,3 +194,49 @@ export async function sendJsonWithToken(baseUrl, path, { method, token, payload 
   return { status: response.status, body };
 }
 
+
+/**
+ * Sends a multipart form with a Bearer token, for the upload endpoint.
+ *
+ * Built on the platform's own FormData and Blob rather than a multipart
+ * library: the boundary and the part headers are then produced by the same
+ * machinery a browser uses, so the test exercises the shape the server will
+ * actually receive rather than one a helper invented.
+ *
+ * @param {{ token?: string, file?: { buffer: Buffer, filename: string, type: string },
+ *           files?: object[], fields?: Record<string, string>, fieldName?: string }} options
+ */
+export async function uploadWithToken(
+  baseUrl,
+  path,
+  { token, file, files, fields = {}, fieldName = 'file' } = {},
+) {
+  const form = new FormData();
+
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+
+  for (const part of files ?? (file ? [file] : [])) {
+    form.append(
+      part.fieldName ?? fieldName,
+      new Blob([part.buffer], { type: part.type }),
+      part.filename,
+    );
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    // Content-Type is left to fetch, which appends the generated boundary.
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+
+  return { status: response.status, body };
+}

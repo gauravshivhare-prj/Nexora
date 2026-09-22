@@ -1,6 +1,7 @@
 import {
   analyseResume,
   createResume,
+  createResumeFromFile,
   deleteResume,
   getResume,
   listResumes,
@@ -20,6 +21,28 @@ export const create = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     message: 'Resume saved',
+    data: { resume },
+  });
+});
+
+/**
+ * POST /api/resumes/upload
+ *
+ * Same result as POST /api/resumes, reached with a file instead of a
+ * string. A separate route rather than a branch inside `create`, because
+ * the two take different content types and only one of them needs
+ * multipart parsing in front of it — making every JSON create pay for a
+ * multipart parser would be the wrong trade.
+ *
+ * 201 with the identical body, so a client that has already handled a
+ * created resume needs no new code to handle an uploaded one.
+ */
+export const upload = asyncHandler(async (req, res) => {
+  const resume = await createResumeFromFile(req.auth.userId, req.file, req.body ?? {});
+
+  res.status(201).json({
+    success: true,
+    message: 'Resume uploaded',
     data: { resume },
   });
 });
