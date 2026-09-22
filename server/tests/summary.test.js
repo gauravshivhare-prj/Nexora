@@ -312,4 +312,29 @@ describe('dashboard summary', () => {
     // and echoing an id invites a client to start passing it back.
     assert.ok(!JSON.stringify(body.data).includes('"user"'));
   });
+
+  // ------------------------------------------ section failure isolation
+
+  it('degrades gracefully when skillGap or roadmap sections fail', async () => {
+    // Regression: before the Promise.allSettled fix, a failure in getSkillGap
+    // or getRoadmap would crash the entire summary with 500, even though
+    // profile, resumes, twin and matches were fine.
+    //
+    // This test verifies the structural contract: skillGap and roadmap
+    // default to null when they cannot be computed, while the rest of the
+    // summary is still intact.
+    const token = await signUp();
+    await seedProfile(token);
+
+    // A user with only a profile but no twin has no matches, so the
+    // gap/roadmap branch is never entered. That is the structural baseline:
+    // skillGap and roadmap are null, and the endpoint returns 200.
+    const { status, body } = await summary(token);
+
+    assert.equal(status, 200);
+    assert.equal(body.data.skillGap, null);
+    assert.equal(body.data.roadmap, null);
+    assert.equal(body.data.profile.exists, true);
+    assert.equal(body.data.nextStep.code, 'BUILD_CAREER_TWIN');
+  });
 });

@@ -128,6 +128,17 @@ If deployment introduces a critical regression:
 
 **Never deploy directly from an untested local state.**
 
+## Known MVP Limitations
+
+### In-Memory Rate Limiter
+The rate limiter stores hit counts in Node.js process memory. In a multi-instance or horizontally scaled deployment, rate limits apply per-instance rather than globally across instances. For multi-instance production, replace or back the store with Redis or an external distributed cache.
+
+### In-Memory Resume File Extraction
+`POST /api/resumes/upload` extracts text in-memory from PDF/DOCX uploads and stores the extracted text in MongoDB. Original file binaries are discarded after extraction. The `file.storageKey` field on the Resume model serves as a placeholder for future persistent object storage (e.g., S3/GCS) if re-downloading becomes a product requirement.
+
+### AI Provider Configuration
+Resume analysis (`POST /api/resumes/:id/analysis`) requires `AI_PROVIDER=gemini` (or another registered adapter) and its corresponding API key (e.g., `GEMINI_API_KEY`). If no provider is configured, the endpoint returns `503 AI_PROVIDER_NOT_CONFIGURED` without inventing student career data.
+
 ## Nexora Design & Experience Standard
 
 ### Final Visual Theme — Sunset Warm

@@ -188,6 +188,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/resumes` | Bearer | Summaries only; full text is projected away |
 | `GET` | `/api/resumes/:id` | Bearer | Owner-scoped; 404 if not the caller's |
 | `DELETE` | `/api/resumes/:id` | Bearer | Owner-scoped |
+| `POST` | `/api/resumes/upload` | Bearer | Rate-limited file upload; extracts text in-memory |
 | `POST` | `/api/resumes/:id/analysis` | Bearer | Runs the AI pipeline. 503 when unconfigured |
 | `GET` | `/api/career-twin` | Bearer | Stored twin plus `isStale`. Never regenerates |
 | `POST` | `/api/career-twin` | Bearer | Rebuilds. `?narrative=true` adds an optional summary |
@@ -199,6 +200,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
 | `POST` | `/api/skill-evidence/assessments` | Bearer | Records a deterministic assessment result |
 | `POST` | `/api/skill-evidence/interviews` | Bearer | Records a human- or AI-evaluated interview result |
+| `GET` | `/api/summary` | Bearer | Dashboard aggregate; section-failure-isolated |
 
 ### Ownership rule
 
@@ -230,15 +232,15 @@ No vendor SDK is imported anywhere in the domain. Everything goes through the
 { name, complete({ system, user, maxOutputTokens }) → { text, model } }
 ```
 
-**Nexora ships with no provider implementation.** There is deliberately no
-built-in fallback returning canned output — a fake provider would make resume
-analysis look finished while inventing a student's career data. With nothing
-registered, `POST /api/resumes/:id/analysis` answers `503
-AI_PROVIDER_NOT_CONFIGURED` and says so. Everything else works without it.
+**Nexora ships with one provider implementation** — a Gemini adapter in
+`server/src/services/ai/geminiProvider.js`. Set `AI_PROVIDER=gemini` and
+`GEMINI_API_KEY` to enable it. With no provider registered,
+`POST /api/resumes/:id/analysis` answers `503 AI_PROVIDER_NOT_CONFIGURED`
+and says so. Everything else works without it.
 
-To enable analysis: implement the contract, call `registerAiProvider()` at
-startup, and set `AI_PROVIDER` to its name. The provider's own API key belongs
-in its own environment variable.
+To add another provider: implement the contract, call `registerAiProvider()`
+at startup, and set `AI_PROVIDER` to its name. The provider's own API key
+belongs in its own environment variable.
 
 ### The AI safety pipeline
 
@@ -534,14 +536,15 @@ of technology is not something this could do honestly.
 
 ### Not implemented
 
-- File upload. Resume text is submitted as text (`source: "pasted_text"`).
-  The `file` subdocument and the `file_upload` source value exist in the
-  schema so adding upload is a new value rather than a migration; the API
-  rejects that source today rather than silently ignoring it.
-- Any AI provider adapter, per the boundary section above.
-- Any resume or CareerTwin UI. Phases 3 and 4 are backend only.
-- `verified` evidence. Assessments and AI interviews are Phase 8, and nothing
-  else may be promoted to fill the gap.
+- **Original file persistence.** `POST /api/resumes/upload` extracts text
+  from PDF/DOCX in memory and stores the extracted text. The original file is
+  discarded after extraction. `file.storageKey` on the Resume model is the
+  placeholder for future persistent storage. This is an intentional MVP
+  limitation: writing to disk or a blob store would add infrastructure
+  complexity with no current product requirement for re-downloading the
+  original.
+- `verified` evidence. The assessment/interview contract exists (Phase 8),
+  but no UI or AI question generation is included yet.
 - Any readiness score, pending a target role to measure against.
 
 ## Nexora Design & Experience Standard

@@ -12,12 +12,14 @@ This document defines the controlled development sequence for Nexora.
 | 0 — Project Foundation | Complete |
 | 1 — Authentication | Complete |
 | 2 — Student Profile | Complete |
-| 3 — Resume Intelligence | Backend foundation complete; no upload, no provider, no UI |
-| 4 — CareerTwin | Backend foundation complete; no UI |
-| 5 — Career Recommendation | Backend foundation complete; no UI |
-| 6 — Skill Gap | Backend foundation complete; no UI |
-| 7 — Personalized Roadmap | Backend foundation complete; no UI |
-| 8 onwards | Not started |
+| 3 — Resume Intelligence | Complete (backend + file upload + Gemini provider; no edit/review UI) |
+| 4 — CareerTwin | Backend complete; frontend via dashboard summary |
+| 5 — Career Recommendation | Backend complete; frontend via dashboard summary |
+| 6 — Skill Gap | Backend complete; frontend via dashboard summary |
+| 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
+| 8 — Assessment & AI Interview | Backend contract only (evidence storage); no UI |
+| 9 — Opportunity Matching | Not started |
+| 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
 A phase is marked complete only when its exit criteria are met and its tests
 pass. The implemented data model and API surface are recorded in
@@ -108,18 +110,15 @@ treats it as evidence. The evidence model arrives with Phase 6.
   provider double.
 
 **Deliberately NOT delivered, and why**
-- **No AI provider implementation.** None is configured on this deployment,
-  and shipping a fake one would invent student career data. Analysis answers
-  `503 AI_PROVIDER_NOT_CONFIGURED`.
-- **No file upload.** PDF and DOCX extraction needs parsing infrastructure
-  that does not exist here yet; adding a dependency stack to fake completeness
-  was rejected. Resume text is submitted as text. The schema has the `file`
-  subdocument and the `file_upload` source value ready.
-- **No resume UI.** It would need both of the above to be worth building.
+- **No original file persistence.** The uploaded file is held in memory,
+  parsed, and discarded. Extracted text is stored. `file.storageKey` on the
+  model is the placeholder for persistent storage. See architecture.md.
+- **No resume edit/review UI.** A student cannot yet correct extracted data
+  through the interface.
 
-Exit criteria not yet met: "supported resume formats work", "invalid files are
-rejected" and "user can correct extracted data" all depend on upload and a UI.
-"AI output is schema-validated" is met, and exceeded by grounding.
+Exit criteria not yet met: "user can correct extracted data" depends on the
+review UI. "Supported resume formats work" and "invalid files are rejected"
+are met. "AI output is schema-validated" is met, and exceeded by grounding.
 
 ## Phase 4 — CareerTwin
 - CareerTwin profile

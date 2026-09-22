@@ -4,6 +4,7 @@ import { getCareerTwin } from './careerTwin.service.js';
 import { recommendRoles } from './recommendation.service.js';
 import { getRoadmap } from './roadmap.service.js';
 import { getSkillGap } from './skillGap.service.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * One read that answers "where am I?".
@@ -90,13 +91,26 @@ export async function getSummary(userId) {
     // Only for the top match, and only its counts. A client that wants the
     // detail has the per-role endpoints; duplicating their full output here
     // would make this response grow with every field they gain.
-    const [gap, roadmap] = await Promise.all([
+    //
+    // Promise.allSettled rather than Promise.all: a transient failure in one
+    // section must not crash the entire summary. The defaults above are
+    // already null, so a rejected section is simply absent.
+    const [gapResult, roadmapResult] = await Promise.allSettled([
       getSkillGap(userId, focus.roleId),
       getRoadmap(userId, focus.roleId),
     ]);
 
-    summary.skillGap = { roleId: focus.roleId, summary: gap.gap.summary };
-    summary.roadmap = { roleId: focus.roleId, summary: roadmap.roadmap.summary };
+    if (gapResult.status === 'fulfilled') {
+      summary.skillGap = { roleId: focus.roleId, summary: gapResult.value.gap.summary };
+    } else {
+      logger.warn(`Summary: skill-gap section failed for user ${userId}`, gapResult.reason);
+    }
+
+    if (roadmapResult.status === 'fulfilled') {
+      summary.roadmap = { roleId: focus.roleId, summary: roadmapResult.value.roadmap.summary };
+    } else {
+      logger.warn(`Summary: roadmap section failed for user ${userId}`, roadmapResult.reason);
+    }
   }
 
   summary.nextStep = nextStepFor(summary);
