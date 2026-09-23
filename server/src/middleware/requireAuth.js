@@ -1,6 +1,7 @@
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { ApiError } from '../utils/ApiError.js';
 import { extractBearerToken, verifyAccessToken } from '../utils/jwt.js';
+import { getAuthenticatedUser } from '../services/auth.service.js';
 
 /**
  * Gate for protected routes.
@@ -12,7 +13,7 @@ import { extractBearerToken, verifyAccessToken } from '../utils/jwt.js';
  * On success `req.auth = { userId }` — an identifier only. Nothing sensitive
  * is attached, and the raw token is not kept on the request.
  */
-export function requireAuth(req, _res, next) {
+export async function requireAuth(req, _res, next) {
   const token = extractBearerToken(req.headers.authorization);
 
   if (!token) {
@@ -27,6 +28,7 @@ export function requireAuth(req, _res, next) {
 
   try {
     const { userId } = verifyAccessToken(token);
+    await getAuthenticatedUser(userId);
     req.auth = { userId };
     next();
   } catch (error) {
