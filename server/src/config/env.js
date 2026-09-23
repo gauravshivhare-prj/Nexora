@@ -131,6 +131,18 @@ function parseTimeoutMs(value, fallback = 60000) {
   return ms;
 }
 
+/** Express trust-proxy setting; disabled by default so forwarded headers are not trusted accidentally. */
+function parseTrustProxy(value) {
+  if (!value?.trim()) return false;
+  if (value.trim() === 'true') return true;
+  if (value.trim() === 'false') return false;
+
+  const hops = Number(value);
+  if (Number.isInteger(hops) && hops >= 0) return hops;
+
+  throw new Error('Invalid TRUST_PROXY value. Expected true, false, or a non-negative hop count.');
+}
+
 assertRequiredVariables();
 
 export const env = {
@@ -155,6 +167,7 @@ export const env = {
 
   geminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash',
   geminiTimeoutMs: parseTimeoutMs(process.env.GEMINI_TIMEOUT_MS, 60000),
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
 };
 
 /**

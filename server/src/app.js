@@ -16,6 +16,7 @@ import { requestLogger } from './middleware/requestLogger.js';
 export function createApp() {
   const app = express();
 
+  app.set('trust proxy', env.trustProxy);
   app.use(cors({ origin: env.clientUrl }));
   app.use(express.json({ limit: '1mb' }));
   app.use(requestLogger);
