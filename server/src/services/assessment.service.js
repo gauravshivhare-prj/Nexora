@@ -149,12 +149,53 @@ export async function createAssessment(input) {
 }
 
 /**
+ * Recursively scans payload for any client-controlled scoring, answer key, or verification fields.
+ * Throws ApiError.badRequest if any forbidden field is discovered.
+ */
+export function assertNoForbiddenClientFields(payload, context = 'payload') {
+  if (!payload || typeof payload !== 'object') return;
+
+  const forbiddenSet = new Set(FORBIDDEN_CLIENT_VERIFICATION_FIELDS);
+
+  function walk(node, path) {
+    if (!node || typeof node !== 'object') return;
+
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        walk(node[i], `${path}[${i}]`);
+      }
+      return;
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (forbiddenSet.has(key)) {
+        throw ApiError.badRequest(
+          `Client is forbidden from supplying scoring/verification field: "${key}".`,
+          ERROR_CODES.VALIDATION_ERROR,
+        );
+      }
+      if (value && typeof value === 'object') {
+        walk(value, `${path}.${key}`);
+      }
+    }
+  }
+
+  walk(payload, context);
+}
+
+/**
  * Starts a new assessment attempt for an authenticated student.
  */
-export async function startAssessmentAttempt(userId, { assessmentId }) {
+export async function startAssessmentAttempt(userId, input) {
   if (!userId) {
     throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
   }
+  if (!input || typeof input !== 'object') {
+    throw ApiError.badRequest('Attempt payload is required.', ERROR_CODES.MALFORMED_REQUEST);
+  }
+  assertNoForbiddenClientFields(input);
+
+  const { assessmentId } = input;
   validateAssessmentIdParam(assessmentId);
 
   // Load the assessment to verify it exists
@@ -217,15 +258,8 @@ export async function submitAssessmentAttempt(userId, payload) {
     throw ApiError.badRequest('Submission payload is required.', ERROR_CODES.MALFORMED_REQUEST);
   }
 
-  // 1. Anti-Tamper: Reject any client-controlled verification / scoring fields
-  for (const field of FORBIDDEN_CLIENT_VERIFICATION_FIELDS) {
-    if (payload[field] !== undefined) {
-      throw ApiError.badRequest(
-        `Client is forbidden from supplying scoring/verification field: "${field}".`,
-        ERROR_CODES.VALIDATION_ERROR,
-      );
-    }
-  }
+  // 1. Anti-Tamper: Reject any client-controlled verification / scoring / answer key fields
+  assertNoForbiddenClientFields(payload);
 
   const { attemptId, assessmentId, answers } = payload;
 
@@ -314,6 +348,7 @@ export async function submitAssessmentAttempt(userId, payload) {
   return {
     attempt: toPublicAssessmentAttempt(attempt),
     evidenceResult: evalResult.evidenceResult,
+    evidenceStatus: evalResult.evidenceStatus,
   };
 }
 
@@ -345,6 +380,27 @@ export async function listUserAttempts(userId, { assessmentId } = {}) {
 
   const attempts = await AssessmentAttempt.find(query).sort({ createdAt: -1 });
   return attempts.map(toPublicAssessmentAttempt);
+}
+
+/**
+ * Retrieves the latest completed assessment result for an authenticated user.
+ */
+export async function getLatestAssessmentResult(userId, assessmentId) {
+  if (!userId) {
+    throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+  validateAssessmentIdParam(assessmentId);
+
+  const attempt = await AssessmentAttempt.findOne({
+    user: userId,
+    assessmentId: assessmentId.trim(),
+    status: { $in: [ATTEMPT_STATUS.EVALUATED, ATTEMPT_STATUS.TIMED_OUT] },
+  }).sort({ attemptNumber: -1 });
+
+  if (!attempt) {
+    return null;
+  }
+  return toPublicAssessmentAttempt(attempt);
 }
 
 // -----------------------------------------------------------------------------
