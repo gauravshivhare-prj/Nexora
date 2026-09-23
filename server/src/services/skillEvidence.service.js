@@ -26,6 +26,7 @@ export async function loadVerifiedEvidence(userId) {
 
   return checks.map((check) => ({
     skill: check.skillName,
+    completedAt: check.completedAt,
     evidence: {
       source: check.kind,
       strength: 'verified',

@@ -43,7 +43,7 @@ export function buildCareerTwin({ profile, resumes = [], verifiedEvidence = [] }
     targetRoles: collectTargetRoles(profile),
     academic: summariseAcademic(profile),
     indicators: countIndicators({ profile, analysed, skills }),
-    sources: describeSources({ profile, resumes, analysed }),
+    sources: describeSources({ profile, resumes, analysed, verifiedEvidence }),
   };
 }
 
@@ -312,11 +312,12 @@ function countIndicators({ profile, analysed, skills }) {
 }
 
 /** What this twin was built from, so a stale one can be recognised. */
-function describeSources({ profile, resumes, analysed }) {
+function describeSources({ profile, resumes, analysed, verifiedEvidence = [] }) {
   return {
     hasProfile: Boolean(profile),
     profileUpdatedAt: profile?.updatedAt ?? null,
     resumeCount: resumes.length,
     analysedResumeIds: analysed.map((resume) => resume.id),
+    verifiedEvidenceCount: verifiedEvidence.length,
   };
 }

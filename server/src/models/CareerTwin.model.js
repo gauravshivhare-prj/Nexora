@@ -157,6 +157,7 @@ const careerTwinSchema = new mongoose.Schema(
       profileUpdatedAt: { type: Date, default: null },
       resumeCount: { type: Number, default: 0 },
       analysedResumeIds: { type: [String], default: [] },
+      verifiedEvidenceCount: { type: Number, default: 0 },
     },
 
     generatedAt: { type: Date, required: true },
@@ -178,7 +179,13 @@ const careerTwinSchema = new mongoose.Schema(
  */
 export function isCareerTwinStale(
   twin,
-  { profileUpdatedAt, analysedResumeIds, latestAnalysisAt = null },
+  {
+    profileUpdatedAt,
+    analysedResumeIds,
+    latestAnalysisAt = null,
+    latestEvidenceAt = null,
+    verifiedEvidenceCount = null,
+  },
 ) {
   const reasons = [];
 
@@ -209,6 +216,20 @@ export function isCareerTwinStale(
     new Date(latestAnalysisAt) > new Date(twin.generatedAt)
   ) {
     reasons.push('A resume has been analysed again since this was generated.');
+  }
+
+  if (
+    latestEvidenceAt &&
+    twin.generatedAt &&
+    new Date(latestEvidenceAt) > new Date(twin.generatedAt)
+  ) {
+    reasons.push('New skill evidence has been recorded since this was generated.');
+  } else if (
+    verifiedEvidenceCount !== null &&
+    twin.sources?.verifiedEvidenceCount !== undefined &&
+    verifiedEvidenceCount !== twin.sources.verifiedEvidenceCount
+  ) {
+    reasons.push('New skill evidence has been recorded since this was generated.');
   }
 
   return { isStale: reasons.length > 0, reasons };
@@ -271,6 +292,7 @@ export function toPublicCareerTwin(twin, staleness = { isStale: false, reasons: 
       profileUpdatedAt: twin.sources?.profileUpdatedAt ?? null,
       resumeCount: twin.sources?.resumeCount ?? 0,
       analysedResumeCount: (twin.sources?.analysedResumeIds ?? []).length,
+      verifiedEvidenceCount: twin.sources?.verifiedEvidenceCount ?? 0,
     },
     generatedAt: twin.generatedAt,
     isStale: staleness.isStale,
