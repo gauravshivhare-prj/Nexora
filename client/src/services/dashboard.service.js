@@ -80,5 +80,3 @@ export async function fetchDashboard({ signal } = {}) {
   };
 }
 
-/** Exported for the failure branch the page still renders. */
-export const FAILED_SECTION = FAILED;

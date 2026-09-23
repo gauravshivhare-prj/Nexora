@@ -44,7 +44,7 @@ export async function fetchRoles({ signal } = {}) {
 export async function fetchRecommendations({ includeAll = false, limit, signal } = {}) {
   const query = new URLSearchParams();
   if (includeAll) query.set('includeAll', 'true');
-  if (limit) query.set('limit', String(limit));
+  if (limit != null) query.set('limit', String(limit));
 
   const suffix = query.toString() ? `?${query}` : '';
   const body = await request(`/api/careers/recommendations${suffix}`, { signal });
@@ -59,9 +59,6 @@ export async function fetchRecommendations({ includeAll = false, limit, signal }
   };
 }
 
-/** Mirrors PRIORITY in server/src/domain/roadmap/buildRoadmap.js. */
-export const ROADMAP_PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
-
 /**
  * GET /api/careers/roles/:roleId/roadmap
  *
@@ -75,7 +72,7 @@ export const ROADMAP_PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
  *   mistaken for the whole of it.
  */
 export async function fetchRoadmap(roleId, { maxItems, signal } = {}) {
-  const suffix = maxItems ? `?maxItems=${encodeURIComponent(maxItems)}` : '';
+  const suffix = maxItems != null ? `?maxItems=${encodeURIComponent(maxItems)}` : '';
   const body = await request(
     `/api/careers/roles/${encodeURIComponent(roleId)}/roadmap${suffix}`,
     { signal },
@@ -105,4 +102,19 @@ export async function fetchSkillGap(roleId, { signal } = {}) {
   if (!data?.gap) throw new Error('The backend returned an unexpected response shape.');
 
   return { gap: data.gap, basedOn: data.basedOn ?? null, method: data.method ?? null };
+}
+
+/** GET /api/opportunities — deterministic matches from verified evidence. */
+export async function fetchOpportunities({ signal } = {}) {
+  const body = await request('/api/opportunities', { signal });
+  const data = body?.data;
+  if (!Array.isArray(data?.opportunities)) {
+    throw new Error('The backend returned an unexpected response shape.');
+  }
+
+  return {
+    opportunities: data.opportunities,
+    catalogue: data.catalogue ?? null,
+    method: data.method ?? null,
+  };
 }
