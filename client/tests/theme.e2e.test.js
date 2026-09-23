@@ -472,10 +472,8 @@ describe('theme', { timeout: 180_000 }, () => {
 
     // `--color-on-brand` is white on #EA580C in this theme: 3.7:1, which
     // passes AA only at large text sizes. It is the accepted design of the
-    // primary button and predates the theme work, so it is excluded here by
-    // name rather than silently by a lowered threshold.
     const failures = ratios.filter(
-      ([pair, ratio]) => ratio < 4.5 && !pair.startsWith('--color-on-brand'),
+      ([, ratio]) => ratio < 4.5,
     );
 
     assert.deepEqual(

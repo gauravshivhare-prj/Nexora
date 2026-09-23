@@ -59,14 +59,12 @@
    * dot.
    *
    * Every `text-on-brand` in this codebase was one of those, so the intent is
-   * named instead. It has to be a token because the answer is
-   * theme-dependent: the dark theme brightens the accent to hold its own
-   * against charcoal, and white on that bright orange is 2.8:1 — worse than
-   * the light theme it replaced. Dark text on it is 6.5:1.
-   *
-   * Light keeps white, which is the accepted design.
+    * named instead. It has to be a token because the answer is
+    * theme-dependent: dark warm text preserves the Sunset Warm palette while
+    * meeting AA on the light theme's orange, and the dark theme uses the same
+    * treatment against its brighter accent.
    */
-  --color-on-brand: #ffffff;
+  --color-on-brand: #3b0a03;
 
   --animate-rise: rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
 
