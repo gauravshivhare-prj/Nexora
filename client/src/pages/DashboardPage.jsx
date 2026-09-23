@@ -109,6 +109,12 @@ export function DashboardPage() {
             onRetry={() => load()}
           />
         </div>
+
+        <ReadinessTile
+          section={data.readiness}
+          role={data.focusRole.value}
+          onRetry={() => load()}
+        />
       </div>
     </PageShell>
   );
@@ -388,6 +394,53 @@ function SkillGapTile({ section, role, onRetry }) {
           <div>
             <Action to={`/careers/${role.roleId}/skill-gap`}>See the full gap</Action>
           </div>
+        </div>
+      ) : null}
+    </Tile>
+  );
+}
+
+function ReadinessTile({ section, role, onRetry }) {
+  const readiness = section.value;
+  const statusMessage = {
+    insufficient_data: 'There is not enough evidence to compare this role yet.',
+    partial: 'Some required skills are missing or only claimed.',
+    supported: 'Every required skill has supporting evidence; some still need verification.',
+    verified: 'Every required skill has verified evidence.',
+  }[readiness?.evidenceStatus];
+
+  return (
+    <Tile
+      section={section}
+      title="Career readiness"
+      description={role ? `Evidence for ${role.title}.` : undefined}
+      empty="Build a CareerTwin and match a role to see evidence-based readiness."
+      emptyAction={
+        <div>
+          <Action to="/careers">Browse roles</Action>
+        </div>
+      }
+      onRetry={onRetry}
+    >
+      {readiness ? (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm font-semibold text-ink">{statusMessage}</p>
+          <Stats
+            items={[
+              ['Required missing', readiness.required.missing],
+              ['Required claimed', readiness.required.claimed],
+              ['Required supported', readiness.required.supported],
+              ['Required verified', readiness.required.verified],
+            ]}
+          />
+          <p className="text-xs text-ink-muted">
+            Readiness is based on evidence states, not a percentage or overall score.
+          </p>
+          {role ? (
+            <div>
+              <Action to={`/careers/${role.roleId}/skill-gap`}>See the evidence</Action>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Tile>
