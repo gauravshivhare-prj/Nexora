@@ -4,6 +4,15 @@ import { Resume, toPublicResume, toResumeSummary } from './Resume.model.js';
 import { StudentProfile, emptyProfile, toPublicProfile } from './StudentProfile.model.js';
 import { User, toPublicUser } from './User.model.js';
 import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from './SkillEvidenceCheck.model.js';
+import {
+  Assessment,
+  toPublicAssessment,
+  toAdminAssessment,
+} from './Assessment.model.js';
+import {
+  AssessmentAttempt,
+  toPublicAssessmentAttempt,
+} from './AssessmentAttempt.model.js';
 
 /**
  * Model registry and index management.
@@ -11,7 +20,15 @@ import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from './SkillEvidenceC
  * Registering new models here keeps index creation in one place as the schema
  * set grows, one model per phase.
  */
-const MODELS = [User, StudentProfile, Resume, CareerTwin, SkillEvidenceCheck];
+const MODELS = [
+  User,
+  StudentProfile,
+  Resume,
+  CareerTwin,
+  SkillEvidenceCheck,
+  Assessment,
+  AssessmentAttempt,
+];
 
 /**
  * Builds every declared index before the server accepts traffic.
@@ -29,6 +46,8 @@ export async function ensureModelIndexes() {
 }
 
 export {
+  Assessment,
+  AssessmentAttempt,
   CareerTwin,
   Resume,
   SkillEvidenceCheck,
@@ -36,6 +55,9 @@ export {
   User,
   emptyProfile,
   isCareerTwinStale,
+  toAdminAssessment,
+  toPublicAssessment,
+  toPublicAssessmentAttempt,
   toPublicCareerTwin,
   toPublicProfile,
   toPublicResume,

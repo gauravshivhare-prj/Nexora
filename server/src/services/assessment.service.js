@@ -1,0 +1,426 @@
+import { Assessment, toAdminAssessment, toPublicAssessment } from '../models/Assessment.model.js';
+import {
+  AssessmentAttempt,
+  toPublicAssessmentAttempt,
+} from '../models/AssessmentAttempt.model.js';
+import {
+  ATTEMPT_STATUS,
+  evaluateAssessmentSubmission,
+  validateAssessmentDefinition,
+} from '../domain/assessment/assessmentContract.js';
+import {
+  ASSESSMENT_CATALOG,
+  getAssessmentById as getCatalogAssessmentById,
+  getAssessmentCatalog,
+} from '../domain/assessment/assessmentCatalog.js';
+import { recordAssessment } from './skillEvidence.service.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ERROR_CODES } from '../constants/errorCodes.js';
+import {
+  ASSESSMENT_LIMITS,
+  FORBIDDEN_CLIENT_VERIFICATION_FIELDS,
+} from '../constants/assessmentPolicy.js';
+import { canonicalSkill, skillKey } from '../domain/skills/skillKey.js';
+
+/**
+ * Ensures the canonical catalog assessments exist in MongoDB.
+ */
+export async function seedAssessmentCatalog() {
+  const catalog = getAssessmentCatalog();
+  for (const item of catalog) {
+    const existing = await Assessment.findOne({ assessmentId: item.id });
+    if (!existing) {
+      await Assessment.create({
+        assessmentId: item.id,
+        version: item.version,
+        skillKey: item.skillKey,
+        skillName: item.skillName,
+        secondarySkillKeys: item.secondarySkillKeys ?? [],
+        difficulty: item.difficulty,
+        title: item.title,
+        description: item.description,
+        passMark: item.passMark,
+        timeLimitMinutes: item.timeLimitMinutes,
+        questions: item.questions,
+        isActive: true,
+      });
+    }
+  }
+}
+
+/**
+ * Lists all active, sanitized assessments available for students.
+ */
+export async function listAssessments({ skill, difficulty } = {}) {
+  const query = { isActive: true };
+
+  if (skill) {
+    const canonical = canonicalSkill(skill);
+    if (!canonical) {
+      throw ApiError.badRequest(
+        `Unknown canonical skill: "${skill}".`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+    query.$or = [{ skillKey: canonical.key }, { secondarySkillKeys: canonical.key }];
+  }
+
+  if (difficulty) {
+    query.difficulty = difficulty;
+  }
+
+  let assessments = await Assessment.find(query).sort({ title: 1 });
+
+  // If DB is empty, fallback to canonical catalog
+  if (assessments.length === 0 && (!query.skillKey && !query.$or)) {
+    return ASSESSMENT_CATALOG.map(toPublicAssessment);
+  }
+
+  return assessments.map(toPublicAssessment);
+}
+
+/**
+ * Fetches a single sanitized assessment definition for a student.
+ */
+export async function getAssessment(assessmentId) {
+  validateAssessmentIdParam(assessmentId);
+
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true });
+  if (doc) {
+    return toPublicAssessment(doc);
+  }
+
+  // Check canonical catalog fallback
+  const catalogItem = getCatalogAssessmentById(assessmentId);
+  if (catalogItem) {
+    return toPublicAssessment(catalogItem);
+  }
+
+  throw ApiError.notFound(`Assessment "${assessmentId}" not found.`, ERROR_CODES.NOT_FOUND);
+}
+
+/**
+ * Creates or registers a new assessment definition (admin/system).
+ */
+export async function createAssessment(input) {
+  if (!input || typeof input !== 'object') {
+    throw ApiError.badRequest('Assessment payload is required.', ERROR_CODES.MALFORMED_REQUEST);
+  }
+
+  // Validate using domain contract
+  let validated;
+  try {
+    validated = validateAssessmentDefinition(input);
+  } catch (err) {
+    throw ApiError.badRequest(err.message, ERROR_CODES.VALIDATION_ERROR);
+  }
+
+  const existing = await Assessment.findOne({ assessmentId: validated.id });
+  if (existing) {
+    throw ApiError.conflict(
+      `Assessment with ID "${validated.id}" already exists.`,
+      ERROR_CODES.CONFLICT,
+    );
+  }
+
+  try {
+    const created = await Assessment.create({
+      assessmentId: validated.id,
+      version: validated.version,
+      skillKey: validated.skillKey,
+      skillName: validated.skillName,
+      secondarySkillKeys: validated.secondarySkillKeys,
+      difficulty: validated.difficulty,
+      title: validated.title,
+      description: validated.description,
+      passMark: validated.passMark,
+      timeLimitMinutes: validated.timeLimitMinutes,
+      questions: validated.questions,
+      isActive: true,
+    });
+
+    return toAdminAssessment(created);
+  } catch (error) {
+    if (error?.name === 'ValidationError') {
+      throw ApiError.badRequest(error.message, ERROR_CODES.VALIDATION_ERROR);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Starts a new assessment attempt for an authenticated student.
+ */
+export async function startAssessmentAttempt(userId, { assessmentId }) {
+  if (!userId) {
+    throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+  validateAssessmentIdParam(assessmentId);
+
+  // Load the assessment to verify it exists
+  const fullAssessment = await loadFullAssessment(assessmentId);
+
+  // Check previous attempts
+  const previousAttempts = await AssessmentAttempt.find({
+    user: userId,
+    assessmentId: fullAssessment.id,
+  }).sort({ attemptNumber: 1 });
+
+  // If there is an active in-progress attempt, check if it timed out
+  const activeAttempt = previousAttempts.find((att) => att.status === ATTEMPT_STATUS.IN_PROGRESS);
+  if (activeAttempt) {
+    const isTimedOut = checkAttemptTimedOut(activeAttempt, fullAssessment.timeLimitMinutes);
+    if (!isTimedOut) {
+      return toPublicAssessmentAttempt(activeAttempt);
+    }
+    activeAttempt.status = ATTEMPT_STATUS.TIMED_OUT;
+    activeAttempt.passed = false;
+    activeAttempt.score = 0;
+    await activeAttempt.save();
+  }
+
+  if (previousAttempts.length >= ASSESSMENT_LIMITS.maxAttemptsPerAssessment) {
+    throw ApiError.badRequest(
+      `Maximum number of attempts (${ASSESSMENT_LIMITS.maxAttemptsPerAssessment}) reached for this assessment.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const attemptNumber = previousAttempts.length + 1;
+
+  const attempt = await AssessmentAttempt.create({
+    user: userId,
+    assessmentId: fullAssessment.id,
+    attemptNumber,
+    version: fullAssessment.version,
+    skillKey: fullAssessment.skillKey,
+    skillName: fullAssessment.skillName,
+    difficulty: fullAssessment.difficulty,
+    passMark: fullAssessment.passMark,
+    status: ATTEMPT_STATUS.IN_PROGRESS,
+    startedAt: new Date(),
+    answers: {},
+  });
+
+  return toPublicAssessmentAttempt(attempt);
+}
+
+/**
+ * Submits an assessment attempt, executes deterministic scoring,
+ * and records verified skill evidence on passing.
+ */
+export async function submitAssessmentAttempt(userId, payload) {
+  if (!userId) {
+    throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+  if (!payload || typeof payload !== 'object') {
+    throw ApiError.badRequest('Submission payload is required.', ERROR_CODES.MALFORMED_REQUEST);
+  }
+
+  // 1. Anti-Tamper: Reject any client-controlled verification / scoring fields
+  for (const field of FORBIDDEN_CLIENT_VERIFICATION_FIELDS) {
+    if (payload[field] !== undefined) {
+      throw ApiError.badRequest(
+        `Client is forbidden from supplying scoring/verification field: "${field}".`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+  }
+
+  const { attemptId, assessmentId, answers } = payload;
+
+  if (!attemptId && !assessmentId) {
+    throw ApiError.badRequest(
+      'Either attemptId or assessmentId must be provided.',
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  // 2. Validate answers format and length boundaries
+  validateSubmissionAnswers(answers);
+
+  // 3. Locate attempt
+  let attempt;
+  if (attemptId) {
+    attempt = await AssessmentAttempt.findOne({ _id: attemptId, user: userId });
+  } else {
+    attempt = await AssessmentAttempt.findOne({
+      user: userId,
+      assessmentId: assessmentId.trim(),
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+    }).sort({ attemptNumber: -1 });
+  }
+
+  if (!attempt) {
+    throw ApiError.notFound('Active assessment attempt not found.', ERROR_CODES.NOT_FOUND);
+  }
+
+  if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) {
+    throw ApiError.badRequest(
+      `Attempt is already ${attempt.status} and cannot be submitted again.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  // 4. Load full assessment definition with secrets
+  const fullAssessment = await loadFullAssessment(attempt.assessmentId);
+
+  // 5. Deterministic evaluation using domain contract
+  const evalDate = new Date();
+  const evalResult = evaluateAssessmentSubmission({
+    assessment: fullAssessment,
+    submission: {
+      assessmentId: fullAssessment.id,
+      studentId: String(userId),
+      startedAt: attempt.startedAt,
+      answers,
+    },
+    evaluatedAt: evalDate,
+  });
+
+  // 6. Record verified evidence if passed
+  let evidenceCheckId = null;
+  if (evalResult.passed && evalResult.evidenceResult?.eligibleForVerified) {
+    const evidenceDoc = await recordAssessment(userId, {
+      skill: fullAssessment.skillKey,
+      score: evalResult.score,
+      assessmentId: fullAssessment.id,
+      passMark: fullAssessment.passMark,
+      completedAt: evalDate,
+    });
+    evidenceCheckId = evidenceDoc?.id ?? null;
+  }
+
+  // 7. Update attempt document with results
+  const startMs = new Date(attempt.startedAt).getTime();
+  const durationSeconds = Math.max(0, Math.round((evalDate.getTime() - startMs) / 1000));
+
+  attempt.status = evalResult.status;
+  attempt.score = evalResult.score;
+  attempt.passed = evalResult.passed;
+  attempt.outcome = evalResult.outcome;
+  attempt.earnedPoints = evalResult.earnedPoints;
+  attempt.maxPoints = evalResult.maxPoints;
+  attempt.totalQuestions = evalResult.totalQuestions;
+  attempt.correctQuestionsCount = evalResult.correctQuestionsCount;
+  attempt.answers = answers ?? {};
+  attempt.questionResults = evalResult.questionResults;
+  attempt.evidenceCheck = evidenceCheckId;
+  attempt.completedAt = evalDate;
+  attempt.durationSeconds = durationSeconds;
+
+  await attempt.save();
+
+  return {
+    attempt: toPublicAssessmentAttempt(attempt),
+    evidenceResult: evalResult.evidenceResult,
+  };
+}
+
+/**
+ * Retrieves a single attempt by ID for an authenticated user.
+ */
+export async function getAttemptById(userId, attemptId) {
+  if (!userId) {
+    throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+  const attempt = await AssessmentAttempt.findOne({ _id: attemptId, user: userId });
+  if (!attempt) {
+    throw ApiError.notFound('Assessment attempt not found.', ERROR_CODES.NOT_FOUND);
+  }
+  return toPublicAssessmentAttempt(attempt);
+}
+
+/**
+ * Lists all attempts for an authenticated user.
+ */
+export async function listUserAttempts(userId, { assessmentId } = {}) {
+  if (!userId) {
+    throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+  const query = { user: userId };
+  if (assessmentId) {
+    query.assessmentId = assessmentId.trim();
+  }
+
+  const attempts = await AssessmentAttempt.find(query).sort({ createdAt: -1 });
+  return attempts.map(toPublicAssessmentAttempt);
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+function validateAssessmentIdParam(id) {
+  if (typeof id !== 'string' || id.trim().length === 0) {
+    throw ApiError.badRequest('assessmentId parameter is required.', ERROR_CODES.VALIDATION_ERROR);
+  }
+}
+
+async function loadFullAssessment(assessmentId) {
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true });
+  if (doc) {
+    return toAdminAssessment(doc);
+  }
+
+  const catalogItem = getCatalogAssessmentById(assessmentId);
+  if (catalogItem) {
+    return catalogItem;
+  }
+
+  throw ApiError.notFound(`Assessment "${assessmentId}" not found.`, ERROR_CODES.NOT_FOUND);
+}
+
+function checkAttemptTimedOut(attempt, timeLimitMinutes, graceSeconds = 60) {
+  if (!timeLimitMinutes || !attempt.startedAt) return false;
+  const startMs = new Date(attempt.startedAt).getTime();
+  const allowedMs = (timeLimitMinutes * 60 + graceSeconds) * 1000;
+  return Date.now() - startMs > allowedMs;
+}
+
+function validateSubmissionAnswers(answers) {
+  if (answers === null || answers === undefined) return;
+
+  if (typeof answers !== 'object') {
+    throw ApiError.badRequest('answers must be an object or array.', ERROR_CODES.VALIDATION_ERROR);
+  }
+
+  const entries = Array.isArray(answers)
+    ? answers.map((a) => [a?.questionId, a?.answer])
+    : Object.entries(answers);
+
+  if (entries.length > ASSESSMENT_LIMITS.maxSubmissionAnswers) {
+    throw ApiError.badRequest(
+      `Answers payload exceeds limit of ${ASSESSMENT_LIMITS.maxSubmissionAnswers} answers.`,
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  for (const [qId, val] of entries) {
+    if (typeof qId !== 'string' || qId.length > 64) {
+      throw ApiError.badRequest(`Invalid questionId in answers payload.`, ERROR_CODES.VALIDATION_ERROR);
+    }
+    if (typeof val === 'string' && val.length > ASSESSMENT_LIMITS.answerText.max) {
+      throw ApiError.badRequest(
+        `Answer for "${qId}" exceeds maximum length of ${ASSESSMENT_LIMITS.answerText.max} characters.`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+    if (Array.isArray(val)) {
+      if (val.length > 10) {
+        throw ApiError.badRequest(
+          `Answer option array for "${qId}" exceeds maximum items (10).`,
+          ERROR_CODES.VALIDATION_ERROR,
+        );
+      }
+      for (const item of val) {
+        if (typeof item === 'string' && item.length > 100) {
+          throw ApiError.badRequest(
+            `Option ID in answer for "${qId}" exceeds maximum length (100).`,
+            ERROR_CODES.VALIDATION_ERROR,
+          );
+        }
+      }
+    }
+  }
+}

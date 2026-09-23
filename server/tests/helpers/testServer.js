@@ -117,6 +117,24 @@ export async function clearSkillEvidenceChecks() {
   return mongoose.connection.collection('skillevidencechecks').deleteMany({});
 }
 
+/** Removes persisted assessments. */
+export async function clearAssessments() {
+  try {
+    await mongoose.connection.collection('assessments').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
+/** Removes persisted assessment attempts. */
+export async function clearAssessmentAttempts() {
+  try {
+    await mongoose.connection.collection('assessmentattempts').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *
