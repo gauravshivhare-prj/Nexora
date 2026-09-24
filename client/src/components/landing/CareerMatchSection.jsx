@@ -23,7 +23,7 @@ const ROLES = [
   { id: 'frontend-developer', title: 'Frontend Developer', score: 78 },
   { id: 'full-stack-developer', title: 'Full Stack Developer', score: 71 },
   { id: 'backend-developer', title: 'Backend Developer', score: 64 },
-  { id: 'mobile-application-developer', title: 'Mobile App Developer', score: 52 },
+  { id: 'mobile-developer', title: 'Mobile Application Developer', score: 52 },
   { id: 'data-analyst', title: 'Data Analyst', score: 41 },
 ];
 

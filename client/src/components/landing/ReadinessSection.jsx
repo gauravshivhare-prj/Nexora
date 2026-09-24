@@ -90,8 +90,8 @@ export function ReadinessSection() {
               {[
                 'Nine of my skills are backed by something I built.',
                 'Seven are still only claimed — and I know which seven.',
-                'For the role I am targeting, two required skills are missing.',
-                'Here is the plan that closes them, and how each one gets evidenced.',
+                'For the role I am targeting, one required skill is missing.',
+                'Here is the plan that closes the gaps, and how each one gets evidenced.',
               ].map((line) => (
                 <li key={line} className="flex items-start gap-2.5 text-ink">
                   <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" />

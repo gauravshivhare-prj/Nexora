@@ -98,9 +98,9 @@ export function ProductPreview() {
                 <Tile title="Skill gap" description="Against Frontend Developer.">
                   <Stats
                     items={[
-                      ['Required missing', '2'],
-                      ['Required claimed', '1'],
-                      ['Required supported', '4'],
+                      ['Required missing', '1'],
+                      ['Required claimed', '0'],
+                      ['Required supported', '3'],
                       ['Preferred missing', '3'],
                     ]}
                   />
@@ -116,10 +116,10 @@ export function ProductPreview() {
               <Tile title="Roadmap" description="The plan towards Frontend Developer.">
                 <Stats
                   items={[
-                    ['Steps shown', '6'],
-                    ['Gaps to close', '6'],
-                    ['Critical', '2'],
-                    ['High', '1'],
+                    ['Steps shown', '5'],
+                    ['Gaps to close', '5'],
+                    ['Critical', '1'],
+                    ['High', '0'],
                   ]}
                 />
                 <p className="mt-3 text-xs text-ink-muted">
