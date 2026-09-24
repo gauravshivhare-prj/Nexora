@@ -143,6 +143,8 @@ implemented yet.
 | `resumes` | Resume text and AI-derived structured data | `user` (non-unique) |
 | `careertwins` | Derived career representation. Entirely computed | `user` (unique) |
 | `skillevidencechecks` | Assessment/interview outcomes and provenance | `user` |
+| `assessments` | Canonical and dynamic assessment definitions with questions and answer keys | — |
+| `assessmentattempts` | Student assessment attempt sessions, answer submissions, and scoring results | `user` |
 
 `User` and `StudentProfile` are deliberately separate documents. An
 authentication change cannot put profile data at risk, a profile migration
@@ -200,6 +202,13 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
 | `POST` | `/api/skill-evidence/assessments` | Bearer | Records a deterministic assessment result |
 | `POST` | `/api/skill-evidence/interviews` | Bearer | Records a human- or AI-evaluated interview result |
+| `GET` | `/api/assessments` | Bearer | Lists active sanitized assessments. Optional `?skill=`, `?difficulty=` |
+| `GET` | `/api/assessments/:assessmentId` | Bearer | Sanitized assessment detail (secrets stripped); 404 if not found |
+| `POST` | `/api/assessments/:assessmentId/attempts` | Bearer | Starts/deduplicates an attempt. Rate-limited (30/15m) |
+| `POST` | `/api/assessments/attempts/:attemptId/submit` | Bearer | Evaluates attempt, records verified evidence. Rate-limited (30/15m) |
+| `GET` | `/api/assessments/attempts/:attemptId` | Bearer | Owner-scoped attempt result detail; 404 if not caller's |
+| `GET` | `/api/assessments/attempts` | Bearer | Owner-scoped attempt history. Optional `?assessmentId=` |
+| `GET` | `/api/assessments/:assessmentId/latest` | Bearer | Owner-scoped latest completed attempt; null if none |
 | `GET` | `/api/summary` | Bearer | Dashboard aggregate; section-failure-isolated |
 
 ### Ownership rule
@@ -523,11 +532,9 @@ title and a `searchHint` the student can run themselves, plus
 hours. "12 hours to learn Docker" is a number nobody can justify, and
 printing it would make the plan look precise exactly where it cannot be.
 
-An item appears only if it has at least one *available* action. A `supported`
-skill's only remaining step is passing an assessment, which does not exist
-yet — listing it would ask the student to use a feature that is not there.
-This is tested on the suggestion's `available` flag rather than on the
-status, so those skills rejoin the plan automatically when assessments ship.
+An item appears only if it has at least one *available* action. Skills with
+`supported` evidence can transition to `verified` by passing an intermediate or
+advanced skill assessment.
 
 Prerequisites come from a small explicit table (Express.js needs JavaScript
 and Node.js) and are filtered to skills that are *also on this roadmap*, so a
@@ -543,9 +550,405 @@ of technology is not something this could do honestly.
   limitation: writing to disk or a blob store would add infrastructure
   complexity with no current product requirement for re-downloading the
   original.
-- `verified` evidence. The assessment/interview contract exists (Phase 8),
-  but no UI or AI question generation is included yet.
+- **AI-generated mock interview sessions.** The skill assessment engine and
+  deterministic evidence contracts are fully delivered, but live AI-generated
+  interactive interview sessions and frontend test-taking UI remain upcoming.
 - Any readiness score, pending a target role to measure against.
+
+## 8. Assessment Feature Architecture & API Specification
+
+### Overview
+
+The Assessment feature provides a deterministic, secure, and reproducible evaluation engine for measuring student technical skills against Nexora's canonical taxonomy (`SKILL_TAXONOMY_VERSION = 2`).
+
+The architecture strictly enforces:
+1. **Deterministic Rule-Based Scoring**: Transparent scoring algorithms without LLM nondeterminism or hallucinations.
+2. **Anti-Tampering & Secret Protection**: Complete elimination of client-controlled scores, verification fields, and answer keys.
+3. **Evidence Policy Separation**: High raw scores do not automatically produce `verified` evidence unless the assessment difficulty and evaluation context satisfy institutional evidence standards.
+4. **Tenant Isolation (IDOR Defense)**: Attempts are strictly scoped to `req.auth.userId`. Attempts belonging to other students return `404 NOT_FOUND` with zero existence confirmation.
+5. **Atomic State & Replay Protection**: Concurrent racing submissions and sequential replays are rejected via atomic document updates.
+6. **Rate Limiting**: Sliding-window rate limiters defend assessment attempt start and submission endpoints against brute-force enumeration and Denial-of-Service abuse.
+
+---
+
+### Data Models & Collections
+
+#### 1. `assessments` Collection
+Stores canonical catalog definitions and dynamically assembled assessment specifications.
+
+```text
+assessmentId      String, unique, alphanumeric slug (/^[a-z0-9_-]+$/i)
+version           Number, integer >= 1
+skillKey          String, canonical Nexora taxonomy skill (e.g. "Node.js")
+skillName         String, display name
+difficulty        String enum: "beginner" | "intermediate" | "advanced"
+title             String, human-readable title (<= 150 chars)
+description       String, markdown description (<= 2000 chars)
+passMark          Number, 0.0 to 1.0 (default: 0.70)
+timeLimitMinutes  Number, 5 to 180 (default: 30)
+isActive          Boolean, default: true
+questions[]       Array of question definitions (max: 50):
+  id              String, unique within assessment (e.g. "q-node-01")
+  type            String enum: "single_choice" | "multiple_choice" | "code_output" | "short_answer"
+  prompt          String, question prompt (<= 1000 chars)
+  codeSnippet     String, optional code context (<= 4000 chars)
+  options[]       Array of choices (for choice types, max: 10):
+    id            String (e.g. "opt-a")
+    text          String (<= 500 chars)
+  expectedAnswer  String | Array (INTERNAL SECRET — stripped from public projections)
+  acceptedAnswers String[] (INTERNAL SECRET — stripped from public projections)
+  scoringRule     String enum: "exact_match" | "set_equality" | "partial_choice" | "normalized_string"
+  weight          Number, >= 0.1 (default: 1.0)
+  explanation     String, internal rationale (INTERNAL SECRET — stripped from public projections)
+```
+
+#### 2. `assessmentattempts` Collection
+Stores student assessment sessions, student-submitted answers, and evaluation results.
+
+```text
+user                  ObjectId → User, required, immutable
+assessmentId          String, alphanumeric slug
+attemptNumber         Number, sequential integer 1..5
+version               Number, assessment version evaluated
+skillKey              String, canonical taxonomy skill
+skillName             String, display name
+difficulty            String enum: "beginner" | "intermediate" | "advanced"
+status                String enum: "in_progress" | "evaluated" | "timed_out" | "abandoned"
+score                 Number, 0.0 to 1.0 (null while in_progress)
+passMark              Number, 0.0 to 1.0
+passed                Boolean (null while in_progress)
+outcome               String enum: "pass" | "fail" | "incomplete" (null while in_progress)
+earnedPoints          Number, total awarded points (null while in_progress)
+maxPoints             Number, total possible points (null while in_progress)
+totalQuestions        Number, count of questions
+correctQuestionsCount Number, count of correct answers (null while in_progress)
+answers               Object / Map: questionId → student answer (primitive or string array)
+questionResults[]     Array of scored question outcomes:
+  questionId          String
+  prompt              String
+  weight              Number
+  studentAnswer       String | Array | null
+  isCorrect           Boolean
+  ratio               Number, 0.0 to 1.0
+  earnedPoints        Number
+  maxPoints           Number
+evidenceCheck         ObjectId → SkillEvidenceCheck (null if not eligible or failed)
+startedAt             Date, attempt creation timestamp
+completedAt           Date, submission timestamp (null while in_progress)
+durationSeconds       Number, elapsed seconds (null while in_progress)
+```
+
+**Indexes**:
+- `{ user: 1, assessmentId: 1, attemptNumber: 1 }` (unique compound index enforcing attempt sequence integrity).
+- `{ user: 1, assessmentId: 1, createdAt: -1 }` (fast retrieval of user attempt history and latest attempts).
+
+---
+
+### Endpoints Specification
+
+All assessment endpoints require student authentication via `Authorization: Bearer <jwt>`.
+
+#### 1. `GET /api/assessments`
+Lists all active assessments available to students in sanitized form.
+
+- **Query Parameters**:
+  - `skill` (optional, string): Canonical Nexora skill key (e.g. `Node.js`). Validated against `isKnownSkill`; unknown skills return `400 VALIDATION_ERROR`.
+  - `difficulty` (optional, string): Filter by difficulty level (`beginner`, `intermediate`, `advanced`). Invalid values return `400 VALIDATION_ERROR`.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Assessments retrieved",
+    "data": {
+      "assessments": [
+        {
+          "id": "asm_node_intermediate_01",
+          "version": 1,
+          "skillKey": "Node.js",
+          "skillName": "Node.js",
+          "difficulty": "intermediate",
+          "title": "Node.js Asynchronous & Event Loop Assessment",
+          "description": "Evaluates understanding of libuv, event loop phases, and streaming I/O.",
+          "passMark": 0.7,
+          "timeLimitMinutes": 30,
+          "questionCount": 5,
+          "totalWeight": 5,
+          "questions": [
+            {
+              "id": "q-node-01",
+              "type": "single_choice",
+              "prompt": "Which phase of the Node.js event loop executes setImmediate() callbacks?",
+              "weight": 1,
+              "codeSnippet": null,
+              "options": [
+                { "id": "opt-timers", "text": "Timers phase" },
+                { "id": "opt-poll", "text": "Poll phase" },
+                { "id": "opt-check", "text": "Check phase" },
+                { "id": "opt-close", "text": "Close callbacks phase" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+
+#### 2. `GET /api/assessments/:assessmentId`
+Fetches a single sanitized assessment definition by ID.
+
+- **Path Parameters**:
+  - `assessmentId` (string, required): Alphanumeric slug (`/^[a-z0-9_-]+$/i`). Malformed slugs return `400 VALIDATION_ERROR`.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Assessment retrieved",
+    "data": {
+      "assessment": {
+        "id": "asm_node_intermediate_01",
+        "version": 1,
+        "skillKey": "Node.js",
+        "skillName": "Node.js",
+        "difficulty": "intermediate",
+        "title": "Node.js Asynchronous & Event Loop Assessment",
+        "description": "...",
+        "passMark": 0.7,
+        "timeLimitMinutes": 30,
+        "questionCount": 5,
+        "totalWeight": 5,
+        "questions": [ ... ]
+      }
+    }
+  }
+  ```
+- **Error Responses**:
+  - `404 NOT_FOUND` (`NOT_FOUND`): Assessment does not exist or is inactive.
+
+#### 3. `POST /api/assessments/:assessmentId/attempts`
+Starts a new assessment attempt session or returns an active `in_progress` attempt for deduplication.
+
+- **Rate Limit**: 30 requests per 15-minute sliding window per authenticated user. Exceeding limit returns `429 RATE_LIMIT_EXCEEDED`.
+- **Path Parameters**:
+  - `assessmentId` (string, required): Slug of the assessment to attempt.
+- **Request Body**: `{}` (any client-supplied scoring or verification field causes immediate `400 VALIDATION_ERROR`).
+- **Deduplication Logic**:
+  - If the student already has an `in_progress` attempt that has not expired, the existing attempt is returned (HTTP 201) without advancing `attemptNumber`.
+  - If an active attempt has exceeded `timeLimitMinutes + 60s`, it is automatically transitioned to `timed_out` before initiating the next attempt.
+  - If the student has reached the maximum of 5 completed/evaluated attempts for this assessment, the request is rejected with `400 BAD_REQUEST`.
+- **Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "Assessment attempt started",
+    "data": {
+      "attempt": {
+        "id": "6ab41c652d4c49da16bca882",
+        "assessmentId": "asm_node_intermediate_01",
+        "attemptNumber": 1,
+        "version": 1,
+        "skillKey": "Node.js",
+        "skillName": "Node.js",
+        "difficulty": "intermediate",
+        "status": "in_progress",
+        "score": null,
+        "passMark": 0.7,
+        "passed": null,
+        "outcome": null,
+        "earnedPoints": null,
+        "maxPoints": null,
+        "totalQuestions": 5,
+        "correctQuestionsCount": null,
+        "questionResults": [],
+        "evidenceCheckId": null,
+        "startedAt": "2026-09-24T10:00:00.000Z",
+        "completedAt": null,
+        "durationSeconds": null
+      }
+    }
+  }
+  ```
+
+#### 4. `POST /api/assessments/attempts/:attemptId/submit`
+Submits student answers, runs deterministic rule-based scoring, atomically transitions attempt status to `evaluated`, and records verified skill evidence if eligible.
+
+- **Rate Limit**: 30 submissions per 15-minute sliding window per user. Exceeding limit returns `429 RATE_LIMIT_EXCEEDED`.
+- **Path Parameters**:
+  - `attemptId` (string, required): 24-character hexadecimal ObjectId string. Malformed IDs return `404 NOT_FOUND`.
+- **Request Body**:
+  ```json
+  {
+    "answers": {
+      "q-node-01": "opt-check",
+      "q-node-02": ["opt-a", "opt-c"],
+      "q-node-03": "undefined"
+    }
+  }
+  ```
+- **Validation Constraints**:
+  - Rejects any forbidden keys (`score`, `passed`, `outcome`, `status`, `earnedPoints`, `evidenceCheck`, etc.) with `400 VALIDATION_ERROR`.
+  - Rejects prototype pollution keys (`__proto__`, `constructor`, `prototype`) or keys starting with `$` with `400 VALIDATION_ERROR`.
+  - Answers payload cannot exceed 50 entries.
+  - Answer strings cannot exceed 1000 characters.
+  - Answer values must be primitive types (`string`, `number`, `boolean`, `null`, `undefined`) or arrays of primitives. Non-primitive objects are rejected with `400 VALIDATION_ERROR`.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Assessment submitted and evaluated",
+    "data": {
+      "attempt": {
+        "id": "6ab41c652d4c49da16bca882",
+        "assessmentId": "asm_node_intermediate_01",
+        "attemptNumber": 1,
+        "version": 1,
+        "skillKey": "Node.js",
+        "skillName": "Node.js",
+        "difficulty": "intermediate",
+        "status": "evaluated",
+        "score": 0.85,
+        "passMark": 0.7,
+        "passed": true,
+        "outcome": "pass",
+        "earnedPoints": 4.25,
+        "maxPoints": 5,
+        "totalQuestions": 5,
+        "correctQuestionsCount": 4,
+        "questionResults": [
+          {
+            "questionId": "q-node-01",
+            "prompt": "Which phase of the Node.js event loop executes setImmediate() callbacks?",
+            "weight": 1,
+            "studentAnswer": "opt-check",
+            "isCorrect": true,
+            "ratio": 1.0,
+            "earnedPoints": 1,
+            "maxPoints": 1
+          }
+        ],
+        "evidenceCheckId": "6ab41c72147426ad6d1aa2b6",
+        "startedAt": "2026-09-24T10:00:00.000Z",
+        "completedAt": "2026-09-24T10:05:32.000Z",
+        "durationSeconds": 332
+      },
+      "evidenceResult": {
+        "eligibleForVerified": true,
+        "skill": "Node.js",
+        "score": 0.85,
+        "reason": "Passed intermediate assessment with score 85% (passMark 70%)."
+      },
+      "evidenceStatus": "verified"
+    }
+  }
+  ```
+- **Error Responses**:
+  - `400 BAD_REQUEST`: Attempt is already evaluated or timed out.
+  - `404 NOT_FOUND`: Attempt not found or owned by a different user.
+
+#### 5. `GET /api/assessments/attempts/:attemptId`
+Fetches detailed result and question-level breakdown of an attempt owned by the authenticated student.
+
+- **Path Parameters**: `attemptId` (24-hex string).
+- **Security**: IDOR protected. If the attempt belongs to another student or does not exist, returns `404 NOT_FOUND`.
+- **Response** (`200 OK`): `{ success: true, message: "Assessment attempt retrieved", data: { attempt } }`.
+
+#### 6. `GET /api/assessments/attempts`
+Lists the student's attempt history in reverse chronological order.
+
+- **Query Parameters**: `assessmentId` (optional, string): Filter by alphanumeric slug.
+- **Response** (`200 OK`): `{ success: true, message: "User assessment attempts retrieved", data: { attempts: [ ... ] } }`.
+
+#### 7. `GET /api/assessments/:assessmentId/latest`
+Fetches the student's latest completed assessment attempt result for a given assessment.
+
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Latest assessment result retrieved",
+    "data": {
+      "result": { ... } // or null if student has not completed any attempts
+    }
+  }
+  ```
+
+---
+
+### Scoring Semantics & Rule-Based Engine
+
+Evaluation is 100% deterministic and operates via `server/src/domain/assessment/assessmentContract.js`.
+
+#### Supported Question Types & Scoring Rules
+
+| Question Type | Valid Answer Input | Supported Scoring Rules | Behavior |
+|---|---|---|---|
+| `single_choice` | String (Option ID) | `exact_match` | Awards full weight if student's option ID exactly matches `expectedAnswer` (case-sensitive); otherwise 0. |
+| `multiple_choice` | Array of Option IDs | `set_equality`, `partial_choice` | - `set_equality`: Awards full weight if student's selected set exactly matches expected set; 0 if any mismatch.<br>- `partial_choice`: Awards points based on precision/recall with guessing penalty: `Math.max(0, (correctCount - incorrectCount) / totalExpected) * weight`. |
+| `code_output` | String / Number | `exact_match`, `normalized_string` | - `exact_match`: Exact literal string match.<br>- `normalized_string`: Strips trailing whitespace and normalizes CRLF (`\r\n` to `\n`) before comparison. Matches expected output or any alias in `acceptedAnswers`. |
+| `short_answer` | String | `exact_match`, `normalized_string` | Matches case-insensitively trimmed response against `expectedAnswer` or any alias in `acceptedAnswers`. |
+
+#### Scoring Calculations
+1. **Question Ratio & Earned Points**:
+   $$\text{earnedPoints}_i = \text{ratio}_i \times \text{weight}_i \quad (\text{where } 0.0 \le \text{ratio}_i \le 1.0)$$
+2. **Aggregated Assessment Score**:
+   $$\text{Score} = \frac{\sum \text{earnedPoints}_i}{\sum \text{maxPoints}_i}$$
+   Rounded to 4 decimal places for floating-point stability.
+3. **Pass Criteria**:
+   $$\text{passed} = \text{Score} \ge \text{passMark} \quad (\text{default passMark: } 0.70)$$
+
+---
+
+### Evidence Policy & Limitations
+
+Passing an assessment does **not** unconditionally grant `verified` skill status. Nexora maintains strict separation between raw evaluation scores and institutional evidence status:
+
+```text
+Student Submission
+       ↓
+Deterministic Scoring Engine
+       ↓
+Score >= passMark ?
+   ├── NO  → outcome: "fail", evidenceStatus: "unsupported" (No evidence check created)
+   └── YES → Difficulty & Context Check:
+               ├── beginner     → eligibleForVerified: false, evidenceStatus: "supported" (NO verified check)
+               ├── isPractice   → eligibleForVerified: false, evidenceStatus: "unsupported" (NO verified check)
+               ├── advisory_ai  → eligibleForVerified: false, evidenceStatus: "unsupported" (NO verified check)
+               └── intermediate / advanced → eligibleForVerified: true, evidenceStatus: "verified"
+                                             (Verified SkillEvidenceCheck created in MongoDB)
+```
+
+#### CareerTwin & Skill-Gap Impact
+1. When a verified `SkillEvidenceCheck` is created:
+   - The student's stored CareerTwin detects staleness on the next read (`latestEvidenceAt > twin.generatedAt` or `verifiedEvidenceCount` mismatch) with reason: `"New skill evidence has been recorded since this was generated."`.
+   - Regenerating the CareerTwin (`POST /api/career-twin`) consumes the verified check, elevates the skill level from `claimed` to `verified`, increments `indicators.verified`, and clears `isStale`.
+   - Skill-gap analysis against target career roles shifts the skill into `verified`, clears `suggestedEvidence` to `[]` (requirement fully proven), and increments `summary.required.verified`.
+2. Beginner assessment passes and failed attempts generate zero verified evidence checks and never trigger CareerTwin staleness.
+
+---
+
+### Security Architecture
+
+| Security Threat | Mitigation Strategy | Implemented Defense |
+|---|---|---|
+| **Answer-Key Leakage** | Public projections | `toPublicAssessment` and `toPublicAssessmentAttempt` systematically strip `expectedAnswer`, `expectedOutput`, `acceptedAnswers`, `scoringRule`, and `explanation`. |
+| **IDOR / Tenant Crossing** | Scope enforcement | Every attempt query enforces `{ _id: attemptId, user: req.auth.userId }`. Malformed IDs or cross-student queries return `404 NOT_FOUND` (no existence disclosure). |
+| **Client Score Forgery** | Anti-tampering guard | Recursive `assertNoForbiddenClientFields(payload)` scans root and nested payloads. Attempts to supply `score`, `passed`, `outcome`, `status`, or `evidenceCheck` return `400 VALIDATION_ERROR`. |
+| **Prototype Pollution & Query Injection** | Payload sanitization | Payloads containing `__proto__`, `constructor`, `prototype`, or keys starting with `$` are rejected with `400 VALIDATION_ERROR`. |
+| **Replay & Concurrency Race** | Atomic document locking | Double submission returns `400 BAD_REQUEST`. Rapid concurrent submissions on the same in-progress attempt execute via `AssessmentAttempt.findOneAndUpdate({ _id, user, status: 'in_progress' }, ...)`; exactly one request succeeds and exactly one evidence check is created. |
+| **Brute Force & Rate Abuse** | Sliding-window limiters | `assessmentAttemptLimiter` and `assessmentSubmitLimiter` enforce 30 requests per 15-minute sliding window; exceeding limit returns `429 RATE_LIMIT_EXCEEDED`. |
+| **Payload Flooding** | Structural bounds | Submissions capped at 50 answers, answer strings capped at 1000 characters, non-primitive answer objects rejected with `400 VALIDATION_ERROR`. |
+
+---
+
+### Known MVP Limitations
+
+The following architectural trade-offs are intentional design decisions for the current MVP release:
+1. **In-Memory Rate Limiting**: The sliding-window rate limiters use in-process memory maps. In horizontally scaled multi-instance deployments, this store must be swapped for a distributed Redis-backed limiter.
+2. **Deterministic Output Matching (No Execution Sandbox)**: `code_output` questions evaluate student predictions of code snippets using string matching (`normalized_string`). The platform does not execute untrusted student-submitted code in a containerized sandbox (e.g. gVisor or Docker).
+3. **Fixed Attempt Cap (5 Attempts)**: Students are capped at 5 attempts per assessment. There is currently no administrative reset or re-certification workflow implemented.
+4. **API-Only Delivery**: Assessment features are fully delivered and tested at the REST API and domain service levels. The frontend student test-taking interface is scheduled for subsequent UI integration.
+5. **Curated Taxonomy Scope**: The initial question bank provides validated, non-copyrighted questions across 10 canonical core skills (`Node.js`, `React`, `Python`, `SQL`, `Docker`, `TypeScript`, `Git`, `MongoDB`, `REST APIs`, `System Design`). Additional taxonomy skills fall back to project-based verification until dedicated assessment banks are authored.
+
 
 ## Nexora Design & Experience Standard
 

@@ -42,6 +42,15 @@
 - FR-ROAD-02: User can track task status.
 - FR-ROAD-03: Completion updates progress.
 
+### Skill Assessment
+- FR-ASM-01: User can browse sanitized skill assessments filtered by canonical skill taxonomy and difficulty level (`beginner`, `intermediate`, `advanced`).
+- FR-ASM-02: User can start or resume an assessment attempt; system deduplicates active in-progress attempts.
+- FR-ASM-03: System validates answer submissions against strict structural bounds (max 50 answers, max 1000 characters per answer, primitive types only).
+- FR-ASM-04: System calculates scores deterministically using rule-based scoring engines (`exact_match`, `set_equality`, `partial_choice`, `normalized_string`).
+- FR-ASM-05: Passing intermediate or advanced assessments (score >= 70%) creates verified evidence records and flags CareerTwin as stale.
+- FR-ASM-06: System enforces an attempt limit of 5 completed attempts per assessment and marks expired attempts as timed-out.
+- FR-ASM-07: System enforces IDOR tenant isolation (404 responses), atomic concurrency locking, anti-tampering guards, and sliding-window rate limiting.
+
 ### AI Interview
 - FR-INT-01: User can start an interview.
 - FR-INT-02: System generates role-specific questions.

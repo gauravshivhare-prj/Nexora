@@ -17,7 +17,7 @@ This document defines the controlled development sequence for Nexora.
 | 5 — Career Recommendation | Backend complete; frontend via dashboard summary |
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
-| 8 — Assessment & AI Interview | Backend contract only (evidence storage); no UI |
+| 8 — Assessment & AI Interview | Backend complete for Skill Assessment (engine, question bank, deterministic scoring, attempt lifecycle, evidence integration, security hardening); AI interview & UI upcoming |
 | 9 — Opportunity Matching | Not started |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
@@ -268,30 +268,43 @@ the thing this architecture exists to prevent. Items expose
 - **No roadmap UI.** Phase 10 integrates the dashboard.
 
 ## Phase 8 — Assessment & AI Interview
-- Skill assessment
-- AI-generated questions
-- Answer submission
-- Evaluation
-- Weak-area extraction
-- CareerTwin update
+- Skill assessment (Delivered)
+- Curated question bank (Delivered)
+- Deterministic scoring engine (Delivered)
+- Attempt lifecycle & persistence (Delivered)
+- Skill evidence & CareerTwin integration (Delivered)
+- Assessment security & rate limiting (Delivered)
+- AI-generated interview questions (Upcoming)
+- Answer submission & AI interview evaluation (Upcoming)
+- Weak-area extraction from interview (Upcoming)
 
-**Delivered — backend contract only**
-- `POST /api/skill-evidence/assessments` stores a canonical skill, score,
-  pass mark, outcome, owner and completion timestamp. Only a passing result
-  can produce verified evidence.
-- `POST /api/skill-evidence/interviews` stores pass/fail/uncertain outcomes.
-  AI evaluation is advisory and never produces verified evidence; a human
-  pass is required.
-- `GET /api/skill-evidence` is owner-scoped and exposes provenance without
-  exposing the owning user id.
-- CareerTwin consumes only eligible passing results. No UI or AI question
-  generation is included in this slice.
+**Delivered — Skill Assessment Engine & API**
+- **Domain Contract & Question Bank**: Curated, versioned assessment question bank covering 10 canonical skills (`Node.js`, `React`, `Python`, `SQL`, `Docker`, `TypeScript`, `Git`, `MongoDB`, `REST APIs`, `System Design`) across 3 difficulty tiers (`beginner`, `intermediate`, `advanced`) and 4 question types (`single_choice`, `multiple_choice`, `code_output`, `short_answer`).
+- **Deterministic Scoring Engine**: Explicit rule-based evaluation (`exact_match`, `set_equality`, `partial_choice`, `normalized_string`) with partial scoring and guessing penalties.
+- **Data Models & State Machine**: Mongoose models (`Assessment`, `AssessmentAttempt`) with attempt lifecycle states (`in_progress`, `completed`, `timed_out`, `abandoned`), duration tracking, and deduplication of active attempts.
+- **REST Endpoints**:
+  - `GET /api/assessments`: Filter by skill and difficulty.
+  - `GET /api/assessments/:assessmentId`: Public view stripping answers/scoring rules.
+  - `POST /api/assessments/:assessmentId/attempts`: Starts or resumes an attempt.
+  - `POST /api/assessments/attempts/:attemptId/submit`: Atomic evaluation and completion.
+  - `GET /api/assessments/attempts/:attemptId`: Owner-scoped attempt breakdown.
+  - `GET /api/assessments/attempts`: Reverse-chronological attempt history.
+  - `GET /api/assessments/:assessmentId/latest`: Latest completed result.
+- **Evidence Policy Integration**: Passing intermediate or advanced assessments ($\ge 70\%$) generates a verified `SkillEvidenceCheck` in MongoDB and marks the student's CareerTwin as stale for recomputation. Beginner, advisory, or practice assessments withhold verified checks.
+- **Security Hardening**: IDOR protection via owner-scoped queries (returning `404 NOT_FOUND`), recursive anti-tampering guards rejecting client-submitted scores/results, prototype pollution / MongoDB operator rejection, atomic document locking against concurrency races, and sliding-window rate limiters (30 requests / 15 minutes).
+
+**Deliberately NOT delivered in this slice, and why**
+- **No untrusted code execution sandbox.** Predicts code output via deterministic string matching (`normalized_string`) rather than running arbitrary code in a container sandbox.
+- **No AI interview question generation.** Assessment uses the curated question bank; dynamic AI interview sessions remain in the AI interview track.
+- **No assessment UI.** Frontend test-taking interface is scheduled for subsequent UI integration; all capabilities are fully verified at the REST API and domain level.
 
 **Exit criteria**
-- Interview results are stored.
-- AI output follows a strict schema.
-- Invalid AI responses are handled.
-- Results can update relevant readiness signals.
+- Assessment attempts can be started, resumed, and submitted.
+- Scoring is 100% deterministic and transparent.
+- Secret answer keys and internal scoring metadata are never leaked.
+- Valid passing results create verified evidence checks and flag CareerTwin staleness.
+- Double-submission, replay, tampering, and IDOR attacks are blocked safely.
+- 136/136 assessment domain, model, service, API, evidence, and security tests pass.
 
 ## Phase 9 — Opportunity Matching
 - Opportunity dataset
