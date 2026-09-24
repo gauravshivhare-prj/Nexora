@@ -15,22 +15,24 @@ import { ExampleLabel, Section, SectionHeading, StateChip } from './Section.jsx'
  * ones that are, which is the same separation the roadmap is built from.
  * Two state changes for the whole section, and it plays only while visible.
  */
+// Matches the real Frontend Developer entry in the role catalogue: HTML, CSS,
+// JavaScript and React are required; the rest shown are preferred.
 const REQUIRED = [
   { skill: 'HTML', status: 'supported' },
   { skill: 'CSS', status: 'supported' },
   { skill: 'JavaScript', status: 'supported' },
-  { skill: 'React', status: 'supported' },
-  { skill: 'Git', status: 'claimed' },
-  { skill: 'Testing', status: 'missing' },
-  { skill: 'Accessibility', status: 'missing' },
+  { skill: 'React', status: 'missing' },
+  { skill: 'TypeScript', status: 'supported', preferred: true },
+  { skill: 'Git', status: 'claimed', preferred: true },
+  { skill: 'Accessibility', status: 'missing', preferred: true },
 ];
 
 const isGap = (status) => status === 'missing' || status === 'claimed';
 
 const SUMMARY = [
-  ['Required missing', '2'],
-  ['Required claimed', '1'],
-  ['Required supported', '4'],
+  ['Required missing', '1'],
+  ['Required claimed', '0'],
+  ['Required supported', '3'],
   ['Preferred missing', '3'],
 ];
 
@@ -55,7 +57,7 @@ export function SkillGapSection() {
             <p className="text-xs font-semibold tracking-[0.18em] text-brand-text uppercase">
               Target role · Frontend Developer
             </p>
-            <p className="mt-1 text-sm text-ink-muted">Required skills, against your evidence</p>
+            <p className="mt-1 text-sm text-ink-muted">Required and preferred skills, against your evidence</p>
 
             <ul className="mt-5 flex flex-col gap-2">
               {REQUIRED.map((item, index) => {
@@ -76,7 +78,12 @@ export function SkillGapSection() {
                       pulled ? 'border-orange-300 bg-orange-100/70' : 'border-orange-100 bg-surface'
                     }`}
                   >
-                    <span className="text-sm font-semibold text-ink">{item.skill}</span>
+                    <span className="text-sm font-semibold text-ink">
+                      {item.skill}
+                      {item.preferred ? (
+                        <span className="ml-1.5 text-xs font-normal text-ink-muted">preferred</span>
+                      ) : null}
+                    </span>
 
                     <span className="flex items-center gap-2">
                       <StateChip
@@ -105,7 +112,7 @@ export function SkillGapSection() {
             <p aria-live="polite" className="mt-5 text-sm text-ink-muted">
               {isSplit
                 ? 'Three of the seven are not evidenced yet. Those are the ones the roadmap is built from.'
-                : 'Every required skill, at the strength your evidence supports.'}
+                : 'Every skill the role asks for, at the strength your evidence supports.'}
             </p>
           </div>
         </Reveal>
