@@ -17,6 +17,16 @@ export function createApp() {
   const app = express();
 
   app.set('trust proxy', env.trustProxy);
+  app.disable('x-powered-by');
+  // A JSON API is never meant to be sniffed as another type or framed.
+  app.use((_req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+    });
+    next();
+  });
   app.use(cors({ origin: env.clientUrl }));
   app.use(express.json({ limit: '1mb' }));
   app.use(requestLogger);

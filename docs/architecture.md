@@ -204,8 +204,8 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
 | `GET` | `/api/careers/roles/:roleId/roadmap` | Bearer | Prioritised plan built from the gap |
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
-| `POST` | `/api/skill-evidence/assessments` | Bearer | Records a deterministic assessment result |
-| `POST` | `/api/skill-evidence/interviews` | Bearer | Records a human- or AI-evaluated interview result |
+| `POST` | `/api/skill-evidence/assessments` | Bearer (admin) | Records an assessment result directly. Students earn evidence through `/api/assessments` instead |
+| `POST` | `/api/skill-evidence/interviews` | Bearer (admin) | Records a human- or AI-evaluated interview result directly. Students earn evidence through `/api/interviews` instead |
 | `GET` | `/api/assessments` | Bearer | Lists active sanitized assessments. Optional `?skill=`, `?difficulty=` |
 | `GET` | `/api/assessments/:assessmentId` | Bearer | Sanitized assessment detail (secrets stripped); 404 if not found |
 | `POST` | `/api/assessments/:assessmentId/attempts` | Bearer | Starts/deduplicates an attempt. Rate-limited (30/15m) |

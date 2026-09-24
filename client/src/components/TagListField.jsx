@@ -119,9 +119,9 @@ export function TagListField({
           {values.map((value, index) => (
             <li
               key={value}
-              className="animate-rise flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 py-1 pr-1 pl-3 text-sm text-ink"
+              className="animate-rise flex max-w-full items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 py-1 pr-1 pl-3 text-sm text-ink"
             >
-              {value}
+              <span className="min-w-0">{value}</span>
               <button
                 type="button"
                 onClick={() => remove(index)}
@@ -129,7 +129,9 @@ export function TagListField({
                 // The visible ✕ is decoration; the accessible name names the
                 // entry, so a screen-reader user knows which chip they remove.
                 aria-label={`Remove ${value}`}
-                className="flex size-5 items-center justify-center rounded-full text-ink-muted transition-colors duration-200 hover:bg-orange-200 hover:text-ink"
+                // 32px hit area on a 20px-tall chip: the negative margin
+                // keeps the chip's height while the target stays tappable.
+                className="-my-1.5 flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors duration-200 hover:bg-orange-200 hover:text-ink"
               >
                 <span aria-hidden="true">✕</span>
               </button>

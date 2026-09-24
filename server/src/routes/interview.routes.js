@@ -28,12 +28,15 @@ router.use(requireAuth);
  */
 export const evaluationLimiter = createRateLimiter(RATE_LIMIT_POLICY.aiAnalysis);
 
-router.post('/sessions', create);
+/** Per-user limit on session writes that are not AI calls. */
+export const sessionWriteLimiter = createRateLimiter(RATE_LIMIT_POLICY.interviewSession);
+
+router.post('/sessions', sessionWriteLimiter, create);
 router.get('/sessions', list);
 router.get('/sessions/:sessionId', read);
-router.post('/sessions/:sessionId/start', start);
+router.post('/sessions/:sessionId/start', sessionWriteLimiter, start);
 router.post('/sessions/:sessionId/questions/:questionId/answers', evaluationLimiter, submitAnswer);
-router.post('/sessions/:sessionId/complete', complete);
-router.post('/sessions/:sessionId/abandon', abandon);
+router.post('/sessions/:sessionId/complete', sessionWriteLimiter, complete);
+router.post('/sessions/:sessionId/abandon', sessionWriteLimiter, abandon);
 
 export default router;

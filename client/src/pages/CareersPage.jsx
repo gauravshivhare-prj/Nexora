@@ -74,7 +74,12 @@ export function CareersPage() {
     return () => controller.abort();
   }, [load]);
 
-  if (loadStatus === LOAD_STATUS.LOADING) {
+  // Only the first load replaces the page. A refresh — ticking "Include weak
+  // matches" — keeps the current list on screen, so the checkbox the student
+  // just used stays mounted and keeps keyboard focus.
+  const isRefreshing = loadStatus === LOAD_STATUS.LOADING && data !== null;
+
+  if (loadStatus === LOAD_STATUS.LOADING && !isRefreshing) {
     return (
       <PageShell>
         <LoadingState label="Working out which roles fit you…" rows={3} />
@@ -156,7 +161,10 @@ export function CareersPage() {
               anyway.
             </EmptyState>
           ) : (
-            <ul className="flex flex-col gap-3">
+            <ul
+              aria-busy={isRefreshing}
+              className={`flex flex-col gap-3 transition-opacity duration-200 ${isRefreshing ? 'opacity-60' : ''}`}
+            >
               {data.matches.map((match) => (
                 <li key={match.roleId}>
                   <MatchCard match={match} />

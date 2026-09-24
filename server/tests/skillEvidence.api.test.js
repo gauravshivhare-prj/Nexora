@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
+import mongoose from 'mongoose';
 
 import {
   clearProfiles,
@@ -35,7 +36,7 @@ describe('skill evidence API contract', () => {
     resetRateLimiters();
   });
 
-  async function signUp(label) {
+  async function signUp(label, role = 'student') {
     counter += 1;
     const email = `evidence.${label}.${Date.now()}.${counter}@example.com`;
     await postJson(server.baseUrl, '/api/auth/register', {
@@ -47,8 +48,34 @@ describe('skill evidence API contract', () => {
       email,
       password: PASSWORD,
     });
+    if (role !== 'student') {
+      await mongoose.connection.collection('users').updateOne({ email }, { $set: { role } });
+    }
     return body.data.token;
   }
+
+  it('forbids students from recording their own results directly', async () => {
+    const student = await signUp('self-grader');
+
+    const assessment = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/assessments', {
+      method: 'POST',
+      token: student,
+      payload: { skill: 'docker', score: 1, assessmentId: 'self-graded' },
+    });
+    assert.equal(assessment.status, 403);
+    assert.equal(assessment.body.success, false);
+    assert.equal(assessment.body.errorCode, 'FORBIDDEN');
+
+    const interview = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/interviews', {
+      method: 'POST',
+      token: student,
+      payload: { skill: 'python', score: 1, interviewId: 'self-graded', evaluatedBy: 'human' },
+    });
+    assert.equal(interview.status, 403);
+    assert.equal(interview.body.errorCode, 'FORBIDDEN');
+
+    assert.equal(await mongoose.connection.collection('skillevidencechecks').countDocuments(), 0);
+  });
 
   it('requires authentication and keeps results owner-scoped', async () => {
     const anonymous = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/assessments', {
@@ -57,7 +84,7 @@ describe('skill evidence API contract', () => {
     });
     assert.equal(anonymous.status, 401);
 
-    const owner = await signUp('owner');
+    const owner = await signUp('owner', 'admin');
     const stranger = await signUp('stranger');
     const created = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/assessments', {
       method: 'POST',
@@ -80,7 +107,7 @@ describe('skill evidence API contract', () => {
   });
 
   it('keeps AI interview claims uncertain and feeds only eligible results to CareerTwin', async () => {
-    const token = await signUp('student');
+    const token = await signUp('reviewer', 'admin');
     const interview = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/interviews', {
       method: 'POST',
       token,

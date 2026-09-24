@@ -185,20 +185,25 @@ export function createGeminiProvider(options = {}) {
           // the caller's own cancellation is not a failure to work around.
           if (signal.aborted) {
             if (timeoutSignal.aborted) {
-              throw new Error(`Gemini API request timed out after ${timeoutMs}ms.`);
+              throw Object.assign(new Error(`Gemini API request timed out after ${timeoutMs}ms.`), { reason: 'timeout' });
             }
-            throw new Error('Gemini API request was aborted by the caller.');
+            throw Object.assign(new Error('Gemini API request was aborted by the caller.'), { reason: 'aborted' });
           }
 
           // A connection-level failure is the clearest case for trying again.
           lastTransientError = fetchError;
           if (await waitBeforeRetry(attempt, signal)) continue;
-          throw fetchError;
+          throw Object.assign(fetchError, { reason: 'network' });
         }
 
         if (!response.ok) {
           const details = await readErrorDetails(response, apiKey);
-          const error = new Error(`Gemini API error (HTTP ${response.status}): ${details}`);
+          // `reason` and `status` are safe to log; the message may quote the
+          // prompt and is not.
+          const error = Object.assign(new Error(`Gemini API error (HTTP ${response.status}): ${details}`), {
+            reason: 'http',
+            status: response.status,
+          });
 
           if (RETRYABLE_STATUSES.has(response.status)) {
             lastTransientError = error;

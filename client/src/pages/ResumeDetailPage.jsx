@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
@@ -23,6 +23,10 @@ const LOAD_STATUS = { LOADING: 'loading', READY: 'ready', FAILED: 'failed' };
 
 export function ResumeDetailPage() {
   const { resumeId } = useParams();
+  // The route reuses this component when the id changes, so a slow analysis
+  // must not write its result into another resume's view.
+  const currentResumeId = useRef(resumeId);
+  currentResumeId.current = resumeId;
   const navigate = useNavigate();
 
   const [resume, setResume] = useState(null);
@@ -72,12 +76,17 @@ export function ResumeDetailPage() {
   }, [load]);
 
   async function analyse() {
+    const analysedId = resumeId;
+    const isStale = () => currentResumeId.current !== analysedId;
     setIsAnalysing(true);
     setAnalysisError(null);
 
     try {
-      setResume(await analyseResume(resumeId));
+      const analysed = await analyseResume(analysedId);
+      if (isStale()) return;
+      setResume(analysed);
     } catch (error) {
+      if (isStale()) return;
       setAnalysisError(toMessage(error, 'The analysis could not be run.'));
 
       // 503 is a deployment state that can change, and 409 clears once the
@@ -86,11 +95,15 @@ export function ResumeDetailPage() {
       // very likely produce the same thing.
       const status = error instanceof ApiRequestError ? error.status : null;
       setIsRetryable(status === null || status === 503 || status === 409);
+      // The attempt is over. Clearing this now, not after the badge refresh
+      // below, keeps the error and its retry button on screen together.
+      setIsAnalysing(false);
 
       // The server records the failure on the document, so reload to show
       // the stored status rather than leaving a stale "in progress" badge.
       try {
-        setResume(await fetchResume(resumeId));
+        const refreshed = await fetchResume(analysedId);
+        if (!isStale()) setResume(refreshed);
       } catch {
         // Keeping the analysis error on screen matters more than refreshing
         // the badge; the reload is a nicety, not the point of the action.

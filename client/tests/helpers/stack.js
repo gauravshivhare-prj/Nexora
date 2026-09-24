@@ -259,6 +259,12 @@ export async function startStack() {
         PORT: String(apiPort),
         CLIENT_URL: appUrl,
         MONGODB_URI: mongoUri,
+        // server.js loads server/.env, and dotenv never overrides a variable
+        // that is already set. Blanking these keeps the stack keyless: the
+        // suite asserts the unconfigured-provider behaviour, and must never
+        // spend a developer's real AI quota.
+        AI_PROVIDER: '',
+        GEMINI_API_KEY: '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

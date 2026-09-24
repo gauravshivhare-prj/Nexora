@@ -22,6 +22,15 @@ describe('deployment smoke', () => {
     assert.match(body.message, /healthy/i);
   });
 
+  it('sends baseline security headers and hides the framework', async () => {
+    const response = await fetch(`${server.baseUrl}/api/health`);
+
+    assert.equal(response.headers.get('x-powered-by'), null);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  });
+
   it('keeps protected deployment routes authenticated', async () => {
     const { status, body } = await requestWithHeaders(server.baseUrl, '/api/opportunities');
 

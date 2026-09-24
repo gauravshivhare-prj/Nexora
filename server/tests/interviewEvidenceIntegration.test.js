@@ -275,7 +275,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('sanitizes forged verification fields sent to direct evidence endpoint POST /api/skill-evidence/interviews', async () => {
-      const student = await createAccount('direct_forger');
+      const student = await createAccount('direct_forger', 'admin');
 
       // Malicious payload claiming pass, verified, and score 1.0 under AI evaluator
       const forgedRes = await sendJsonWithToken(
@@ -309,7 +309,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects unsupported evaluator types on direct evidence submission', async () => {
-      const student = await createAccount('unsupported_evaluator_user');
+      const student = await createAccount('unsupported_evaluator_user', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
@@ -331,7 +331,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects uncanonical skill claims on direct interview evidence submission', async () => {
-      const student = await createAccount('uncanonical_skill_user');
+      const student = await createAccount('uncanonical_skill_user', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
@@ -539,7 +539,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects direct POST /api/skill-evidence/interviews with failing score and forged eligibleForVerified: true', async () => {
-      const student = await createAccount('failing_direct_student');
+      const student = await createAccount('failing_direct_student', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
@@ -611,6 +611,58 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
       // Zero new evidence checks created
       const countAfter = await SkillEvidenceCheck.countDocuments({ user: student.id });
       assert.equal(countAfter, 1);
+    });
+
+    it('concurrent completions create evidence exactly once', async () => {
+      const student = await createAccount('concurrent_complete_user');
+      const session = await createAndStartInterviewSession(student.token, 'Backend Developer', ['Node.js']);
+      await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${session.questions[0].questionId}/answers`,
+        { method: 'POST', token: student.token, payload: { answerText: 'Answer before a racing completion.' } },
+      );
+
+      const responses = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          sendWithToken(server.baseUrl, `/api/interviews/sessions/${session.id}/complete`, {
+            method: 'POST',
+            token: student.token,
+          }),
+        ),
+      );
+
+      assert.equal(responses.filter((r) => r.status === 200).length, 1);
+      for (const r of responses.filter((res) => res.status !== 200)) {
+        assert.equal(r.status, 400);
+        assert.equal(r.body.errorCode, ERROR_CODES.INTERVIEW_INVALID_STATE);
+      }
+      assert.equal(await SkillEvidenceCheck.countDocuments({ user: student.id }), 1);
+    });
+
+    it('concurrent answers to the same question are recorded exactly once', async () => {
+      const student = await createAccount('concurrent_answer_user');
+      const session = await createAndStartInterviewSession(student.token, 'Backend Developer', ['Node.js']);
+      const questionId = session.questions[0].questionId;
+
+      const responses = await Promise.all(
+        Array.from({ length: 4 }, (_, i) =>
+          sendJsonWithToken(
+            server.baseUrl,
+            `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+            { method: 'POST', token: student.token, payload: { answerText: `Racing answer number ${i}.` } },
+          ),
+        ),
+      );
+
+      assert.equal(responses.filter((r) => r.status === 200).length, 1);
+      for (const r of responses.filter((res) => res.status !== 200)) {
+        assert.equal(r.status, 409);
+        assert.equal(r.body.errorCode, ERROR_CODES.CONFLICT);
+      }
+
+      const stored = await InterviewSession.findById(session.id).lean();
+      assert.equal(stored.attemptCount, 1);
+      assert.equal(stored.questions[0].answer.attemptNumber, 1);
     });
 
     it('rejects completion of an abandoned session without creating evidence checks', async () => {

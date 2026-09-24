@@ -80,7 +80,7 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
     ]);
   });
 
-  async function signUp(label) {
+  async function signUp(label, role = 'student') {
     counter += 1;
     const email = `a8.${label}.${Date.now()}.${counter}@example.com`;
     await postJson(server.baseUrl, '/api/auth/register', {
@@ -92,6 +92,9 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
       email,
       password: PASSWORD,
     });
+    if (role !== 'student') {
+      await mongoose.connection.collection('users').updateOne({ email }, { $set: { role } });
+    }
     return { token: body.data.token, user: body.data.user };
   }
 
@@ -438,7 +441,7 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
     });
 
     it('direct POST to /api/skill-evidence/assessments with low score cannot forge verified status', async () => {
-      const { token } = await signUp('direct-forge');
+      const { token } = await signUp('direct-forge', 'admin');
 
       // Attempt to submit a low score while claiming eligibleForVerified and outcome = pass
       const forgeRes = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/assessments', {
@@ -479,7 +482,7 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
     });
 
     it('rejects direct evidence creation for unknown canonical skill taxonomy keys', async () => {
-      const { token } = await signUp('unknown-skill');
+      const { token } = await signUp('unknown-skill', 'admin');
 
       const res = await sendJsonWithToken(server.baseUrl, '/api/skill-evidence/assessments', {
         method: 'POST',

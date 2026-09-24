@@ -267,6 +267,14 @@
   body {
     @apply bg-canvas text-ink antialiased;
     font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    /*
+     * Most text on screen is the student's own (project titles, interests,
+     * certification names) and can be one unbroken 60-character word.
+     * `anywhere` rather than `break-word` because only `anywhere` lowers the
+     * min-content width, which is what lets a chip in a flex row shrink to
+     * a 320px screen instead of pushing the page sideways.
+     */
+    overflow-wrap: anywhere;
   }
 
   /*
