@@ -159,6 +159,8 @@ assessmentAttemptSchema.index(
 
 // Lookup index for user attempts
 assessmentAttemptSchema.index({ user: 1, assessmentId: 1, createdAt: -1 });
+assessmentAttemptSchema.index({ user: 1, createdAt: -1 });
+assessmentAttemptSchema.index({ user: 1, assessmentId: 1, status: 1, attemptNumber: -1 });
 
 export function toPublicAssessmentAttempt(doc) {
   if (!doc) return null;

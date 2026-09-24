@@ -200,6 +200,8 @@ const assessmentSchema = new mongoose.Schema(
 
 // Indexes
 assessmentSchema.index({ skillKey: 1, difficulty: 1, isActive: 1 });
+assessmentSchema.index({ isActive: 1, title: 1 });
+assessmentSchema.index({ isActive: 1, skillKey: 1, difficulty: 1 });
 
 /**
  * Strips answers and explanations before exposing assessment to students.

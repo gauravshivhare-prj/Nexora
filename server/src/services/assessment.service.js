@@ -29,7 +29,7 @@ import { canonicalSkill, skillKey } from '../domain/skills/skillKey.js';
 export async function seedAssessmentCatalog() {
   const catalog = getAssessmentCatalog();
   for (const item of catalog) {
-    const existing = await Assessment.findOne({ assessmentId: item.id });
+    const existing = await Assessment.findOne({ assessmentId: item.id }).select('_id').lean();
     if (!existing) {
       await Assessment.create({
         assessmentId: item.id,
@@ -79,7 +79,7 @@ export async function listAssessments({ skill, difficulty } = {}) {
     query.difficulty = difficulty.trim().toLowerCase();
   }
 
-  let assessments = await Assessment.find(query).sort({ title: 1 });
+  let assessments = await Assessment.find(query).sort({ title: 1 }).lean();
 
   // If DB is empty, fallback to canonical catalog
   if (assessments.length === 0 && (!query.skillKey && !query.$or)) {
@@ -95,7 +95,7 @@ export async function listAssessments({ skill, difficulty } = {}) {
 export async function getAssessment(assessmentId) {
   validateAssessmentIdParam(assessmentId);
 
-  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true });
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true }).lean();
   if (doc) {
     return toPublicAssessment(doc);
   }
@@ -125,7 +125,7 @@ export async function createAssessment(input) {
     throw ApiError.badRequest(err.message, ERROR_CODES.VALIDATION_ERROR);
   }
 
-  const existing = await Assessment.findOne({ assessmentId: validated.id });
+  const existing = await Assessment.findOne({ assessmentId: validated.id }).select('_id').lean();
   if (existing) {
     throw ApiError.conflict(
       `Assessment with ID "${validated.id}" already exists.`,
@@ -226,7 +226,7 @@ export async function startAssessmentAttempt(userId, input) {
   const previousAttempts = await AssessmentAttempt.find({
     user: userId,
     assessmentId: fullAssessment.id,
-  }).sort({ attemptNumber: 1 });
+  }).sort({ attemptNumber: 1 }).lean();
 
   // If there is an active in-progress attempt, check if it timed out
   const activeAttempt = previousAttempts.find((att) => att.status === ATTEMPT_STATUS.IN_PROGRESS);
@@ -235,10 +235,13 @@ export async function startAssessmentAttempt(userId, input) {
     if (!isTimedOut) {
       return toPublicAssessmentAttempt(activeAttempt);
     }
+    await AssessmentAttempt.updateOne(
+      { _id: activeAttempt._id },
+      { $set: { status: ATTEMPT_STATUS.TIMED_OUT, passed: false, score: 0 } },
+    );
     activeAttempt.status = ATTEMPT_STATUS.TIMED_OUT;
     activeAttempt.passed = false;
     activeAttempt.score = 0;
-    await activeAttempt.save();
   }
 
   if (previousAttempts.length >= ASSESSMENT_LIMITS.maxAttemptsPerAssessment) {
@@ -300,7 +303,7 @@ export async function submitAssessmentAttempt(userId, payload) {
     if (typeof attemptId !== 'string' || !/^[a-f0-9]{24}$/i.test(attemptId.trim())) {
       throw ApiError.notFound('Active assessment attempt not found.', ERROR_CODES.NOT_FOUND);
     }
-    attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId });
+    attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId }).lean();
   } else {
     if (typeof assessmentId !== 'string' || assessmentId.trim() === '' || !/^[a-z0-9_-]+$/i.test(assessmentId.trim())) {
       throw ApiError.badRequest('assessmentId must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
@@ -309,7 +312,7 @@ export async function submitAssessmentAttempt(userId, payload) {
       user: userId,
       assessmentId: assessmentId.trim(),
       status: ATTEMPT_STATUS.IN_PROGRESS,
-    }).sort({ attemptNumber: -1 });
+    }).sort({ attemptNumber: -1 }).lean();
   }
 
   if (!attempt) {
@@ -362,7 +365,7 @@ export async function submitAssessmentAttempt(userId, payload) {
         durationSeconds,
       },
     },
-    { new: true },
+    { new: true, lean: true },
   );
 
   if (!updatedAttempt) {
@@ -409,7 +412,7 @@ export async function getAttemptById(userId, attemptId) {
   if (!attemptId || typeof attemptId !== 'string' || !/^[a-f0-9]{24}$/i.test(attemptId.trim())) {
     throw ApiError.notFound('Assessment attempt not found.', ERROR_CODES.NOT_FOUND);
   }
-  const attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId });
+  const attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId }).lean();
   if (!attempt) {
     throw ApiError.notFound('Assessment attempt not found.', ERROR_CODES.NOT_FOUND);
   }
@@ -431,7 +434,7 @@ export async function listUserAttempts(userId, { assessmentId } = {}) {
     query.assessmentId = assessmentId.trim();
   }
 
-  const attempts = await AssessmentAttempt.find(query).sort({ createdAt: -1 });
+  const attempts = await AssessmentAttempt.find(query).sort({ createdAt: -1 }).lean();
   return attempts.map(toPublicAssessmentAttempt);
 }
 
@@ -448,7 +451,7 @@ export async function getLatestAssessmentResult(userId, assessmentId) {
     user: userId,
     assessmentId: assessmentId.trim(),
     status: { $in: [ATTEMPT_STATUS.EVALUATED, ATTEMPT_STATUS.TIMED_OUT] },
-  }).sort({ attemptNumber: -1 });
+  }).sort({ attemptNumber: -1 }).lean();
 
   if (!attempt) {
     return null;
@@ -467,7 +470,7 @@ function validateAssessmentIdParam(id) {
 }
 
 async function loadFullAssessment(assessmentId) {
-  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true });
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true }).lean();
   if (doc) {
     return toAdminAssessment(doc);
   }
