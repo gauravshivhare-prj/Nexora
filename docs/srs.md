@@ -43,11 +43,15 @@
 - FR-ROAD-03: Completion updates progress.
 
 ### AI Interview
-- FR-INT-01: User can start an interview.
-- FR-INT-02: System generates role-specific questions.
-- FR-INT-03: User submits answers.
-- FR-INT-04: System generates structured feedback.
-- FR-INT-05: Weak areas can feed back into roadmap/readiness.
+- FR-INT-01: User can initialize an interview session targeting a role and canonical skills.
+- FR-INT-02: System selects curated questions from the versioned question bank with stable IDs (`iq-*-*`).
+- FR-INT-03: User transitions session to `in_progress` and submits text answers bounded by length (5–5,000 chars) and attempt limits.
+- FR-INT-04: System validates and XML-escapes candidate answers within strict XML prompt boundaries (`<candidate_untrusted_answer>`) to prevent injection or instruction override.
+- FR-INT-05: AI evaluation service evaluates answers against rubric criteria and parses structured JSON output with 4 dimension scores (`accuracy`, `depth`, `clarity`, `relevance`), feedback, strengths, and growth areas.
+- FR-INT-06: Evaluator domain grounds skills against canonical taxonomy and withholds verified skill claims on failing answers (< 0.65).
+- FR-INT-07: Malformed model outputs, forbidden privilege escalation fields, or provider failures safely return operational 502/503 errors without leaking secrets or credentials.
+- FR-INT-08: Completed sessions persist `SkillEvidenceCheck` records; AI evaluations remain advisory (`uncertain`, unverified), while only authorized human passes grant `verified` status.
+- FR-INT-09: Verified interview results flag CareerTwin staleness and are consumed by CareerTwin and Skill-Gap.
 
 ### Opportunities
 - FR-OPP-01: System stores opportunity records.
