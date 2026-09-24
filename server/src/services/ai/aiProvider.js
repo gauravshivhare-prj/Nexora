@@ -116,9 +116,10 @@ export function resolveAiProvider() {
  *
  * A provider's own exceptions — network errors, rate limits, SDK-specific
  * types — must not reach a controller, or every caller would have to know
- * about each vendor's error taxonomy. The provider's message is logged in
- * full and deliberately not returned: it can contain request ids, account
- * details and occasionally fragments of the prompt.
+ * about each vendor's error taxonomy. Only structured facts (error type,
+ * reason, upstream status) are logged. The message is neither logged nor
+ * returned: it can contain request ids, account details and fragments of
+ * the prompt.
  *
  * @param {AiCompletionRequest} request
  * @returns {Promise<AiCompletionResult>}
@@ -133,6 +134,10 @@ export async function requestCompletion(request) {
   } catch (error) {
     logger.error(`AI provider "${provider.name}" failed`, {
       errorType: error?.name ?? 'UnknownError',
+      // Structured facts only. The message can quote the prompt, so it is
+      // never logged.
+      reason: error?.reason,
+      status: Number.isInteger(error?.status) ? error.status : undefined,
     });
     throw ApiError.serviceUnavailable(
       'The AI service could not be reached. Please try again in a moment.',
