@@ -117,6 +117,12 @@ export async function clearSkillEvidenceChecks() {
   return mongoose.connection.collection('skillevidencechecks').deleteMany({});
 }
 
+/** Removes all interview sessions. */
+export async function clearInterviewSessions() {
+  return mongoose.connection.collection('interviewsessions').deleteMany({});
+}
+
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *
