@@ -158,11 +158,32 @@ export const getLatestResultHandler = asyncHandler(async (req, res) => {
 
   const attempt = await getLatestAssessmentResult(req.auth.userId, assessmentId);
 
+  const result = attempt
+    ? {
+        assessmentId: attempt.assessmentId,
+        canonicalSkill: attempt.skillName || attempt.skillKey,
+        difficulty: attempt.difficulty,
+        score: attempt.score,
+        earnedPoints: attempt.earnedPoints,
+        maxPoints: attempt.maxPoints,
+        passMark: attempt.passMark,
+        passed: attempt.passed,
+        outcome: attempt.outcome,
+        evidenceStatus: attempt.evidenceCheckId
+          ? 'verified'
+          : attempt.passed
+            ? 'supported'
+            : 'unsupported',
+        completedAt: attempt.completedAt,
+        questionBreakdown: attempt.questionResults,
+      }
+    : null;
+
   res.status(200).json({
     success: true,
     message: attempt
       ? 'Latest assessment result retrieved'
       : 'No completed attempts for this assessment yet',
-    data: { attempt },
+    data: { attempt, result },
   });
 });

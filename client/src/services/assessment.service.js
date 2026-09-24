@@ -105,7 +105,7 @@ export function toAssessmentResult(raw) {
 
   return {
     assessmentId: raw.assessmentId ?? '',
-    canonicalSkill: raw.canonicalSkill ?? '',
+    canonicalSkill: raw.canonicalSkill ?? raw.skillName ?? raw.skillKey ?? '',
     difficulty: raw.difficulty ?? '',
     score: typeof raw.score === 'number' ? raw.score : 0,
     earnedPoints: typeof raw.earnedPoints === 'number' ? raw.earnedPoints : 0,
@@ -113,12 +113,12 @@ export function toAssessmentResult(raw) {
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     passed: Boolean(raw.passed),
     outcome: raw.outcome ?? (raw.passed ? EVALUATION_OUTCOME.PASS : EVALUATION_OUTCOME.FAIL),
-    evidenceStatus: raw.evidenceStatus ?? EVIDENCE_STATUS.UNSUPPORTED,
+    evidenceStatus: raw.evidenceStatus ?? (raw.evidenceCheckId ? EVIDENCE_STATUS.VERIFIED : (raw.passed ? EVIDENCE_STATUS.SUPPORTED : EVIDENCE_STATUS.UNSUPPORTED)),
     completedAt: raw.completedAt ?? null,
-    questionBreakdown: Array.isArray(raw.questionBreakdown)
-      ? raw.questionBreakdown.map((item) => ({
+    questionBreakdown: Array.isArray(raw.questionBreakdown || raw.questionResults)
+      ? (raw.questionBreakdown || raw.questionResults).map((item) => ({
           questionId: item.questionId ?? '',
-          status: item.status ?? QUESTION_RESULT_STATUS.INVALID,
+          status: item.status ?? (item.isCorrect ? QUESTION_RESULT_STATUS.CORRECT : QUESTION_RESULT_STATUS.INCORRECT),
           earnedPoints: typeof item.earnedPoints === 'number' ? item.earnedPoints : 0,
           maxPoints: typeof item.maxPoints === 'number' ? item.maxPoints : 1,
           studentAnswer: item.studentAnswer ?? item.selectedOption ?? null,
@@ -288,7 +288,10 @@ export async function fetchLatestAssessmentResult(assessmentId, { signal } = {})
     throw new Error('The backend returned an unexpected response shape.');
   }
 
+  const rawResult = data?.result ?? (data?.attempt?.score !== undefined ? data.attempt : null);
+
   return {
-    result: data?.result ? toAssessmentResult(data.result) : null,
+    attempt: data?.attempt ? toAssessmentAttempt(data.attempt) : null,
+    result: rawResult ? toAssessmentResult(rawResult) : null,
   };
 }

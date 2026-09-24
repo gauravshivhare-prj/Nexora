@@ -867,7 +867,8 @@ Fetches the student's latest completed assessment attempt result for a given ass
     "success": true,
     "message": "Latest assessment result retrieved",
     "data": {
-      "result": { ... } // or null if student has not completed any attempts
+      "attempt": { ... }, // Public attempt document, or null if no completed attempts
+      "result": { ... }   // Evaluation result summary, or null if no completed attempts
     }
   }
   ```
