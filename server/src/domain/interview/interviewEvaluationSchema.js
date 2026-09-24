@@ -51,7 +51,10 @@ export const ALLOWED_EVALUATION_FIELDS = Object.freeze([
 export const INJECTION_PATTERNS = Object.freeze([
   // Prompt overrides and instruction hijacking
   /ignore\s+(all\s+)?(previous|prior)\s+instructions/i,
+  /disregard\s+(all\s+)?(previous|prior)\s+instructions/i,
+  /forget\s+(all\s+)?(your\s+)?(previous\s+)?instructions/i,
   /system\s*(_|\s*)?(override|instruction|prompt|note|directive)\b/i,
+  /new\s+system\s+(prompt|directive|rule|instruction)/i,
   /give\s+(a\s+)?full\s+marks/i,
   /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
   /(award|give|receive|grant)\s+(a\s+)?(perfect|full|maximum|1(\.0)?)\s+(score|marks?)/i,
@@ -60,12 +63,25 @@ export const INJECTION_PATTERNS = Object.freeze([
   /roleplay\s+game/i,
   /\bDAN\s*\(/i,
   /do\s+anything\s+now/i,
+  /you\s+are\s+(now\s+)?(a\s+)?(helpful\s+)?(tutor|assistant|bot|Dan|an\s+unrestricted)/i,
+  /reveal\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
+  /repeat\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
+  /what\s+is\s+your\s+system\s+prompt/i,
+  /output\s+JSON\s+immediately/i,
+  /override\s+all\s+(rules|rubrics|criteria)/i,
+  /ignore\s+(the\s+)?rubric/i,
+  /do\s+not\s+grade/i,
 
-  // Delimiter and prompt markup breakouts
-  /<\s*\/?\s*candidate_untrusted_answer\s*>/i,
-  /<\s*\/?\s*system(_instruction|_override)?\s*>/i,
-  /<\s*\/?\s*question_target\s*>/i,
-  /<\s*\/?\s*rubric_criteria\s*>/i,
+  // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace)
+  /<\s*\/?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules)\b[^>]*>/i,
+  /<!\[CDATA\[|\]\]>/i,
+
+  // LLM template and chat tokens
+  /<\s*\|\s*im_(start|end)\s*\|>/i,
+  /\[\s*\/?\s*INST\s*\]/i,
+  /<<\s*\/?\s*SYS\s*>>/i,
+  /<\s*\/?\s*turn_(start|end)\s*>/i,
+  /<\s*\/?\s*s\s*>/i,
 
   // HTML / Script / XSS payloads
   /<\s*script\b[^>]*>/i,
@@ -85,13 +101,15 @@ export const INJECTION_PATTERNS = Object.freeze([
 
 /**
  * Scans a string for malicious or injection-like patterns.
+ * Normalizes invisible zero-width and directionality override characters before checking.
  *
  * @param {string} text
  * @returns {boolean} True if suspicious injection pattern is detected
  */
 export function hasInjectionContent(text) {
   if (typeof text !== 'string') return false;
-  return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
+  const normalized = text.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '');
+  return INJECTION_PATTERNS.some((pattern) => pattern.test(text) || pattern.test(normalized));
 }
 
 /**
