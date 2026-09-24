@@ -6,6 +6,7 @@ import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
 import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
 import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
+import { evaluationLimiter } from '../../src/routes/interview.routes.js';
 
 /**
  * Integration-test harness.
@@ -68,6 +69,7 @@ export function resetRateLimiters() {
   generateLimiter.reset();
   assessmentAttemptLimiter.reset();
   assessmentSubmitLimiter.reset();
+  evaluationLimiter.reset();
 }
 
 /**
@@ -136,6 +138,16 @@ export async function clearAssessmentAttempts() {
   } catch {
     // Collection might not exist yet
   }
+}
+
+/** Removes all interview sessions. */
+export async function clearInterviewSessions() {
+  return mongoose.connection.collection('interviewsessions').deleteMany({});
+}
+
+/** Removes all career twins. */
+export async function clearCareerTwins() {
+  return mongoose.connection.collection('careertwins').deleteMany({});
 }
 
 /**

@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { CareerTwin, isCareerTwinStale, toPublicCareerTwin } from './CareerTwin.model.js';
+import { InterviewSession, toPublicInterviewSession } from './InterviewSession.model.js';
 import { Resume, toPublicResume, toResumeSummary } from './Resume.model.js';
 import { StudentProfile, emptyProfile, toPublicProfile } from './StudentProfile.model.js';
 import { User, toPublicUser } from './User.model.js';
@@ -28,6 +29,7 @@ const MODELS = [
   SkillEvidenceCheck,
   Assessment,
   AssessmentAttempt,
+  InterviewSession,
 ];
 
 /**
@@ -49,6 +51,7 @@ export {
   Assessment,
   AssessmentAttempt,
   CareerTwin,
+  InterviewSession,
   Resume,
   SkillEvidenceCheck,
   StudentProfile,
@@ -59,6 +62,7 @@ export {
   toPublicAssessment,
   toPublicAssessmentAttempt,
   toPublicCareerTwin,
+  toPublicInterviewSession,
   toPublicProfile,
   toPublicResume,
   toPublicSkillEvidenceCheck,

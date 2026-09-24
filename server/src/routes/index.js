@@ -4,6 +4,7 @@ import authRoutes from './auth.routes.js';
 import careerRoutes from './career.routes.js';
 import careerTwinRoutes from './careerTwin.routes.js';
 import healthRoutes from './health.routes.js';
+import interviewRoutes from './interview.routes.js';
 import profileRoutes from './profile.routes.js';
 import opportunityRoutes from './opportunity.routes.js';
 import resumeRoutes from './resume.routes.js';
@@ -24,5 +25,6 @@ router.use('/careers', careerRoutes);
 router.use('/summary', summaryRoutes);
 router.use('/skill-evidence', skillEvidenceRoutes);
 router.use('/assessments', assessmentRoutes);
+router.use('/interviews', interviewRoutes);
 
 export default router;

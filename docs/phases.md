@@ -17,7 +17,7 @@ This document defines the controlled development sequence for Nexora.
 | 5 — Career Recommendation | Backend complete; frontend via dashboard summary |
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
-| 8 — Assessment & AI Interview | Backend complete for Skill Assessment (engine, question bank, deterministic scoring, attempt lifecycle, evidence integration, security hardening); AI interview & UI upcoming |
+| 8 — Assessment & AI Interview | Complete (Backend assessment engine & AI interview session lifecycle, prompt boundary hardening, schema validation, red-team suite, and institutional evidence integration; UI scheduled for future phase) |
 | 9 — Opportunity Matching | Not started |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
@@ -269,14 +269,16 @@ the thing this architecture exists to prevent. Items expose
 
 ## Phase 8 — Assessment & AI Interview
 - Skill assessment (Delivered)
-- Curated question bank (Delivered)
-- Deterministic scoring engine (Delivered)
-- Attempt lifecycle & persistence (Delivered)
-- Skill evidence & CareerTwin integration (Delivered)
-- Assessment security & rate limiting (Delivered)
-- AI-generated interview questions (Upcoming)
-- Answer submission & AI interview evaluation (Upcoming)
-- Weak-area extraction from interview (Upcoming)
+- Curated assessment question bank & deterministic scoring (Delivered)
+- Assessment attempt lifecycle & persistence (Delivered)
+- AI-guided interview session lifecycle (Delivered)
+- Curated interview question bank & deterministic selection (Delivered)
+- Candidate answer submission & bounded validation (Delivered)
+- Prompt boundary hardening & anti-jailbreak defenses (Delivered)
+- Strict structured output validation & grounding (Delivered)
+- Provider error sanitization & secret protection (Delivered)
+- AI red-team integration test suite (Delivered)
+- Institutional evidence integration & CareerTwin staleness (Delivered)
 
 **Delivered — Skill Assessment Engine & API**
 - **Domain Contract & Question Bank**: Curated, versioned assessment question bank covering 10 canonical skills (`Node.js`, `React`, `Python`, `SQL`, `Docker`, `TypeScript`, `Git`, `MongoDB`, `REST APIs`, `System Design`) across 3 difficulty tiers (`beginner`, `intermediate`, `advanced`) and 4 question types (`single_choice`, `multiple_choice`, `code_output`, `short_answer`).
@@ -293,18 +295,39 @@ the thing this architecture exists to prevent. Items expose
 - **Evidence Policy Integration**: Passing intermediate or advanced assessments ($\ge 70\%$) generates a verified `SkillEvidenceCheck` in MongoDB and marks the student's CareerTwin as stale for recomputation. Beginner, advisory, or practice assessments withhold verified checks.
 - **Security Hardening**: IDOR protection via owner-scoped queries (returning `404 NOT_FOUND`), recursive anti-tampering guards rejecting client-submitted scores/results, prototype pollution / MongoDB operator rejection, atomic document locking against concurrency races, and sliding-window rate limiters (30 requests / 15 minutes).
 
+**Delivered — AI Interview Architecture & Safety**
+- **AI Interview Session Architecture**:
+  - `InterviewSession` model enforcing ownership, strict lifecycle states (`initialized` → `in_progress` → `completed` | `abandoned` | `timed_out`), and question/session attempt limits.
+  - Curated question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy (`SKILL_TAXONOMY_VERSION = 1`).
+  - Full REST API suite: session creation, listing, retrieval, starting, answering, completing, and abandoning.
+- **Prompt Boundary Hardening & Safety**:
+  - Candidate answers strictly enclosed in `<candidate_untrusted_answer>` XML tags with XML character escaping, neutralizing delimiter breakout, instruction override, or rubric manipulation.
+  - Evaluator enforces adversarial separation: grades strictly on technical substance, ignoring DAN/persona hijack directives.
+- **Strict Output Validation & Grounding**:
+  - Model responses validated against strict JSON schema: 4 dimension scores (`accuracy`, `depth`, `clarity`, `relevance` $\in [0.0, 1.0]$), bounded feedback strings, and privilege escalation rejection (502 on malformed or forbidden fields).
+  - Grounding filters candidate skills against canonical taxonomy and target question skill; unasked or hallucinated skills are stripped.
+- **AI Red-Team Suite**:
+  - 19 deterministic tests covering prompt injection, instruction override, oversized/undersized answers, malformed model JSON, unsupported skill claims, answer-key extraction, cross-user IDOR access, and provider failure with zero secret leakage.
+- **Institutional Evidence Integration**:
+  - Completed sessions create `SkillEvidenceCheck` records for each target skill.
+  - AI evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`). Raw AI claims can never directly create verified skills.
+  - Only authorized human evaluator passes ($\ge 0.75$) grant `verified` status.
+  - CareerTwin staleness monitors newly recorded evidence (`latestEvidenceAt > generatedAt`), and fresh CareerTwin generation consumes verified checks, elevating skills to `strength: 'verified'`.
+  - Skill-gap analysis marks verified skills as `GAP_STATUS.VERIFIED` and clears suggested evidence.
+
 **Deliberately NOT delivered in this slice, and why**
 - **No untrusted code execution sandbox.** Predicts code output via deterministic string matching (`normalized_string`) rather than running arbitrary code in a container sandbox.
-- **No AI interview question generation.** Assessment uses the curated question bank; dynamic AI interview sessions remain in the AI interview track.
-- **No assessment UI.** Frontend test-taking interface is scheduled for subsequent UI integration; all capabilities are fully verified at the REST API and domain level.
+- **No assessment or interview UI.** Frontend test-taking and interview interfaces are scheduled for subsequent UI integration; all capabilities are fully verified at the REST API, service, and domain level.
+- **No audio/video capture.** Text-based interview submissions in MVP.
+- **No streaming tokens.** Synchronous JSON response delivery.
 
 **Exit criteria**
-- Assessment attempts can be started, resumed, and submitted.
-- Scoring is 100% deterministic and transparent.
-- Secret answer keys and internal scoring metadata are never leaked.
-- Valid passing results create verified evidence checks and flag CareerTwin staleness.
-- Double-submission, replay, tampering, and IDOR attacks are blocked safely.
-- 136/136 assessment domain, model, service, API, evidence, and security tests pass.
+- Assessment attempts can be started, resumed, and submitted with 100% deterministic scoring.
+- Interview sessions follow strict lifecycle states with prompt boundary hardening and structured JSON schema validation.
+- Secret answer keys, internal scoring metadata, and AI provider credentials are never leaked.
+- Valid passing results create verified evidence checks and flag CareerTwin staleness according to institutional verification policy (AI evaluations remain advisory).
+- Double-submission, replay, tampering, prompt injection, and IDOR attacks are blocked safely.
+- All assessment and interview test suites pass cleanly.
 
 ## Phase 9 — Opportunity Matching
 - Opportunity dataset
