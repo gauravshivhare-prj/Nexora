@@ -8,6 +8,11 @@ import {
   toPublicInterviewSession,
 } from '../models/InterviewSession.model.js';
 import {
+  SkillEvidenceCheck,
+  toPublicSkillEvidenceCheck,
+} from '../models/SkillEvidenceCheck.model.js';
+import { User } from '../models/User.model.js';
+import {
   INTERVIEW_DIFFICULTY,
   INTERVIEW_DIFFICULTY_VALUES,
   INTERVIEW_LIMITS,
@@ -368,16 +373,51 @@ export async function completeSession(userId, sessionId, options = {}) {
     );
   }
 
-  const { overallScore, evaluatorType, eligibleForVerified, evidenceResults } =
+  let evaluatorType = 'ai';
+  if (options.evaluatorType === 'human') {
+    if (options.bypassRoleCheck) {
+      evaluatorType = 'human';
+    } else {
+      const caller = await User.findById(userId).select('role').lean();
+      if (caller && caller.role === 'admin') {
+        evaluatorType = 'human';
+      }
+    }
+  }
+
+  const { overallScore, eligibleForVerified, evidenceResults } =
     evaluateSessionResults({
       session,
-      evaluatorType: options.evaluatorType || 'ai',
+      evaluatorType,
     });
 
   session.overallScore = overallScore;
   session.evaluatorType = evaluatorType;
   session.status = SESSION_STATUS.COMPLETED;
   session.completedAt = new Date();
+
+  // Persist SkillEvidenceCheck records for each target skill evaluated in the session
+  const savedChecks = [];
+  for (const ev of evidenceResults) {
+    const check = await SkillEvidenceCheck.create({
+      user: userId,
+      kind: ev.kind,
+      skillKey: ev.skillKey,
+      skillName: ev.skillName,
+      score: ev.score,
+      passMark: ev.passMark,
+      outcome: ev.outcome,
+      eligibleForVerified: ev.eligibleForVerified,
+      evaluatedBy: ev.evaluatedBy,
+      reference: String(session._id),
+      completedAt: session.completedAt,
+    });
+    savedChecks.push(check);
+  }
+
+  if (savedChecks.length > 0) {
+    session.evidenceCheck = savedChecks[0]._id;
+  }
 
   await session.save();
   logger.info(`Interview session completed: ${session._id} with overall score ${overallScore}`);
@@ -387,6 +427,7 @@ export async function completeSession(userId, sessionId, options = {}) {
     overallScore,
     eligibleForVerified,
     evidenceResults,
+    evidenceChecks: savedChecks.map(toPublicSkillEvidenceCheck),
   };
 }
 

@@ -93,7 +93,9 @@ export const submitAnswer = asyncHandler(async (req, res) => {
  * Finalizes the interview session and calculates overall score.
  */
 export const complete = asyncHandler(async (req, res) => {
-  const result = await completeSession(req.auth.userId, req.params.sessionId, req.body);
+  const result = await completeSession(req.auth.userId, req.params.sessionId, {
+    evaluatorType: req.body?.evaluatorType,
+  });
 
   res.status(200).json({
     success: true,

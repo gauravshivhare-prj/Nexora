@@ -124,6 +124,11 @@ export async function clearInterviewSessions() {
   return mongoose.connection.collection('interviewsessions').deleteMany({});
 }
 
+/** Removes all career twins. */
+export async function clearCareerTwins() {
+  return mongoose.connection.collection('careertwins').deleteMany({});
+}
+
 
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.

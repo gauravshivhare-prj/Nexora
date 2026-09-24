@@ -462,6 +462,7 @@ export function toPublicInterviewSession(session) {
     })),
     overallScore: session.overallScore ?? null,
     evaluatorType: session.evaluatorType,
+    evidenceCheck: session.evidenceCheck ? String(session.evidenceCheck) : null,
     providerMetadata: session.providerMetadata
       ? {
           provider: session.providerMetadata.provider ?? null,
