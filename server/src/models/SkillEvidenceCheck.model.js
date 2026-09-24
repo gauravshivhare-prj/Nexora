@@ -25,6 +25,11 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Cover the two read paths, both newest-first per user: the evidence list
+// and the verified-only load that feeds every CareerTwin build.
+skillEvidenceCheckSchema.index({ user: 1, completedAt: -1 });
+skillEvidenceCheckSchema.index({ user: 1, eligibleForVerified: 1, completedAt: -1 });
+
 export function toPublicSkillEvidenceCheck(check) {
   return {
     id: String(check._id ?? check.id),

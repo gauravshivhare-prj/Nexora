@@ -6,7 +6,7 @@ import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
 import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
 import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
-import { evaluationLimiter } from '../../src/routes/interview.routes.js';
+import { evaluationLimiter, sessionWriteLimiter } from '../../src/routes/interview.routes.js';
 
 /**
  * Integration-test harness.
@@ -70,6 +70,7 @@ export function resetRateLimiters() {
   assessmentAttemptLimiter.reset();
   assessmentSubmitLimiter.reset();
   evaluationLimiter.reset();
+  sessionWriteLimiter.reset();
 }
 
 /**

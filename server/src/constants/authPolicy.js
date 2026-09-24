@@ -136,4 +136,14 @@ export const RATE_LIMIT_POLICY = {
     windowMs: 15 * 60 * 1000,   // 15 minutes
     maxAttempts: 30,
   },
+
+  /**
+   * Interview session writes: create, start, complete and abandon.
+   * Each creation stores a full question set, and completion writes
+   * evidence, so neither may be looped without bound.
+   */
+  interviewSession: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 60,
+  },
 };

@@ -235,8 +235,10 @@ export async function startAssessmentAttempt(userId, input) {
     if (!isTimedOut) {
       return toPublicAssessmentAttempt(activeAttempt);
     }
+    // Conditional on still being in progress, so a submission that lands
+    // concurrently is never overwritten with a zero score.
     await AssessmentAttempt.updateOne(
-      { _id: activeAttempt._id },
+      { _id: activeAttempt._id, status: ATTEMPT_STATUS.IN_PROGRESS },
       { $set: { status: ATTEMPT_STATUS.TIMED_OUT, passed: false, score: 0 } },
     );
     activeAttempt.status = ATTEMPT_STATUS.TIMED_OUT;

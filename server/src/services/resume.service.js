@@ -317,8 +317,27 @@ export async function analyseResume(userId, resumeId, { signal } = {}) {
   // the document exactly as it was rather than marking a failure nobody caused.
   const provider = resolveAiProvider();
 
-  resume.analysis = { status: PROCESSING_STATUS.PROCESSING, startedAt: new Date(), error: null };
-  await resume.save();
+  // Claimed with a compare-and-set on the state read above rather than a
+  // save(): two concurrent requests would otherwise both pass the running
+  // check and both pay for a provider call.
+  const claim = { status: PROCESSING_STATUS.PROCESSING, startedAt: new Date(), error: null };
+  const claimed = await Resume.updateOne(
+    {
+      _id: resume._id,
+      user: userId,
+      'analysis.status': resume.analysis?.status ?? null,
+      'analysis.startedAt': resume.analysis?.startedAt ?? null,
+    },
+    { $set: { analysis: claim } },
+  );
+  if (claimed.modifiedCount === 0) {
+    throw new ApiError(
+      409,
+      'This resume is already being analysed. Wait for it to finish.',
+      ERROR_CODES.RESUME_ANALYSIS_IN_PROGRESS,
+    );
+  }
+  resume.analysis = claim;
 
   try {
     const result = await runAnalysisPipeline(resume.extractedText, provider, signal);
