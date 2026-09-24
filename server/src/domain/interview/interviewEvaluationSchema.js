@@ -51,11 +51,21 @@ export const ALLOWED_EVALUATION_FIELDS = Object.freeze([
 export const INJECTION_PATTERNS = Object.freeze([
   // Prompt overrides and instruction hijacking
   /ignore\s+(all\s+)?(previous|prior)\s+instructions/i,
-  /system\s*(override|prompt|note)\s*:/i,
+  /system\s*(_|\s*)?(override|instruction|prompt|note|directive)\b/i,
   /give\s+(a\s+)?full\s+marks/i,
-  /always\s+return\s+1(\.0)?/i,
+  /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
+  /(award|give|receive|grant)\s+(a\s+)?(perfect|full|maximum|1(\.0)?)\s+(score|marks?)/i,
   /score\s+is\s+100/i,
   /bypass\s+evaluation/i,
+  /roleplay\s+game/i,
+  /\bDAN\s*\(/i,
+  /do\s+anything\s+now/i,
+
+  // Delimiter and prompt markup breakouts
+  /<\s*\/?\s*candidate_untrusted_answer\s*>/i,
+  /<\s*\/?\s*system(_instruction|_override)?\s*>/i,
+  /<\s*\/?\s*question_target\s*>/i,
+  /<\s*\/?\s*rubric_criteria\s*>/i,
 
   // HTML / Script / XSS payloads
   /<\s*script\b[^>]*>/i,
