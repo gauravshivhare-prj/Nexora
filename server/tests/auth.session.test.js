@@ -392,6 +392,18 @@ describe('authentication session', () => {
       assert.equal(body.errorCode, ERROR_CODES.ACCOUNT_INACTIVE);
     });
 
+    it('rejects a deactivated token on every protected route', async () => {
+      const token = await tokenFor();
+      await mongoose.connection
+        .collection('users')
+        .updateOne({ email: ACCOUNT.email }, { $set: { isActive: false } });
+
+      const { status, body } = await getWithToken(server.baseUrl, '/api/summary', token);
+
+      assert.equal(status, 403);
+      assert.equal(body.errorCode, ERROR_CODES.ACCOUNT_INACTIVE);
+    });
+
     it('rejects a token whose subject is not a valid id', async () => {
       const nonsense = jwt.sign({}, env.jwtSecret, {
         subject: 'not-an-object-id',

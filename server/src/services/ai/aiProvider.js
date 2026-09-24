@@ -131,7 +131,9 @@ export async function requestCompletion(request) {
   try {
     result = await provider.complete(request);
   } catch (error) {
-    logger.error(`AI provider "${provider.name}" failed`, error);
+    logger.error(`AI provider "${provider.name}" failed`, {
+      errorType: error?.name ?? 'UnknownError',
+    });
     throw ApiError.serviceUnavailable(
       'The AI service could not be reached. Please try again in a moment.',
       ERROR_CODES.AI_PROVIDER_FAILED,

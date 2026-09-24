@@ -314,7 +314,7 @@ function Context({ twin }) {
                 .map(([label, value]) => (
                   <div key={label} className="flex gap-2">
                     <dt className="shrink-0 font-medium text-ink-muted">{label}</dt>
-                    <dd className="min-w-0 break-words text-ink">{value}</dd>
+                    <dd className="min-w-0 wrap-break-word text-ink">{value}</dd>
                   </div>
                 ))}
             </dl>

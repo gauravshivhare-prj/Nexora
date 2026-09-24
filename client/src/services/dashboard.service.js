@@ -44,6 +44,20 @@ export async function fetchDashboard({ signal } = {}) {
   const data = body?.data;
   if (!data) throw new Error('The backend returned an unexpected response shape.');
 
+  const readiness = data.focusRole
+    ? await request(
+        `/api/careers/roles/${encodeURIComponent(data.focusRole.roleId)}/readiness`,
+        { signal },
+      )
+          .then((result) => {
+            if (!result?.data?.readiness) {
+              throw new Error('The backend returned an unexpected readiness response.');
+            }
+            return section(READY, result.data.readiness);
+          })
+          .catch((error) => section(FAILED, null, error))
+    : section(EMPTY);
+
   return {
     profile: data.profile.exists ? section(READY, data.profile) : section(EMPTY),
     resumes: data.resumes.total > 0 ? section(READY, data.resumes) : section(EMPTY),
@@ -52,6 +66,7 @@ export async function fetchDashboard({ signal } = {}) {
     focusRole: data.focusRole ? section(READY, data.focusRole) : section(EMPTY),
     skillGap: data.skillGap ? section(READY, data.skillGap) : section(EMPTY),
     roadmap: data.roadmap ? section(READY, data.roadmap) : section(EMPTY),
+    readiness,
 
     /**
      * What to do next, decided by the backend.
@@ -65,5 +80,3 @@ export async function fetchDashboard({ signal } = {}) {
   };
 }
 
-/** Exported for the failure branch the page still renders. */
-export const FAILED_SECTION = FAILED;

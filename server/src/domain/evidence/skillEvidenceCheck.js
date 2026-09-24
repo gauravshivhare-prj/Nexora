@@ -15,6 +15,13 @@ export const CHECK_OUTCOMES = {
 export const ASSESSMENT_PASS_MARK = 0.7;
 export const INTERVIEW_PASS_MARK = 0.75;
 
+export class SkillEvidenceInputError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SkillEvidenceInputError';
+  }
+}
+
 /**
  * Builds the persisted result of a deterministic skill check.
  *
@@ -63,7 +70,7 @@ export function buildInterviewResult({
 }) {
   const canonical = requireCanonicalSkill(skill);
   if (!['human', 'ai'].includes(evaluatedBy)) {
-    throw new Error('evaluatedBy must be "human" or "ai".');
+    throw new SkillEvidenceInputError('evaluatedBy must be "human" or "ai".');
   }
   validateScore(score);
   validateReference(interviewId, 'interviewId');
@@ -115,28 +122,30 @@ function result({ kind, canonical, score, passMark, outcome, reference, complete
 
 function requireCanonicalSkill(skill) {
   const canonical = canonicalSkill(skill);
-  if (!canonical) throw new Error(`Unknown canonical skill: ${skill}`);
+  if (!canonical) throw new SkillEvidenceInputError(`Unknown canonical skill: ${skill}`);
   return canonical;
 }
 
 function validateScore(score) {
   if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) {
-    throw new Error('Score must be a number between 0 and 1.');
+    throw new SkillEvidenceInputError('Score must be a number between 0 and 1.');
   }
 }
 
 function validatePassMark(passMark) {
   if (typeof passMark !== 'number' || !Number.isFinite(passMark) || passMark <= 0 || passMark > 1) {
-    throw new Error('Pass mark must be a number greater than 0 and at most 1.');
+    throw new SkillEvidenceInputError('Pass mark must be a number greater than 0 and at most 1.');
   }
 }
 
 function validateReference(reference, field) {
   if (typeof reference !== 'string' || reference.trim() === '') {
-    throw new Error(`${field} is required.`);
+    throw new SkillEvidenceInputError(`${field} is required.`);
   }
 }
 
 function validateDate(value, field) {
-  if (Number.isNaN(new Date(value).getTime())) throw new Error(`${field} must be a valid date.`);
+  if (Number.isNaN(new Date(value).getTime())) {
+    throw new SkillEvidenceInputError(`${field} must be a valid date.`);
+  }
 }

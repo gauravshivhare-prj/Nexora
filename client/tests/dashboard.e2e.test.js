@@ -231,11 +231,10 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     await openDashboard();
 
     const text = await page.bodyText();
-    // The only percentage the product computes is the per-role match score,
-    // which lives on the careers page. A headline "you are 62% ready" here
-    // would be a number no endpoint produces.
-    assert.doesNotMatch(text, /readiness/i);
+    assert.match(text, /Career readiness/);
+    assert.match(text, /based on evidence states/i);
     assert.doesNotMatch(text, /\d+%\s*(ready|complete)/i);
+    assert.doesNotMatch(text, /readiness score/i);
   });
 
   it('reports roadmap work as outstanding rather than as progress', async () => {
@@ -296,6 +295,49 @@ describe('dashboard and navigation', { timeout: 240_000 }, () => {
     assert.match(alert, /could not be loaded/i);
     assert.match(alert, /Try again/);
     assert.ok(!/at\s+\w+\s+\(/.test(alert), 'a stack trace was displayed');
+  });
+
+  it('isolates a readiness failure from the rest of the dashboard', async () => {
+    await signUp();
+    await addSkillAndProject();
+    await buildTwin();
+    await openDashboard();
+
+    await page.evaluate(`(() => {
+      const original = window.fetch;
+      window.fetch = (input, init) => {
+        if (String(input).includes('/readiness')) {
+          return Promise.reject(new TypeError('Failed to fetch readiness'));
+        }
+        return original(input, init);
+      };
+    })()`);
+
+    await page.evaluate(`(() => {
+      [...document.querySelectorAll('a')]
+        .find((a) => a.getAttribute('href') === '/profile').click();
+    })()`);
+    await page.waitFor('location.pathname === "/profile"', { description: 'the profile page' });
+    await page.evaluate(`(() => {
+      [...document.querySelectorAll('a')]
+        .find((a) => a.getAttribute('href') === '/app').click();
+    })()`);
+
+    await page.waitFor('location.pathname === "/app"', { description: 'the dashboard route' });
+    await page.waitFor(`document.body.innerText.includes('Top career matches')`, {
+      description: 'the dashboard sections',
+    });
+    await page.waitFor(`(() => {
+      const heading = [...document.querySelectorAll('h2')]
+        .find((h) => h.textContent.trim() === 'Career readiness');
+      return heading?.closest('section')?.querySelector('[role="alert"]') !== null;
+    })()`, { description: 'the readiness section error' });
+
+    const text = await page.bodyText();
+    assert.match(text, /Top career matches/);
+    assert.match(text, /Career readiness/);
+    assert.match(text, /Could not reach the Nexora backend|could not be loaded/i);
+    assert.match(text, /Try again/);
   });
 
   // ------------------------------------------------------------- nav

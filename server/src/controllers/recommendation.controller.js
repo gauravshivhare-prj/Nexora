@@ -4,6 +4,7 @@ import {
   scoreAgainstRole,
 } from '../services/recommendation.service.js';
 import { getRoadmap } from '../services/roadmap.service.js';
+import { getReadiness } from '../services/readiness.service.js';
 import { getSkillGap } from '../services/skillGap.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -85,6 +86,22 @@ export const skillGap = asyncHandler(async (req, res) => {
     success: true,
     message: 'Skill gap calculated',
     data,
+  });
+});
+
+/**
+ * GET /api/careers/roles/:roleId/readiness
+ *
+ * Summarises the same role-scoped evidence as the skill gap, without adding a
+ * score or treating stale derived data as current.
+ */
+export const readiness = asyncHandler(async (req, res) => {
+  const data = await getReadiness(req.auth.userId, req.params.roleId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Career readiness calculated',
+    data: { readiness: data },
   });
 });
 
