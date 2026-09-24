@@ -5,6 +5,7 @@ import {
 } from '../models/AssessmentAttempt.model.js';
 import {
   ATTEMPT_STATUS,
+  DIFFICULTY_LEVEL_VALUES,
   evaluateAssessmentSubmission,
   validateAssessmentDefinition,
 } from '../domain/assessment/assessmentContract.js';
@@ -54,8 +55,11 @@ export async function seedAssessmentCatalog() {
 export async function listAssessments({ skill, difficulty } = {}) {
   const query = { isActive: true };
 
-  if (skill) {
-    const canonical = canonicalSkill(skill);
+  if (skill !== undefined && skill !== null) {
+    if (typeof skill !== 'string' || skill.trim() === '') {
+      throw ApiError.badRequest('skill filter parameter must be a non-empty string.', ERROR_CODES.VALIDATION_ERROR);
+    }
+    const canonical = canonicalSkill(skill.trim());
     if (!canonical) {
       throw ApiError.badRequest(
         `Unknown canonical skill: "${skill}".`,
@@ -65,8 +69,14 @@ export async function listAssessments({ skill, difficulty } = {}) {
     query.$or = [{ skillKey: canonical.key }, { secondarySkillKeys: canonical.key }];
   }
 
-  if (difficulty) {
-    query.difficulty = difficulty;
+  if (difficulty !== undefined && difficulty !== null) {
+    if (typeof difficulty !== 'string' || !DIFFICULTY_LEVEL_VALUES.includes(difficulty.trim().toLowerCase())) {
+      throw ApiError.badRequest(
+        `Invalid difficulty filter. Allowed values: ${DIFFICULTY_LEVEL_VALUES.join(', ')}.`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+    query.difficulty = difficulty.trim().toLowerCase();
   }
 
   let assessments = await Assessment.find(query).sort({ title: 1 });
@@ -168,6 +178,17 @@ export function assertNoForbiddenClientFields(payload, context = 'payload') {
     }
 
     for (const [key, value] of Object.entries(node)) {
+      if (
+        key === '__proto__' ||
+        key === 'constructor' ||
+        key === 'prototype' ||
+        key.startsWith('$')
+      ) {
+        throw ApiError.badRequest(
+          `Invalid payload key: "${key}".`,
+          ERROR_CODES.VALIDATION_ERROR,
+        );
+      }
       if (forbiddenSet.has(key)) {
         throw ApiError.badRequest(
           `Client is forbidden from supplying scoring/verification field: "${key}".`,
@@ -276,8 +297,14 @@ export async function submitAssessmentAttempt(userId, payload) {
   // 3. Locate attempt
   let attempt;
   if (attemptId) {
-    attempt = await AssessmentAttempt.findOne({ _id: attemptId, user: userId });
+    if (typeof attemptId !== 'string' || !/^[a-f0-9]{24}$/i.test(attemptId.trim())) {
+      throw ApiError.notFound('Active assessment attempt not found.', ERROR_CODES.NOT_FOUND);
+    }
+    attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId });
   } else {
+    if (typeof assessmentId !== 'string' || assessmentId.trim() === '' || !/^[a-z0-9_-]+$/i.test(assessmentId.trim())) {
+      throw ApiError.badRequest('assessmentId must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
+    }
     attempt = await AssessmentAttempt.findOne({
       user: userId,
       assessmentId: assessmentId.trim(),
@@ -312,7 +339,40 @@ export async function submitAssessmentAttempt(userId, payload) {
     evaluatedAt: evalDate,
   });
 
-  // 6. Record verified evidence if passed
+  // 6. Atomically update attempt status to EVALUATED to prevent concurrent double-submissions
+  const startMs = new Date(attempt.startedAt).getTime();
+  const durationSeconds = Math.max(0, Math.round((evalDate.getTime() - startMs) / 1000));
+
+  const updatedAttempt = await AssessmentAttempt.findOneAndUpdate(
+    { _id: attempt._id, user: userId, status: ATTEMPT_STATUS.IN_PROGRESS },
+    {
+      $set: {
+        status: evalResult.status,
+        score: evalResult.score,
+        passed: evalResult.passed,
+        outcome: evalResult.outcome,
+        earnedPoints: evalResult.earnedPoints,
+        maxPoints: evalResult.maxPoints,
+        totalQuestions: evalResult.totalQuestions,
+        correctQuestionsCount: evalResult.correctQuestionsCount,
+        answers: answers ?? {},
+        questionResults: evalResult.questionResults,
+        evidenceCheck: null,
+        completedAt: evalDate,
+        durationSeconds,
+      },
+    },
+    { new: true },
+  );
+
+  if (!updatedAttempt) {
+    throw ApiError.badRequest(
+      'Attempt is already evaluated and cannot be submitted again.',
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  // 7. Record verified evidence if passed (only after atomic attempt transition succeeded)
   let evidenceCheckId = null;
   if (evalResult.passed && evalResult.evidenceResult?.eligibleForVerified) {
     const evidenceDoc = await recordAssessment(userId, {
@@ -323,30 +383,17 @@ export async function submitAssessmentAttempt(userId, payload) {
       completedAt: evalDate,
     });
     evidenceCheckId = evidenceDoc?.id ?? null;
+    if (evidenceCheckId) {
+      updatedAttempt.evidenceCheck = evidenceCheckId;
+      await AssessmentAttempt.updateOne(
+        { _id: updatedAttempt._id },
+        { $set: { evidenceCheck: evidenceCheckId } },
+      );
+    }
   }
 
-  // 7. Update attempt document with results
-  const startMs = new Date(attempt.startedAt).getTime();
-  const durationSeconds = Math.max(0, Math.round((evalDate.getTime() - startMs) / 1000));
-
-  attempt.status = evalResult.status;
-  attempt.score = evalResult.score;
-  attempt.passed = evalResult.passed;
-  attempt.outcome = evalResult.outcome;
-  attempt.earnedPoints = evalResult.earnedPoints;
-  attempt.maxPoints = evalResult.maxPoints;
-  attempt.totalQuestions = evalResult.totalQuestions;
-  attempt.correctQuestionsCount = evalResult.correctQuestionsCount;
-  attempt.answers = answers ?? {};
-  attempt.questionResults = evalResult.questionResults;
-  attempt.evidenceCheck = evidenceCheckId;
-  attempt.completedAt = evalDate;
-  attempt.durationSeconds = durationSeconds;
-
-  await attempt.save();
-
   return {
-    attempt: toPublicAssessmentAttempt(attempt),
+    attempt: toPublicAssessmentAttempt(updatedAttempt),
     evidenceResult: evalResult.evidenceResult,
     evidenceStatus: evalResult.evidenceStatus,
   };
@@ -359,7 +406,10 @@ export async function getAttemptById(userId, attemptId) {
   if (!userId) {
     throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
   }
-  const attempt = await AssessmentAttempt.findOne({ _id: attemptId, user: userId });
+  if (!attemptId || typeof attemptId !== 'string' || !/^[a-f0-9]{24}$/i.test(attemptId.trim())) {
+    throw ApiError.notFound('Assessment attempt not found.', ERROR_CODES.NOT_FOUND);
+  }
+  const attempt = await AssessmentAttempt.findOne({ _id: attemptId.trim(), user: userId });
   if (!attempt) {
     throw ApiError.notFound('Assessment attempt not found.', ERROR_CODES.NOT_FOUND);
   }
@@ -375,6 +425,9 @@ export async function listUserAttempts(userId, { assessmentId } = {}) {
   }
   const query = { user: userId };
   if (assessmentId) {
+    if (typeof assessmentId !== 'string' || !/^[a-z0-9_-]+$/i.test(assessmentId.trim())) {
+      throw ApiError.badRequest('assessmentId filter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
+    }
     query.assessmentId = assessmentId.trim();
   }
 
@@ -408,8 +461,8 @@ export async function getLatestAssessmentResult(userId, assessmentId) {
 // -----------------------------------------------------------------------------
 
 function validateAssessmentIdParam(id) {
-  if (typeof id !== 'string' || id.trim().length === 0) {
-    throw ApiError.badRequest('assessmentId parameter is required.', ERROR_CODES.VALIDATION_ERROR);
+  if (typeof id !== 'string' || id.trim().length === 0 || !/^[a-z0-9_-]+$/i.test(id.trim())) {
+    throw ApiError.badRequest('assessmentId parameter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
   }
 }
 
@@ -456,6 +509,19 @@ function validateSubmissionAnswers(answers) {
     if (typeof qId !== 'string' || qId.length > 64) {
       throw ApiError.badRequest(`Invalid questionId in answers payload.`, ERROR_CODES.VALIDATION_ERROR);
     }
+    if (
+      val !== null &&
+      val !== undefined &&
+      typeof val !== 'string' &&
+      typeof val !== 'boolean' &&
+      typeof val !== 'number' &&
+      !Array.isArray(val)
+    ) {
+      throw ApiError.badRequest(
+        `Answer for "${qId}" has invalid type. Non-primitive objects are not permitted.`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
     if (typeof val === 'string' && val.length > ASSESSMENT_LIMITS.answerText.max) {
       throw ApiError.badRequest(
         `Answer for "${qId}" exceeds maximum length of ${ASSESSMENT_LIMITS.answerText.max} characters.`,
@@ -470,6 +536,12 @@ function validateSubmissionAnswers(answers) {
         );
       }
       for (const item of val) {
+        if (typeof item !== 'string' && typeof item !== 'number') {
+          throw ApiError.badRequest(
+            `Option item in answer for "${qId}" has invalid type.`,
+            ERROR_CODES.VALIDATION_ERROR,
+          );
+        }
         if (typeof item === 'string' && item.length > 100) {
           throw ApiError.badRequest(
             `Option ID in answer for "${qId}" exceeds maximum length (100).`,

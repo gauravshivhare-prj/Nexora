@@ -5,6 +5,7 @@ import { ensureModelIndexes } from '../../src/models/index.js';
 import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
 import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
+import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
 
 /**
  * Integration-test harness.
@@ -65,6 +66,8 @@ export function resetRateLimiters() {
   analysisLimiter.reset();
   uploadLimiter.reset();
   generateLimiter.reset();
+  assessmentAttemptLimiter.reset();
+  assessmentSubmitLimiter.reset();
 }
 
 /**
