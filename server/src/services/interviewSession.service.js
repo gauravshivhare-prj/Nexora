@@ -290,6 +290,13 @@ export async function submitQuestionAnswer(
     }
   }
 
+  if (session.hasReachedAttemptLimit()) {
+    throw ApiError.conflict(
+      'This session has used all of its answer attempts.',
+      ERROR_CODES.CONFLICT,
+    );
+  }
+
   const { answerText, durationSeconds = 30 } = answerData;
   if (typeof answerText !== 'string' || answerText.trim().length < 5) {
     throw ApiError.badRequest(
@@ -313,43 +320,68 @@ export async function submitQuestionAnswer(
   });
 
   // Record answer and evaluation on question subdocument
-  const nextAttemptNumber = (question.answer?.attemptNumber || 0) + 1;
-  question.answer = {
-    answerText: answerText.trim(),
-    submittedAt: new Date(),
-    durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
-    attemptNumber: nextAttemptNumber,
-  };
+  const previousAttemptNumber = question.answer?.attemptNumber || 0;
+  const nextAttemptNumber = previousAttemptNumber + 1;
+  const previousAttemptCount = session.attemptCount || 0;
+  const questionPath = `questions.${questionIndex}`;
 
-  question.evaluation = {
-    dimensions: evaluation.dimensions,
-    compositeScore: evaluation.compositeScore,
-    feedback: evaluation.feedback,
-    strengths: evaluation.strengths,
-    growthAreas: evaluation.growthAreas,
-    groundedSkills: evaluation.groundedSkills,
-    evaluatedAt: new Date(),
-  };
+  // Written conditionally rather than with save(): the AI call above takes
+  // seconds, and two concurrent submissions for the same question would
+  // otherwise both pass the attempt checks and overwrite each other. The
+  // filter only matches if nothing has been recorded since this request read
+  // the session, so exactly one of them lands and the other gets a 409.
+  const updated = await InterviewSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: userId,
+      status: SESSION_STATUS.IN_PROGRESS,
+      attemptCount: previousAttemptCount,
+      [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber || { $exists: false },
+    },
+    {
+      $set: {
+        [`${questionPath}.answer`]: {
+          answerText: answerText.trim(),
+          submittedAt: new Date(),
+          durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
+          attemptNumber: nextAttemptNumber,
+        },
+        [`${questionPath}.evaluation`]: {
+          dimensions: evaluation.dimensions,
+          compositeScore: evaluation.compositeScore,
+          feedback: evaluation.feedback,
+          strengths: evaluation.strengths,
+          growthAreas: evaluation.growthAreas,
+          groundedSkills: evaluation.groundedSkills,
+          evaluatedAt: new Date(),
+        },
+        providerMetadata,
+        attemptCount: previousAttemptCount + 1,
+        currentQuestionIndex: Math.max(
+          session.currentQuestionIndex,
+          Math.min(session.questionCount, questionIndex + 1),
+        ),
+      },
+    },
+    { new: true, runValidators: true },
+  );
 
-  session.providerMetadata = providerMetadata;
-  session.attemptCount = (session.attemptCount || 0) + 1;
-
-  if (session.currentQuestionIndex <= questionIndex) {
-    session.currentQuestionIndex = Math.min(
-      session.questionCount,
-      questionIndex + 1,
+  if (!updated) {
+    throw ApiError.conflict(
+      'This answer was already recorded by another request. Reload the session and try again.',
+      ERROR_CODES.CONFLICT,
     );
   }
 
-  await session.save();
+  const recorded = updated.questions[questionIndex];
 
   return {
-    session: toPublicInterviewSession(session),
+    session: toPublicInterviewSession(updated),
     evaluatedQuestion: {
-      questionId: question.questionId,
-      order: question.order,
-      answer: question.answer,
-      evaluation: question.evaluation,
+      questionId: recorded.questionId,
+      order: recorded.order,
+      answer: recorded.answer,
+      evaluation: recorded.evaluation,
     },
     warnings,
   };
@@ -395,6 +427,20 @@ export async function completeSession(userId, sessionId, options = {}) {
   session.evaluatorType = evaluatorType;
   session.status = SESSION_STATUS.COMPLETED;
   session.completedAt = new Date();
+
+  // Claim the completion atomically before writing any evidence. Two
+  // concurrent completes would otherwise both pass the status check above and
+  // each insert a full set of evidence records.
+  const claim = await InterviewSession.updateOne(
+    { _id: session._id, user: userId, status: SESSION_STATUS.IN_PROGRESS },
+    { $set: { status: SESSION_STATUS.COMPLETED, completedAt: session.completedAt } },
+  );
+  if (claim.modifiedCount === 0) {
+    throw ApiError.badRequest(
+      'Cannot complete session: it is no longer in progress.',
+      ERROR_CODES.INTERVIEW_INVALID_STATE,
+    );
+  }
 
   // Persist SkillEvidenceCheck records for each target skill evaluated in the session
   const savedChecks = [];
