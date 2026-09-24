@@ -23,8 +23,9 @@ import { SkillGapPage } from '../pages/SkillGapPage.jsx';
  * previous arrangement repeated ProtectedRoute per route, which is one
  * omission away from a leak.
  *
- * No routes exist for features that do not: the UI spec names assessments,
- * AI interviews and opportunities, and none of them have endpoints yet.
+ * Only routes for currently delivered UI views exist. While assessment backend
+ * endpoints are delivered and ready for client service integration, their UI views
+ * (along with AI interviews and opportunities) are scheduled for subsequent UI phases.
  *
  * The catch-all is routing infrastructure rather than a feature: without it
  * an unknown URL renders nothing, which would look like a broken build.

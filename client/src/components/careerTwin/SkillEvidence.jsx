@@ -16,9 +16,9 @@ import { EVIDENCE_SOURCE_LABELS, EVIDENCE_STRENGTH } from '../../services/career
  * How each strength is shown.
  *
  * The wording is deliberately flat about what has and has not been checked.
- * "Verified" is the only one that means an independent check passed, and
- * nothing in Nexora produces it yet — so a student seeing "Supported" must
- * not read it as "confirmed".
+ * "Verified" is the only one that means an independent check passed (produced
+ * by passing intermediate or advanced skill assessments) — so a student
+ * seeing "Supported" must not read it as "confirmed".
  */
 const STRENGTH_PRESENTATION = {
   [EVIDENCE_STRENGTH.CLAIMED]: {
