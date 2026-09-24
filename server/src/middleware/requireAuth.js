@@ -10,8 +10,9 @@ import { getAuthenticatedUser } from '../services/auth.service.js';
  * not load the user: a handler that needs the account reads it itself, so a
  * route that only needs an id costs no database round trip.
  *
- * On success `req.auth = { userId }` — an identifier only. Nothing sensitive
- * is attached, and the raw token is not kept on the request.
+ * On success `req.auth = { userId, role }`. Nothing sensitive is attached,
+ * and the raw token is not kept on the request. The role is read from the
+ * account loaded below, not from the token, so a demotion applies at once.
  */
 export async function requireAuth(req, _res, next) {
   const token = extractBearerToken(req.headers.authorization);
@@ -28,10 +29,25 @@ export async function requireAuth(req, _res, next) {
 
   try {
     const { userId } = verifyAccessToken(token);
-    await getAuthenticatedUser(userId);
-    req.auth = { userId };
+    const user = await getAuthenticatedUser(userId);
+    req.auth = { userId, role: user.role };
     next();
   } catch (error) {
     next(error);
   }
+}
+
+/**
+ * Restricts a route to the given roles. Must run after `requireAuth`.
+ *
+ * @param {...string} roles
+ */
+export function requireRole(...roles) {
+  return (req, _res, next) => {
+    if (!req.auth || !roles.includes(req.auth.role)) {
+      next(ApiError.forbidden('You do not have permission to perform this action.'));
+      return;
+    }
+    next();
+  };
 }

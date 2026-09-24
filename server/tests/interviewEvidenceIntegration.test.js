@@ -275,7 +275,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('sanitizes forged verification fields sent to direct evidence endpoint POST /api/skill-evidence/interviews', async () => {
-      const student = await createAccount('direct_forger');
+      const student = await createAccount('direct_forger', 'admin');
 
       // Malicious payload claiming pass, verified, and score 1.0 under AI evaluator
       const forgedRes = await sendJsonWithToken(
@@ -309,7 +309,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects unsupported evaluator types on direct evidence submission', async () => {
-      const student = await createAccount('unsupported_evaluator_user');
+      const student = await createAccount('unsupported_evaluator_user', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
@@ -331,7 +331,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects uncanonical skill claims on direct interview evidence submission', async () => {
-      const student = await createAccount('uncanonical_skill_user');
+      const student = await createAccount('uncanonical_skill_user', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
@@ -539,7 +539,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
     });
 
     it('rejects direct POST /api/skill-evidence/interviews with failing score and forged eligibleForVerified: true', async () => {
-      const student = await createAccount('failing_direct_student');
+      const student = await createAccount('failing_direct_student', 'admin');
 
       const res = await sendJsonWithToken(
         server.baseUrl,
