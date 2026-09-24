@@ -23,9 +23,9 @@ import { SkillGapPage } from '../pages/SkillGapPage.jsx';
  * previous arrangement repeated ProtectedRoute per route, which is one
  * omission away from a leak.
  *
- * No routes exist for student-facing assessment, interview, or opportunity
- * screens yet. Their backend contracts are available without pretending the
- * UI workflow exists.
+ * Only routes for currently delivered UI views exist. While assessment backend
+ * endpoints are delivered and ready for client service integration, their UI views
+ * (along with AI interviews and opportunities) are scheduled for subsequent UI phases.
  *
  * The catch-all is routing infrastructure rather than a feature: without it
  * an unknown URL renders nothing, which would look like a broken build.

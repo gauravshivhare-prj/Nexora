@@ -38,7 +38,7 @@ export const AI_REQUEST_TIMEOUT_MS = 90_000;
  * surfaces in the UI's error state instead of a blank page.
  */
 export function getApiBaseUrl() {
-  const configured = import.meta.env.VITE_API_URL?.trim();
+  const configured = (import.meta.env?.VITE_API_URL ?? process.env?.VITE_API_URL)?.trim();
   if (!configured) return null;
 
   // Tolerate a trailing slash in config so paths can always start with "/".

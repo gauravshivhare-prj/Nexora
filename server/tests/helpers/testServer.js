@@ -5,6 +5,7 @@ import { ensureModelIndexes } from '../../src/models/index.js';
 import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
 import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
+import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
 
 /**
  * Integration-test harness.
@@ -65,6 +66,8 @@ export function resetRateLimiters() {
   analysisLimiter.reset();
   uploadLimiter.reset();
   generateLimiter.reset();
+  assessmentAttemptLimiter.reset();
+  assessmentSubmitLimiter.reset();
 }
 
 /**
@@ -115,6 +118,24 @@ export async function clearResumes() {
 /** Removes persisted assessment/interview results. */
 export async function clearSkillEvidenceChecks() {
   return mongoose.connection.collection('skillevidencechecks').deleteMany({});
+}
+
+/** Removes persisted assessments. */
+export async function clearAssessments() {
+  try {
+    await mongoose.connection.collection('assessments').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
+/** Removes persisted assessment attempts. */
+export async function clearAssessmentAttempts() {
+  try {
+    await mongoose.connection.collection('assessmentattempts').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
 }
 
 /**

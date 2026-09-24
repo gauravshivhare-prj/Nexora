@@ -75,6 +75,14 @@ async function loadInputs(userId) {
       if (!completedAt) return latest;
       return !latest || completedAt > latest ? completedAt : latest;
     }, null),
+    /**
+     * When any verified skill evidence check was most recently completed.
+     */
+    latestEvidenceAt: verifiedEvidence.reduce((latest, item) => {
+      const completedAt = item.completedAt;
+      if (!completedAt) return latest;
+      return !latest || completedAt > latest ? completedAt : latest;
+    }, null),
   };
 }
 
@@ -91,11 +99,14 @@ export async function getCareerTwin(userId) {
   const stored = await CareerTwin.findOne({ user: userId });
   if (!stored) return { twin: null, exists: false };
 
-  const { profileUpdatedAt, resumes, latestAnalysisAt } = await loadInputs(userId);
+  const { profileUpdatedAt, resumes, latestAnalysisAt, latestEvidenceAt, verifiedEvidence } =
+    await loadInputs(userId);
   const staleness = isCareerTwinStale(stored, {
     profileUpdatedAt,
     analysedResumeIds: resumes.map((resume) => resume.id),
     latestAnalysisAt,
+    latestEvidenceAt,
+    verifiedEvidenceCount: verifiedEvidence.length,
   });
 
   return { twin: toPublicCareerTwin(stored, staleness), exists: true };

@@ -118,4 +118,22 @@ export const RATE_LIMIT_POLICY = {
     windowMs: 15 * 60 * 1000,   // 15 minutes
     maxAttempts: 60,
   },
+
+  /**
+   * Assessment attempt start.
+   * Prevents automated scripts from rapidly creating attempts.
+   */
+  assessmentAttempt: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 30,
+  },
+
+  /**
+   * Assessment attempt submission.
+   * Prevents spamming evaluation runs against the grading engine.
+   */
+  assessmentSubmit: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 30,
+  },
 };

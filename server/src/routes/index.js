@@ -9,6 +9,7 @@ import opportunityRoutes from './opportunity.routes.js';
 import resumeRoutes from './resume.routes.js';
 import summaryRoutes from './summary.routes.js';
 import skillEvidenceRoutes from './skillEvidence.routes.js';
+import assessmentRoutes from './assessment.routes.js';
 
 /** Root API router. Future feature routers mount here, one per phase. */
 const router = Router();
@@ -22,5 +23,6 @@ router.use('/career-twin', careerTwinRoutes);
 router.use('/careers', careerRoutes);
 router.use('/summary', summaryRoutes);
 router.use('/skill-evidence', skillEvidenceRoutes);
+router.use('/assessments', assessmentRoutes);
 
 export default router;

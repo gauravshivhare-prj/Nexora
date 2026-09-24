@@ -61,6 +61,8 @@ function toTwin(twin) {
       profileUpdatedAt: null,
       resumeCount: 0,
       analysedResumeCount: 0,
+      verifiedEvidenceCount: 0,
+      latestEvidenceAt: null,
       ...(twin.sources ?? {}),
     },
     generatedAt: twin.generatedAt ?? null,
