@@ -351,6 +351,23 @@ AWS Certified Cloud Practitioner`;
     assert.match(warnings[0], /Terraform/);
   });
 
+  it('does not confirm a skill that only appears inside a longer word', () => {
+    const { value: parsed } = validateParsedResume({
+      skills: [{ name: 'Java' }, { name: 'SQL' }, { name: 'React' }, { name: 'Node.js' }, { name: 'JavaScript' }],
+    });
+    const { value, warnings } = groundParsedResume(
+      parsed,
+      'Built dashboards in JavaScript on PostgreSQL. Stack: React/Redux, NodeJS.',
+    );
+
+    assert.deepEqual(
+      value.skills.map((skill) => skill.name),
+      ['React', 'Node.js', 'JavaScript'],
+    );
+    assert.ok(warnings.some((warning) => warning.includes('"Java"')));
+    assert.ok(warnings.some((warning) => warning.includes('"SQL"')));
+  });
+
   it('drops everything when the resume text is empty', () => {
     const { value } = validateParsedResume({ skills: [{ name: 'Node.js' }] });
     const grounded = groundParsedResume(value, '');

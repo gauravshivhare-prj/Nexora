@@ -55,7 +55,11 @@ export function groundParsedResume(parsed, sourceText) {
     values.filter((value, index) => keep(value, `${path}[${index}]`) !== null);
 
   const keepCanonicalSkill = (value, path) => {
-    if (keep(value, path) === null) return null;
+    if (value === null || value === undefined) return null;
+    if (!isSkillGrounded(value, context)) {
+      warnings.push(`Dropped ${path} "${value}": it does not appear in the resume.`);
+      return null;
+    }
 
     const canonical = canonicalSkill(value);
     if (canonical) return canonical.name;
@@ -139,7 +143,49 @@ function buildContext(sourceText) {
     ),
 
     digits: lowered.replace(/\D/g, ''),
+
+    /**
+     * Every run of one to four consecutive words, compacted. Skill names are
+     * matched against these rather than the whole text, so "Java" is not
+     * confirmed by "JavaScript" nor "SQL" by "PostgreSQL". Slashes and commas
+     * separate words, so "React/Redux" still confirms "React".
+     */
+    phrases: buildPhrases(lowered),
   };
+}
+
+const MAX_SKILL_WORDS = 4;
+
+function buildPhrases(lowered) {
+  const words = lowered
+    .split(/[\s/,;|()[\]{}]+/)
+    .map((word) => compact(word))
+    .filter(Boolean);
+
+  const phrases = new Set();
+  for (let start = 0; start < words.length; start += 1) {
+    let phrase = '';
+    for (let length = 0; length < MAX_SKILL_WORDS && start + length < words.length; length += 1) {
+      phrase += words[start + length];
+      phrases.add(phrase);
+    }
+  }
+  return phrases;
+}
+
+/**
+ * Whether a skill name appears in the resume as whole words.
+ *
+ * Stricter than `isGrounded`: a substring test would accept a model's "Java"
+ * on the strength of "JavaScript", and grounded skills become claimed
+ * CareerTwin evidence.
+ */
+function isSkillGrounded(value, context) {
+  const text = String(value).trim().toLowerCase();
+  const compacted = compact(text);
+  if (compacted === '') return false;
+  if (compacted.length < 3) return context.tokens.has(text);
+  return context.phrases.has(compacted);
 }
 
 /**
