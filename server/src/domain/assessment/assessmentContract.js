@@ -850,13 +850,11 @@ export function evaluateAssessmentSubmission({
     assessmentId: validatedAssessment.id,
     completedAt: evalDate,
     passMark: validatedAssessment.passMark,
+    difficulty: validatedAssessment.difficulty,
+    isPractice: Boolean(validatedAssessment.isPractice || submission.isPractice),
+    evaluatedBy: submission.evaluatedBy ?? 'assessment-engine',
+    eligibleForVerified,
   });
-
-  // If evidence policy determined that stronger proof is required, override eligibleForVerified
-  if (!eligibleForVerified) {
-    evidenceResult.eligibleForVerified = false;
-    evidenceResult.evidence = null;
-  }
 
   return {
     attemptId: submission.attemptId ?? null,

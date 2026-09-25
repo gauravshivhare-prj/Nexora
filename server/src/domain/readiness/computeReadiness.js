@@ -3,8 +3,13 @@ import {
   READINESS_DATA_STATUS,
   READINESS_EVIDENCE_STATUS,
 } from './readinessContract.js';
+import { GAP_IMPORTANCE, GAP_STATUS } from '../skillGap/computeSkillGap.js';
 
-const NON_VERIFIED_STATUSES = new Set(['missing', 'claimed', 'supported']);
+const NON_VERIFIED_STATUSES = new Set([
+  GAP_STATUS.MISSING,
+  GAP_STATUS.CLAIMED,
+  GAP_STATUS.SUPPORTED,
+]);
 
 /**
  * Projects an existing skill gap into an explainable readiness result.
@@ -25,9 +30,9 @@ export function computeReadiness(gap, { dataStatus = READINESS_DATA_STATUS.FRESH
     };
   }
 
-  const required = countsFor(gap.summary?.required, 'required', gap.skills);
-  const preferred = countsFor(gap.summary?.preferred, 'preferred', gap.skills);
-  const requiredSkills = gap.skills.filter((skill) => skill.importance === 'required');
+  const required = countsFor(gap.summary?.required, GAP_IMPORTANCE.REQUIRED, gap.skills);
+  const preferred = countsFor(gap.summary?.preferred, GAP_IMPORTANCE.PREFERRED, gap.skills);
+  const requiredSkills = gap.skills.filter((skill) => skill.importance === GAP_IMPORTANCE.REQUIRED);
 
   return {
     roleId: gap.roleId,
@@ -51,10 +56,14 @@ export function computeReadiness(gap, { dataStatus = READINESS_DATA_STATUS.FRESH
 
 function statusFor(requiredSkills) {
   if (requiredSkills.length === 0) return READINESS_EVIDENCE_STATUS.INSUFFICIENT_DATA;
-  if (requiredSkills.some((skill) => skill.status === 'missing' || skill.status === 'claimed')) {
+  if (
+    requiredSkills.some(
+      (skill) => skill.status === GAP_STATUS.MISSING || skill.status === GAP_STATUS.CLAIMED,
+    )
+  ) {
     return READINESS_EVIDENCE_STATUS.PARTIAL;
   }
-  if (requiredSkills.every((skill) => skill.status === 'verified')) {
+  if (requiredSkills.every((skill) => skill.status === GAP_STATUS.VERIFIED)) {
     return READINESS_EVIDENCE_STATUS.VERIFIED;
   }
   return READINESS_EVIDENCE_STATUS.SUPPORTED;
@@ -64,10 +73,10 @@ function countsFor(summary, importance, skills) {
   const relevant = skills.filter((skill) => skill.importance === importance);
   return {
     total: summary?.total ?? relevant.length,
-    missing: summary?.missing ?? countStatus(relevant, 'missing'),
-    claimed: summary?.claimed ?? countStatus(relevant, 'claimed'),
-    supported: summary?.supported ?? countStatus(relevant, 'supported'),
-    verified: summary?.verified ?? countStatus(relevant, 'verified'),
+    missing: summary?.missing ?? countStatus(relevant, GAP_STATUS.MISSING),
+    claimed: summary?.claimed ?? countStatus(relevant, GAP_STATUS.CLAIMED),
+    supported: summary?.supported ?? countStatus(relevant, GAP_STATUS.SUPPORTED),
+    verified: summary?.verified ?? countStatus(relevant, GAP_STATUS.VERIFIED),
   };
 }
 

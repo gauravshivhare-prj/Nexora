@@ -1112,10 +1112,10 @@ Nexora's intelligence architecture is built as a deterministic, multi-layered pi
 
 #### 2. Institutional Evidence Engine & Verification Policy
 - **Location**: `server/src/domain/evidence/evidence.js`, `server/src/models/SkillEvidenceCheck.model.js`
-- **Strength Hierarchy**:
-  - `claimed` (strength: 0.25): Self-declared profile claims or ungrounded resume text.
-  - `supported` (strength: 0.65): Demonstrable projects with technology tags/URLs or accredited certifications.
-  - `verified` (strength: 1.00): Formal verification via passing deterministic assessment ($\ge 70\%$ pass mark on intermediate/advanced tier) or human-evaluated interview ($\ge 75\%$).
+- **Strength Hierarchy & Recommendation Credit**:
+  - `claimed` (credit: 0.40): Self-declared profile claims or ungrounded resume text.
+  - `supported` (credit: 0.80): Demonstrable projects with technology tags/URLs or accredited certifications.
+  - `verified` (credit: 1.00): Formal verification via passing deterministic assessment ($\ge 70\%$ pass mark on intermediate/advanced tier) or human-evaluated interview ($\ge 75\%$).
 - **Anti-Hallucination & AI Policy Barrier**:
   - Raw AI model feedback is strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`).
   - No prompt, model response, or candidate submission can directly upgrade a skill to `verified`.
@@ -1124,11 +1124,11 @@ Nexora's intelligence architecture is built as a deterministic, multi-layered pi
 #### 3. Deterministic Career Recommendation Engine (`ROLE_CATALOGUE_VERSION = 1`)
 - **Location**: `server/src/domain/careers/roleCatalogue.js`, `matchRole.js`, `scoring.js`
 - **Scoring Dimensions**:
-  - `requiredSkills` (40%): Weighted by evidence strength (`verified` = 1.0, `supported` = 0.65, `claimed` = 0.25).
-  - `preferredSkills` (20%): Weighted by evidence strength.
-  - `interestAlignment` (15%): Matching candidate career interests against role category.
-  - `backgroundAlignment` (15%): Academic branch/degree matching.
-  - `evidenceStrength` / Projects (10%): Project count and depth.
+  - `requiredSkills` (45%): Ratio of role's required skills matched by candidate.
+  - `preferredSkills` (20%): Ratio of role's preferred skills matched by candidate.
+  - `evidenceStrength` (20%): Mean evidence credit across matched skills (`claimed` = 0.4, `supported` = 0.8, `verified` = 1.0).
+  - `interestAlignment` (10%): Matching candidate career interests against role category.
+  - `backgroundAlignment` (5%): Academic branch/degree matching.
 - **Contract Guarantees**:
   - 100% deterministic (identical inputs yield identical scores and bands).
   - Explicit non-goals: Zero synthetic market predictions (no salary numbers, hiring demand metrics, or speculative growth rates).
