@@ -119,7 +119,7 @@ const assessmentSchema = new mongoose.Schema(
     skillName: {
       type: String,
       default() {
-        return canonicalSkill(this.skillKey)?.name ?? this.skillKey;
+        return canonicalSkill(this?.skillKey)?.name ?? (this?.skillKey || '');
       },
       trim: true,
     },
