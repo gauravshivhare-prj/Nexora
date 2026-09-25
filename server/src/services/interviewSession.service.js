@@ -70,9 +70,9 @@ function sessionNotFound() {
  * @returns {Promise<object>} Public interview session DTO
  */
 export async function createSession(userId, input = {}) {
+  const targetRole = input.targetRole || input.targetRoleId;
+  const targetSkills = input.targetSkills || input.skills;
   const {
-    targetRole,
-    targetSkills,
     difficulty = INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount = 5,
   } = input;

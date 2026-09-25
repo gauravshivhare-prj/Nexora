@@ -203,6 +203,7 @@ export function toPublicAssessmentAttempt(doc) {
 
   return {
     id: String(raw._id ?? raw.id),
+    attemptId: String(raw._id ?? raw.id),
     assessmentId: raw.assessmentId,
     attemptNumber: raw.attemptNumber,
     version: raw.version,
