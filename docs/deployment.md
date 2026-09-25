@@ -27,10 +27,14 @@ Example:
 NODE_ENV=
 PORT=
 MONGODB_URI=
-MYSQL_URL=
 JWT_SECRET=
-AI_API_KEY=
+JWT_EXPIRES_IN=
 CLIENT_URL=
+TRUST_PROXY=
+AI_PROVIDER=
+GEMINI_API_KEY=
+GEMINI_MODEL=
+GEMINI_TIMEOUT_MS=
 ```
 
 Maintain `.env.example` with variable names only.
@@ -137,7 +141,13 @@ The rate limiter stores hit counts in Node.js process memory. In a multi-instanc
 `POST /api/resumes/upload` extracts text in-memory from PDF/DOCX uploads and stores the extracted text in MongoDB. Original file binaries are discarded after extraction. The `file.storageKey` field on the Resume model serves as a placeholder for future persistent object storage (e.g., S3/GCS) if re-downloading becomes a product requirement.
 
 ### AI Provider Configuration
-Resume analysis (`POST /api/resumes/:id/analysis`) requires `AI_PROVIDER=gemini` (or another registered adapter) and its corresponding API key (e.g., `GEMINI_API_KEY`). If no provider is configured, the endpoint returns `503 AI_PROVIDER_NOT_CONFIGURED` without inventing student career data.
+Resume analysis (`POST /api/resumes/:id/analysis`) and interview answer evaluation (`POST /api/interviews/sessions/:id/questions/:questionId/answers`) require `AI_PROVIDER=gemini` (or another registered adapter) and `GEMINI_API_KEY`. If unconfigured, these endpoints return `503 AI_PROVIDER_NOT_CONFIGURED` without inventing student career data. In contrast, CareerTwin narrative generation (`POST /api/career-twin?narrative=true`) falls back gracefully without a narrative if AI is unconfigured or unavailable.
+
+### AI Advisory Role & Institutional Evidence Policy
+AI mock interview evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`). Raw AI feedback cannot directly grant verified skill evidence regardless of candidate scores. Verified evidence is granted exclusively through deterministic assessments (e.g., passing multiple-choice and coding tests) or authenticated human examiner reviews.
+
+### Deterministic Opportunity Matching
+`GET /api/opportunities` matches student profiles deterministically against a curated internal catalogue (`curated_internal`). It does not scrape live job boards, submit applications, or use LLMs to invent live external job listings.
 
 ## Nexora Design & Experience Standard
 

@@ -18,7 +18,7 @@ This document defines the controlled development sequence for Nexora.
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
 | 8 — Assessment & AI Interview | Complete (Backend assessment engine & AI interview session lifecycle, prompt boundary hardening, schema validation, red-team suite, and institutional evidence integration; UI scheduled for future phase) |
-| 9 — Opportunity Matching | Not started |
+| 9 — Opportunity Matching | Complete (Backend deterministic curated catalogue matching & evidence checking delivered; see docs/opportunities.md) |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
 A phase is marked complete only when its exit criteria are met and its tests
@@ -330,16 +330,17 @@ the thing this architecture exists to prevent. Items expose
 - All assessment and interview test suites pass cleanly.
 
 ## Phase 9 — Opportunity Matching
-- Opportunity dataset
-- Eligibility checks
-- Skill matching
-- Match explanation
-- Opportunity details
+- Curated internal opportunity dataset (`server/src/domain/opportunities/opportunityCatalogue.js`) with source attribution and catalogue versioning.
+- Owner-scoped endpoint `GET /api/opportunities`.
+- Deterministic eligibility checks against student's verified skills and target role.
+- Transparent match explanations showing which verified evidence satisfied eligibility rules.
+- Strict non-goals enforced: no scraping of external job boards, no fake live listing claims, and no LLM hallucinated roles.
 
 **Exit criteria**
-- Opportunity data contains source/date fields.
-- No unsupported claim of live data.
-- Matching logic is explainable.
+- Opportunity records contain immutable IDs, source type (`curated_internal`), version, and date metadata.
+- No unsupported claim of live job feeds, employer availability, or external salary data.
+- Matching logic is fully explainable, deterministic, and deduplicated by opportunity ID.
+- Test suite verifies matching against verified vs claimed skills.
 
 ## Phase 10 — Dashboard Integration
 Connect:
