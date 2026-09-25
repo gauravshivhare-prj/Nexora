@@ -41,7 +41,10 @@
 export const SKILL_TAXONOMY_VERSION = 2;
 
 const ALIASES = new Map([
-  // --- Languages ---
+  // --- Languages & Core Web ---
+  ['html5', 'HTML'],
+  ['css3', 'CSS'],
+  ['structuredquerylanguage', 'SQL'],
   ['js', 'JavaScript'],
   ['ecmascript', 'JavaScript'],
   ['ts', 'TypeScript'],
@@ -60,33 +63,42 @@ const ALIASES = new Map([
   ['expressjs', 'Express.js'],
   ['reactjs', 'React'],
   ['nextjs', 'Next.js'],
+  ['vue', 'Vue.js'],
   ['vuejs', 'Vue.js'],
   ['springboot', 'Spring Boot'],
   ['tailwind', 'Tailwind CSS'],
   ['scikitlearn', 'scikit-learn'],
+  ['sklearn', 'scikit-learn'],
   ['powerbi', 'Power BI'],
   ['dataanalytics', 'Data Analytics'],
+  ['datavisualization', 'Data Visualisation'],
 
   // --- Data ---
   ['postgres', 'PostgreSQL'],
   ['psql', 'PostgreSQL'],
+  ['postgresdb', 'PostgreSQL'],
   ['mongo', 'MongoDB'],
   ['mysqldb', 'MySQL'],
 
-  // --- Platform ---
+  // --- Platform & Cloud ---
   ['amazonwebservices', 'AWS'],
+  ['amazonaws', 'AWS'],
+  ['microsoftazure', 'Azure'],
   ['gcp', 'Google Cloud'],
   ['googlecloudplatform', 'Google Cloud'],
   ['k8s', 'Kubernetes'],
   ['cicd', 'CI/CD'],
   ['restapi', 'REST APIs'],
   ['rest', 'REST APIs'],
+  ['restful', 'REST APIs'],
+  ['restfulapi', 'REST APIs'],
   ['restfulapis', 'REST APIs'],
   ['githubactions', 'GitHub Actions'],
 
   // --- Practice ---
   ['dsa', 'Data Structures and Algorithms'],
   ['datastructures', 'Data Structures and Algorithms'],
+  ['datastructuresalgorithms', 'Data Structures and Algorithms'],
   ['ml', 'Machine Learning'],
   ['ai', 'Artificial Intelligence'],
   ['oop', 'Object-Oriented Programming'],
@@ -187,6 +199,7 @@ const TAXONOMY_NAMES = [
   'Adobe XD',
   'Sketch',
   'Framer',
+  'Object-Oriented Programming',
 ];
 
 /** Normalised alias keys, so a canonical name is recognised as its own alias. */
