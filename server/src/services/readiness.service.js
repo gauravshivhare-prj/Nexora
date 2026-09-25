@@ -26,13 +26,24 @@ export async function getReadiness(userId, roleId) {
     });
   }
 
-  const gapResult = await getSkillGap(userId, roleId);
+  let gapResult;
+  try {
+    gapResult = await getSkillGap(userId, roleId);
+  } catch (error) {
+    if (error?.statusCode === 409) {
+      return computeReadiness(null, {
+        dataStatus: 'incomplete',
+        basedOn: { catalogueVersion: CATALOGUE_VERSION },
+      });
+    }
+    throw error;
+  }
 
   return computeReadiness(gapResult.gap, {
-    dataStatus: twinResult.twin.isStale ? 'stale' : 'fresh',
+    dataStatus: twinResult.twin?.isStale ? 'stale' : 'fresh',
     basedOn: {
-      careerTwinGeneratedAt: gapResult.basedOn.careerTwinGeneratedAt,
-      catalogueVersion: gapResult.method.catalogueVersion,
+      careerTwinGeneratedAt: gapResult.basedOn?.careerTwinGeneratedAt ?? null,
+      catalogueVersion: gapResult.method?.catalogueVersion ?? CATALOGUE_VERSION,
     },
   });
 }
