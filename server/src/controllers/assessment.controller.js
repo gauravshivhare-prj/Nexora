@@ -1,5 +1,4 @@
 import {
-  assertNoForbiddenClientFields,
   getAssessment,
   getAttemptById,
   getLatestAssessmentResult,
@@ -61,8 +60,6 @@ export const startAttemptHandler = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('assessmentId parameter is required.', ERROR_CODES.VALIDATION_ERROR);
   }
 
-  assertNoForbiddenClientFields(req.body);
-
   const attempt = await startAssessmentAttempt(req.auth.userId, {
     ...(req.body && typeof req.body === 'object' ? req.body : {}),
     assessmentId: assessmentId.trim(),
@@ -91,8 +88,6 @@ export const submitAttemptHandler = asyncHandler(async (req, res) => {
       ERROR_CODES.VALIDATION_ERROR,
     );
   }
-
-  assertNoForbiddenClientFields(req.body);
 
   const result = await submitAssessmentAttempt(req.auth.userId, {
     ...(req.body && typeof req.body === 'object' ? req.body : {}),

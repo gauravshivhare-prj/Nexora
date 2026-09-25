@@ -1,34 +1,13 @@
 import { recordAssessment, recordInterview, listEvidenceChecks } from '../services/skillEvidence.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { ApiError } from '../utils/ApiError.js';
-import { ERROR_CODES } from '../constants/errorCodes.js';
-import { SkillEvidenceInputError } from '../domain/evidence/skillEvidenceCheck.js';
-
-function badInput(error) {
-  return ApiError.badRequest(error.message, ERROR_CODES.VALIDATION_ERROR);
-}
 
 export const createAssessment = asyncHandler(async (req, res) => {
-  let result;
-  try {
-    result = await recordAssessment(req.auth.userId, req.body);
-  } catch (error) {
-    if (error instanceof SkillEvidenceInputError) throw badInput(error);
-    throw error;
-  }
-
+  const result = await recordAssessment(req.auth.userId, req.body);
   res.status(201).json({ success: true, message: 'Assessment recorded', data: { assessment: result } });
 });
 
 export const createInterview = asyncHandler(async (req, res) => {
-  let result;
-  try {
-    result = await recordInterview(req.auth.userId, req.body);
-  } catch (error) {
-    if (error instanceof SkillEvidenceInputError) throw badInput(error);
-    throw error;
-  }
-
+  const result = await recordInterview(req.auth.userId, req.body);
   res.status(201).json({ success: true, message: 'Interview result recorded', data: { interview: result } });
 });
 

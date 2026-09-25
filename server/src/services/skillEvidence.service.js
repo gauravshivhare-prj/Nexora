@@ -1,5 +1,6 @@
 import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from '../models/SkillEvidenceCheck.model.js';
 import {
+  SkillEvidenceInputError,
   buildAssessmentResult,
   buildInterviewResult,
 } from '../domain/evidence/skillEvidenceCheck.js';
@@ -7,11 +8,25 @@ import { ApiError } from '../utils/ApiError.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 
 export async function recordAssessment(userId, input) {
-  return saveCheck(userId, buildAssessmentResult(input));
+  try {
+    return await saveCheck(userId, buildAssessmentResult(input));
+  } catch (error) {
+    if (error instanceof SkillEvidenceInputError) {
+      throw ApiError.badRequest(error.message, ERROR_CODES.VALIDATION_ERROR);
+    }
+    throw error;
+  }
 }
 
 export async function recordInterview(userId, input) {
-  return saveCheck(userId, buildInterviewResult(input));
+  try {
+    return await saveCheck(userId, buildInterviewResult(input));
+  } catch (error) {
+    if (error instanceof SkillEvidenceInputError) {
+      throw ApiError.badRequest(error.message, ERROR_CODES.VALIDATION_ERROR);
+    }
+    throw error;
+  }
 }
 
 export async function listEvidenceChecks(userId) {
