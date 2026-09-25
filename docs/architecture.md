@@ -203,6 +203,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/roles/:roleId/match` | Bearer | Score against one named role |
 | `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
 | `GET` | `/api/careers/roles/:roleId/roadmap` | Bearer | Prioritised plan built from the gap |
+| `GET` | `/api/careers/roles/:roleId/readiness` | Bearer | Deterministic role-scoped evidence projection (`insufficient_data` / `partial` / `supported` / `verified`), fresh/stale status, and non-verified blockers |
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
 | `POST` | `/api/skill-evidence/assessments` | Bearer (admin) | Records an assessment result directly. Students earn evidence through `/api/assessments` instead |
 | `POST` | `/api/skill-evidence/interviews` | Bearer (admin) | Records a human- or AI-evaluated interview result directly. Students earn evidence through `/api/interviews` instead |
@@ -565,7 +566,7 @@ of technology is not something this could do honestly.
   banks, deterministic scoring, prompt boundary hardening, evaluation schemas,
   evidence integrations, and red-team regression suites are delivered. Frontend UI
   interfaces are planned for upcoming phases.
-- Any readiness score, pending a target role to measure against.
+- **No synthetic readiness score.** Role-scoped career readiness is implemented as an evidence projection (`GET /api/careers/roles/:roleId/readiness`) rather than an invented single percentage or AI judgement. It reports concrete evidence counts, blocking skills, and freshness state. Arbitrary aggregate scores remain a deliberate non-goal.
 
 ## 8. Assessment Feature Architecture & API Specification
 
@@ -1063,7 +1064,115 @@ CareerTwin & Skill-Gap Consumption (Skill elevated to 'verified')
    - **Synchronous JSON Responses**: AI evaluation returns complete JSON objects synchronously. Real-time token streaming via SSE / WebSockets is not implemented in MVP.
    - **Linear Question Progression**: Sessions present questions sequentially in order; jumping between questions or pausing/resuming over days is not supported in MVP.
 
-## 10. Nexora Design & Experience Standard
+## 10. Intelligence Architecture & Cross-Domain Dependency Mapping
+
+Nexora's intelligence architecture is built as a deterministic, multi-layered pipeline where each layer consumes well-defined contracts from previous layers without inventing data, bypassing verification boundaries, or leaking ungrounded claims.
+
+### 10.1 Intelligence Layer Stack & Dependency Graph
+
+```text
+[1. Canonical Skill Taxonomy] (SKILL_TAXONOMY_VERSION = 2)
+              │
+              ├──────────────────────────────────┐
+              ▼                                  ▼
+[2. Institutional Evidence Engine]      [Role Catalogue] (v1)
+    (claimed → supported → verified)             │
+              │                                  │
+              ▼                                  │
+      [3. CareerTwin]                            │
+(Aggregated Skills & Evidence)                   │
+              │                                  │
+              ├──────────────────┬───────────────┤
+              ▼                  ▼               │
+[4. Career Recommendation]  [Skill Gap] ◄────────┘
+     (5D Deterministic)     (Missing/Claimed/Supported/Verified)
+              │                  │
+              │                  ├──────────────────────┐
+              │                  ▼                      ▼
+              │        [Personalized Roadmap]  [5. Career Readiness]
+              │          (Prioritized Plan)      (READINESS_CONTRACT v1)
+              │                                         │
+              └──────────────────┬──────────────────────┘
+                                 ▼
+                     [Student Dashboard UI]
+```
+
+### 10.2 Five Core Intelligence Pillars
+
+#### 1. Canonical Skill Taxonomy (`SKILL_TAXONOMY_VERSION = 2`)
+- **Location**: `server/src/domain/skills/skillKey.js`
+- **Responsibility**: Provides the authoritative identity, normalization, and display vocabulary for technical skills.
+- **Normalization Invariant**: All skills across Profile, Resumes, Career Roles, Assessments, and AI Interviews normalize through `skillKey(name)`. `canonicalSkill(name)` guarantees strict identity preservation (`c++` vs `c#` vs `c`).
+- **Consumers**:
+  - `groundParsedResume.js`: Grounds extracted resume skills against canonical taxonomy.
+  - `buildCareerTwin.js`: Merges skills across profile, resume, and evidence by canonical key.
+  - `roleCatalogue.js`: All 10 role definitions reference canonical skills.
+  - `assessmentContract.js` & `questionBank.js`: All assessment questions target canonical skill keys.
+  - `interviewQuestions.js` & `interviewContract.js`: All interview questions and rubrics align with canonical skills.
+
+#### 2. Institutional Evidence Engine & Verification Policy
+- **Location**: `server/src/domain/evidence/evidence.js`, `server/src/models/SkillEvidenceCheck.model.js`
+- **Strength Hierarchy**:
+  - `claimed` (strength: 0.25): Self-declared profile claims or ungrounded resume text.
+  - `supported` (strength: 0.65): Demonstrable projects with technology tags/URLs or accredited certifications.
+  - `verified` (strength: 1.00): Formal verification via passing deterministic assessment ($\ge 70\%$ pass mark on intermediate/advanced tier) or human-evaluated interview ($\ge 75\%$).
+- **Anti-Hallucination & AI Policy Barrier**:
+  - Raw AI model feedback is strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`).
+  - No prompt, model response, or candidate submission can directly upgrade a skill to `verified`.
+  - Invalidation: Writing new verified evidence marks CareerTwin as stale (`markCareerTwinStale`), triggering fresh re-aggregation.
+
+#### 3. Deterministic Career Recommendation Engine (`ROLE_CATALOGUE_VERSION = 1`)
+- **Location**: `server/src/domain/careers/roleCatalogue.js`, `matchRole.js`, `scoring.js`
+- **Scoring Dimensions**:
+  - `requiredSkills` (40%): Weighted by evidence strength (`verified` = 1.0, `supported` = 0.65, `claimed` = 0.25).
+  - `preferredSkills` (20%): Weighted by evidence strength.
+  - `interestAlignment` (15%): Matching candidate career interests against role category.
+  - `backgroundAlignment` (15%): Academic branch/degree matching.
+  - `evidenceStrength` / Projects (10%): Project count and depth.
+- **Contract Guarantees**:
+  - 100% deterministic (identical inputs yield identical scores and bands).
+  - Explicit non-goals: Zero synthetic market predictions (no salary numbers, hiring demand metrics, or speculative growth rates).
+
+#### 4. Assessment & AI Interview Verification Subsystems
+- **Location**: `server/src/domain/assessment/`, `server/src/domain/interview/`
+- **Assessment Engine**:
+  - Deterministic scoring (`exact_match`, `set_equality`, `partial_choice`, `normalized_string`).
+  - Anti-tampering: Attempt evaluation is atomic; answer keys are stripped from client payloads.
+  - Passing intermediate/advanced tests creates `SkillEvidenceCheck` (`strength: 'verified'`).
+- **AI Interview Engine**:
+  - Prompt boundary hardening: Untrusted candidate answers isolated in XML `<candidate_untrusted_answer>` tags with delimiter escaping to defeat prompt injections and jailbreaks.
+  - Structured output schema validation: Dimensions strictly bounded to $[0.0, 1.0]$.
+  - Grounding: Evaluator extracts only canonical skills explicitly targeted by the question.
+
+#### 5. Deterministic Career Readiness Projection (`READINESS_CONTRACT_VERSION = 1`)
+- **Location**: `server/src/domain/readiness/readinessContract.js`, `computeReadiness.js`, `server/src/services/readiness.service.js`
+- **Endpoint**: `GET /api/careers/roles/:roleId/readiness`
+- **Contract Guarantees**:
+  - **Evidence States**:
+    - `insufficient_data`: No CareerTwin or role comparison exists.
+    - `partial`: At least one required skill is `missing` or `claimed`.
+    - `supported`: All required skills are `supported` or `verified`, and at least one is not `verified`.
+    - `verified`: Every required skill is `verified`.
+  - **Data Freshness**:
+    - `fresh`: CareerTwin is up-to-date with all inputs.
+    - `stale`: Inputs (profile, resume, evidence checks) updated after CareerTwin generation.
+    - `incomplete`: CareerTwin has not been generated yet.
+  - **Count Parity**: `required` and `preferred` counts strictly match `computeSkillGap` counts.
+  - **Blockers**: `blockingSkills` lists required skills that have not achieved `verified` status.
+  - **Explicit Non-Goals**: No single composite readiness score, percentage, or confidence number. Readiness is an unvarnished projection of concrete evidence.
+
+### 10.3 Cross-Domain Invariants & Security Boundaries
+
+| Domain Boundary | Invariant / Security Policy | Enforcing Module |
+|---|---|---|
+| **Taxonomy Validation** | All skills must resolve to canonical taxonomy; unknown skills rejected or dropped as ungrounded | `skillKey.js`, `assessmentContract.js`, `interviewEvaluationSchema.js` |
+| **Evidence Upgrade** | Raw AI feedback cannot verify skills; only deterministic assessment pass or human interview can verify | `skillEvidenceCheck.js`, `assessment.service.js`, `interviewEvaluation.service.js` |
+| **Staleness Propagation** | New verified evidence marks CareerTwin stale; readiness immediately flags `dataStatus: 'stale'` | `careerTwin.service.js`, `readiness.service.js` |
+| **Prompt Hardening** | Candidate text encapsulated with XML escaping; system instructions prioritized; delimiter breakouts blocked | `interviewQuestions.js`, `interviewEvaluation.service.js` |
+| **Tenant Isolation (IDOR)** | All endpoints strictly scope queries by `req.auth.userId`; unowned resources return 404 with zero existence leakage | Express controllers & Mongoose queries |
+| **Tamper Proofing** | Clients cannot submit scores, outcomes, or evidence flags; all scoring and checks computed server-side | Assessment & interview submission controllers |
+
+## 11. Nexora Design & Experience Standard
 
 ### Final Visual Theme — Sunset Warm
 The finalized Nexora visual identity is **Sunset Warm**.

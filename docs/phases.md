@@ -216,7 +216,8 @@ published formula, and named matched/missing skills each have a test.
   naming the status it would reach and whether it is available yet.
 - Priority ordering by what to act on next.
 - `GET /api/careers/roles/:roleId/skill-gap`.
-- 22 tests: 15 pure-function, 7 API.
+- `GET /api/careers/roles/:roleId/readiness`: Deterministic role-scoped evidence projection (`insufficient_data` / `partial` / `supported` / `verified`), fresh/stale status, and non-verified blockers. (See [readiness.md](readiness.md)).
+- 22 tests: 15 pure-function, 7 API (plus 12 readiness unit/contract/API tests).
 
 All three exit criteria are met, each with a direct test: a reason on every
 skill, counts rather than unbounded scores, and a 404 when the role is not
