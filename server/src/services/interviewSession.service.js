@@ -192,6 +192,13 @@ export async function listSessions(userId) {
  */
 export async function getSession(userId, sessionId) {
   const session = await findOwnedSession(userId, sessionId);
+  if (
+    (session.status === SESSION_STATUS.INITIALIZED || session.status === SESSION_STATUS.IN_PROGRESS) &&
+    session.isExpired()
+  ) {
+    session.status = SESSION_STATUS.TIMED_OUT;
+    await session.save();
+  }
   return toPublicInterviewSession(session);
 }
 
@@ -414,6 +421,15 @@ export async function completeSession(userId, sessionId, options = {}) {
     throw ApiError.badRequest(
       `Cannot complete session in "${session.status}" state.`,
       ERROR_CODES.INTERVIEW_INVALID_STATE,
+    );
+  }
+
+  if (session.isExpired()) {
+    session.status = SESSION_STATUS.TIMED_OUT;
+    await session.save();
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
     );
   }
 
