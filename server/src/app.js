@@ -27,7 +27,14 @@ export function createApp() {
     });
     next();
   });
-  app.use(cors({ origin: env.clientUrl }));
+  app.use(
+    cors({
+      origin: env.clientUrl,
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(requestLogger);
 

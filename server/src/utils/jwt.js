@@ -86,14 +86,14 @@ export function verifyAccessToken(token) {
     );
   }
 
-  if (!payload.sub) {
+  if (typeof payload.sub !== 'string' || payload.sub.trim().length === 0) {
     throw ApiError.unauthorized(
       'Authentication token is invalid.',
       ERROR_CODES.AUTH_TOKEN_INVALID,
     );
   }
 
-  return { userId: payload.sub };
+  return { userId: payload.sub.trim() };
 }
 
 /**
