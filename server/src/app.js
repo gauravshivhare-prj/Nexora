@@ -27,9 +27,13 @@ export function createApp() {
     });
     next();
   });
+  const allowedOrigins = env.clientUrl?.includes(',')
+    ? env.clientUrl.split(',').map((s) => s.trim()).filter(Boolean)
+    : env.clientUrl;
+
   app.use(
     cors({
-      origin: env.clientUrl,
+      origin: allowedOrigins,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true,
