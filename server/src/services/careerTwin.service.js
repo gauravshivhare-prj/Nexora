@@ -132,7 +132,15 @@ export async function getCareerTwin(userId) {
  * @throws {ApiError} 409 when there is no input data.
  */
 export async function generateCareerTwin(userId, { withNarrative = false } = {}) {
-  const { profile, profileUpdatedAt, resumes, verifiedEvidence } = await loadInputs(userId);
+  const {
+    profile,
+    profileUpdatedAt,
+    resumes,
+    verifiedEvidence,
+    latestAnalysisAt,
+    latestEvidenceAt,
+    verifiedEvidenceCount,
+  } = await loadInputs(userId);
 
   if (!hasEnoughInput(profile, resumes, verifiedEvidence)) {
     throw new ApiError(
@@ -142,11 +150,34 @@ export async function generateCareerTwin(userId, { withNarrative = false } = {})
     );
   }
 
+  const existingTwin = await CareerTwin.findOne({ user: userId });
+  let staleness = null;
+  if (existingTwin) {
+    staleness = isCareerTwinStale(existingTwin, {
+      profileUpdatedAt,
+      analysedResumeIds: resumes.map((resume) => resume.id),
+      latestAnalysisAt,
+      latestEvidenceAt,
+      verifiedEvidenceCount,
+    });
+  }
+
   const content = buildCareerTwin({ profile, resumes, verifiedEvidence });
 
-  const narrative = withNarrative
-    ? await generateNarrative(content)
-    : { text: null, provider: null, model: null, generatedAt: null, warnings: [] };
+  let narrative;
+  if (withNarrative) {
+    // Deduplication control: If existing twin already has a valid narrative and inputs are NOT stale,
+    // reuse existing narrative to avoid duplicate AI generation and reduce token costs / latency.
+    if (existingTwin?.narrative?.text && staleness && !staleness.isStale) {
+      narrative = existingTwin.narrative;
+    } else {
+      narrative = await generateNarrative(content);
+    }
+  } else if (existingTwin?.narrative?.text && staleness && !staleness.isStale) {
+    narrative = existingTwin.narrative;
+  } else {
+    narrative = { text: null, provider: null, model: null, generatedAt: null, warnings: [] };
+  }
 
   const stored = await CareerTwin.findOneAndUpdate(
     { user: userId },
