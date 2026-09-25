@@ -356,9 +356,17 @@ export async function analyseResume(userId, resumeId, { signal } = {}) {
       error: null,
     };
 
+    const stillExists = await Resume.exists({ _id: resume._id, user: userId });
+    if (!stillExists) {
+      throw resumeNotFound();
+    }
+
     await resume.save();
     return toPublicResume(resume);
   } catch (error) {
+    if (error?.errorCode === ERROR_CODES.RESUME_NOT_FOUND) {
+      throw error;
+    }
     await recordAnalysisFailure(resume, error);
     throw error;
   }
@@ -444,6 +452,9 @@ function untrustedOutput(reason) {
  */
 async function recordAnalysisFailure(resume, error) {
   try {
+    const stillExists = await Resume.exists({ _id: resume._id, user: resume.user });
+    if (!stillExists) return;
+
     resume.analysis = {
       status: PROCESSING_STATUS.FAILED,
       startedAt: resume.analysis?.startedAt ?? null,
