@@ -113,7 +113,12 @@ export const INTERVIEW_LIMITS = Object.freeze({
 const ALLOWED_TRANSITIONS = new Map([
   [
     SESSION_STATUS.INITIALIZED,
-    new Set([SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.ABANDONED, SESSION_STATUS.TIMED_OUT]),
+    new Set([
+      SESSION_STATUS.IN_PROGRESS,
+      SESSION_STATUS.ABANDONED,
+      SESSION_STATUS.TIMED_OUT,
+      SESSION_STATUS.FAILED,
+    ]),
   ],
   [
     SESSION_STATUS.IN_PROGRESS,
@@ -257,11 +262,15 @@ export function validateInterviewQuestion(question, index = 0) {
     throw new Error(`Question at index ${index} must be an object.`);
   }
 
-  const { id, type, targetSkill, prompt, rubricCriteria = [], timeLimitSeconds = 180, weight = 1 } = question;
+  const rawId = typeof question.id === 'string' && question.id.trim()
+    ? question.id.trim()
+    : (typeof question.questionId === 'string' ? question.questionId.trim() : '');
 
-  if (typeof id !== 'string' || id.trim() === '') {
+  if (rawId === '') {
     throw new Error(`Question at index ${index} must have a non-empty id.`);
   }
+
+  const { type, targetSkill, prompt, rubricCriteria = [], timeLimitSeconds = 180, weight = 1 } = question;
 
   if (!INTERVIEW_QUESTION_TYPE_VALUES.includes(type)) {
     throw new Error(
@@ -270,11 +279,11 @@ export function validateInterviewQuestion(question, index = 0) {
   }
 
   if (typeof targetSkill !== 'string' || targetSkill.trim() === '') {
-    throw new Error(`Question "${id}" targetSkill is required.`);
+    throw new Error(`Question "${rawId}" targetSkill is required.`);
   }
   const canonical = canonicalSkill(targetSkill.trim());
   if (!canonical) {
-    throw new Error(`Question "${id}": Unknown canonical skill "${targetSkill}".`);
+    throw new Error(`Question "${rawId}": Unknown canonical skill "${targetSkill}".`);
   }
 
   if (typeof prompt !== 'string' || prompt.trim().length < INTERVIEW_LIMITS.questionPrompt.min) {
@@ -299,8 +308,10 @@ export function validateInterviewQuestion(question, index = 0) {
     : [];
 
   return {
-    id: id.trim(),
+    id: rawId,
+    questionId: rawId,
     type,
+    targetSkill: canonical.name,
     targetSkillKey: canonical.key,
     targetSkillName: canonical.name,
     prompt: prompt.trim(),
@@ -502,17 +513,20 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
   const questionResults = [];
 
   for (const q of questions) {
+    const qId = q.questionId || q.id || '';
     const weight = q.weight ?? 1;
     totalWeight += weight;
 
-    const evaluation = evaluations[q.id];
-    const score = evaluation?.score ?? 0;
+    const evaluation = evaluations[qId] || (q.id ? evaluations[q.id] : null) || q.evaluation;
+    const score = evaluation?.score ?? evaluation?.compositeScore ?? 0;
     totalWeightedScore += score * weight;
 
+    const canonical = canonicalSkill(q.targetSkill || q.targetSkillName || q.targetSkillKey);
+
     questionResults.push({
-      questionId: q.id,
-      targetSkillKey: q.targetSkillKey,
-      targetSkillName: q.targetSkillName,
+      questionId: qId,
+      targetSkillKey: q.targetSkillKey || canonical?.key || '',
+      targetSkillName: q.targetSkillName || canonical?.name || q.targetSkill || '',
       weight,
       score,
       dimensions: evaluation?.dimensions ?? null,
@@ -538,21 +552,31 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
     ? EVIDENCE_STRENGTH.VERIFIED
     : EVIDENCE_STRENGTH.SUPPORTED;
 
+  const resolvedSessionId = session.sessionId || String(session._id ?? session.id ?? 'interview-session');
+
   // Build skill evidence checks for each target skill
   const skillEvidenceResults = (session.targetSkills ?? []).map((target) => {
-    return buildInterviewResult({
-      skill: target.name || target.key,
+    const rawName = typeof target === 'string' ? target : (target?.name || target?.key || '');
+    const canonical = canonicalSkill(rawName);
+    const resolvedName = canonical?.name || rawName;
+    const result = buildInterviewResult({
+      skill: resolvedName,
       score: overallScore,
-      interviewId: session.sessionId,
+      interviewId: resolvedSessionId,
       evaluatedBy,
       completedAt: new Date(),
       passMark: INTERVIEW_PASS_MARK,
     });
+    return {
+      ...result,
+      skill: resolvedName,
+    };
   });
 
   return {
-    sessionId: session.sessionId,
-    studentId: session.studentId,
+    sessionId: resolvedSessionId,
+    id: resolvedSessionId,
+    studentId: session.studentId || String(session.user ?? ''),
     roleTitle: session.roleTitle,
     roleSlug: session.roleSlug,
     difficulty: session.difficulty,

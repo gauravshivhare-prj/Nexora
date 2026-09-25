@@ -173,11 +173,16 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
       assert.equal(normalized.sessionId, '6ab6ba1aa278c6e17a603503');
       assert.equal(normalized.status, 'in_progress');
       assert.equal(normalized.targetRole, 'backend-developer');
+      assert.equal(normalized.timeLimitMinutes, 30, 'Default timeLimitMinutes should be 30');
       assert.equal(normalized.user, undefined, 'Owner user ID must be stripped from client session DTO');
       assert.equal(normalized.__v, undefined, 'Mongoose version key must be stripped');
       assert.equal(normalized.questions.length, 1);
 
+      const customPayload = { ...serverPayload, timeLimitMinutes: 45 };
+      assert.equal(toInterviewSession(customPayload).timeLimitMinutes, 45);
+
       const q = normalized.questions[0];
+      assert.equal(q.id, 'iq-node-001');
       assert.equal(q.questionId, 'iq-node-001');
       assert.equal(q.order, 1);
       assert.equal(q.answer.durationSeconds, 120);
@@ -196,6 +201,7 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
 
       const normalized = toInterviewQuestion(bareQuestion);
 
+      assert.equal(normalized.id, 'iq-react-002');
       assert.equal(normalized.questionId, 'iq-react-002');
       assert.equal(normalized.order, 1);
       assert.equal(normalized.type, 'conceptual');
@@ -425,6 +431,13 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
               evidenceStrength: 'supported',
             },
           ],
+          evidenceChecks: [
+            {
+              id: 'ev_001',
+              skillKey: 'nodejs',
+              outcome: 'supported',
+            },
+          ],
         },
       };
 
@@ -435,6 +448,8 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
       assert.equal(result.overallScore, 0.82);
       assert.equal(result.eligibleForVerified, false);
       assert.equal(result.evidenceResults.length, 1);
+      assert.equal(result.evidenceChecks.length, 1);
+      assert.equal(result.evidenceChecks[0].id, 'ev_001');
     });
 
     it('abandonInterviewSession posts to abandon and updates status', async () => {

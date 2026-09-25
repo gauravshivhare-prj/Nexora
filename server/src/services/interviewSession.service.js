@@ -75,6 +75,7 @@ export async function createSession(userId, input = {}) {
     targetSkills,
     difficulty = INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount = 5,
+    timeLimitMinutes = 30,
   } = input;
 
   if (typeof targetRole !== 'string' || targetRole.trim() === '') {
@@ -160,6 +161,10 @@ export async function createSession(userId, input = {}) {
     targetSkills: canonicalTargets,
     difficulty,
     questionCount: selectedQuestions.length,
+    timeLimitMinutes: Math.min(
+      INTERVIEW_LIMITS.maxSessionMinutes,
+      Math.max(1, Number(timeLimitMinutes) || 30),
+    ),
     questions: selectedQuestions,
   });
 

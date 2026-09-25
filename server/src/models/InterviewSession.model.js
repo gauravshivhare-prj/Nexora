@@ -235,6 +235,14 @@ const interviewSessionSchema = new mongoose.Schema(
       required: true,
     },
 
+    timeLimitMinutes: {
+      type: Number,
+      min: [1, 'Time limit must be at least 1 minute'],
+      max: [INTERVIEW_LIMITS.maxSessionMinutes, `Time limit cannot exceed ${INTERVIEW_LIMITS.maxSessionMinutes} minutes`],
+      default: 30,
+      required: true,
+    },
+
     attemptLimitPerQuestion: {
       type: Number,
       min: [1, 'Attempt limit per question must be at least 1'],
@@ -347,7 +355,11 @@ interviewSessionSchema.post('init', function trackOriginalStatus() {
 interviewSessionSchema.pre('validate', function validateSessionState() {
   // Enforce session expiration defaults if not set
   if (this.isNew && !this.expiresAt) {
-    const sessionDurationMs = INTERVIEW_LIMITS.maxSessionMinutes * 60 * 1000;
+    const minutes = Math.min(
+      INTERVIEW_LIMITS.maxSessionMinutes,
+      Math.max(1, Number(this.timeLimitMinutes) || 30),
+    );
+    const sessionDurationMs = minutes * 60 * 1000;
     this.expiresAt = new Date(Date.now() + sessionDurationMs);
   }
 
@@ -428,6 +440,7 @@ export function toPublicInterviewSession(session) {
     targetSkills: Array.isArray(session.targetSkills) ? [...session.targetSkills] : [],
     difficulty: session.difficulty,
     questionCount: session.questionCount,
+    timeLimitMinutes: session.timeLimitMinutes ?? 30,
     currentQuestionIndex: session.currentQuestionIndex,
     attemptCount: session.attemptCount,
     maxAttemptsTotal: session.maxAttemptsTotal,

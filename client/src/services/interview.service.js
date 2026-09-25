@@ -68,6 +68,7 @@ export function toInterviewSession(raw) {
       : [],
     difficulty: raw.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount: typeof raw.questionCount === 'number' ? raw.questionCount : 0,
+    timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : 30,
     currentQuestionIndex: typeof raw.currentQuestionIndex === 'number' ? raw.currentQuestionIndex : 0,
     attemptCount: typeof raw.attemptCount === 'number' ? raw.attemptCount : 0,
     maxAttemptsTotal: typeof raw.maxAttemptsTotal === 'number' ? raw.maxAttemptsTotal : 10,
@@ -103,8 +104,11 @@ export function toInterviewQuestion(raw) {
     throw new Error('Invalid interview question data: expected an object.');
   }
 
+  const questionId = raw.questionId ?? raw.id ?? '';
+
   return {
-    questionId: raw.questionId ?? raw.id ?? '',
+    id: questionId,
+    questionId,
     order: typeof raw.order === 'number' ? raw.order : 1,
     type: raw.type ?? INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
     prompt: raw.prompt ?? '',
@@ -309,6 +313,7 @@ export async function completeInterviewSession(sessionId, payload = {}, { signal
     overallScore: typeof data.overallScore === 'number' ? data.overallScore : (data.session?.overallScore ?? null),
     eligibleForVerified: Boolean(data.eligibleForVerified),
     evidenceResults: Array.isArray(data.evidenceResults) ? data.evidenceResults : [],
+    evidenceChecks: Array.isArray(data.evidenceChecks) ? data.evidenceChecks : [],
   };
 }
 

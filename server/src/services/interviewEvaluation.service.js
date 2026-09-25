@@ -188,13 +188,15 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
   // Evaluate evidence for each target skill
   const evidenceResults = [];
   for (const rawSkill of targetSkills) {
-    const canonical = canonicalSkill(rawSkill);
+    const skillName = typeof rawSkill === 'string' ? rawSkill : (rawSkill?.name || rawSkill?.key || '');
+    const canonical = canonicalSkill(skillName);
     if (!canonical) continue;
 
     // Filter questions specific to this skill
-    const skillQuestions = evaluatedQuestions.filter(
-      (q) => q.targetSkill && canonicalSkill(q.targetSkill)?.key === canonical.key,
-    );
+    const skillQuestions = evaluatedQuestions.filter((q) => {
+      const qSkill = q.targetSkill || q.targetSkillName || q.targetSkillKey;
+      return qSkill && canonicalSkill(qSkill)?.key === canonical.key;
+    });
 
     const skillScore = skillQuestions.length > 0
       ? Math.round((skillQuestions.reduce((sum, q) => sum + q.evaluation.compositeScore, 0) / skillQuestions.length) * 10000) / 10000
