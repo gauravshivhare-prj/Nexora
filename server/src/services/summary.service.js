@@ -133,21 +133,24 @@ export async function getSummary(userId) {
     // Promise.allSettled rather than Promise.all: a transient failure in one
     // section must not crash the entire summary. The defaults above are
     // already null, so a rejected section is simply absent.
-    const [gapResult, roadmapResult] = await Promise.allSettled([
-      getSkillGap(userId, focus.roleId),
-      getRoadmap(userId, focus.roleId),
-    ]);
+    try {
+      const gapData = await getSkillGap(userId, focus.roleId);
+      summary.skillGap = { roleId: focus.roleId, summary: gapData.gap.summary };
 
-    if (gapResult.status === 'fulfilled') {
-      summary.skillGap = { roleId: focus.roleId, summary: gapResult.value.gap.summary };
-    } else {
-      logger.warn(`Summary: skill-gap section failed for user ${userId}`, gapResult.reason);
-    }
-
-    if (roadmapResult.status === 'fulfilled') {
-      summary.roadmap = { roleId: focus.roleId, summary: roadmapResult.value.roadmap.summary };
-    } else {
-      logger.warn(`Summary: roadmap section failed for user ${userId}`, roadmapResult.reason);
+      try {
+        const roadmapData = await getRoadmap(userId, focus.roleId, { skillGap: gapData });
+        summary.roadmap = { roleId: focus.roleId, summary: roadmapData.roadmap.summary };
+      } catch (roadmapErr) {
+        logger.warn(`Summary: roadmap section failed for user ${userId}`, roadmapErr);
+      }
+    } catch (gapErr) {
+      logger.warn(`Summary: skill-gap section failed for user ${userId}`, gapErr);
+      try {
+        const roadmapData = await getRoadmap(userId, focus.roleId);
+        summary.roadmap = { roleId: focus.roleId, summary: roadmapData.roadmap.summary };
+      } catch (roadmapErr) {
+        logger.warn(`Summary: roadmap section failed for user ${userId}`, roadmapErr);
+      }
     }
   }
 

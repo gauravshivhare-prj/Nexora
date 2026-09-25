@@ -11,8 +11,8 @@ import { CareerTwin, StudentProfile } from '../models/index.js';
  */
 export async function getOpportunities(userId, filters = {}) {
   const [twin, profile] = await Promise.all([
-    CareerTwin.findOne({ user: userId }),
-    StudentProfile.findOne({ user: userId }).select('career.targetRole'),
+    CareerTwin.findOne({ user: userId }).lean(),
+    StudentProfile.findOne({ user: userId }).select('career.targetRole').lean(),
   ]);
 
   let matched = matchOpportunities(twin, profile);
