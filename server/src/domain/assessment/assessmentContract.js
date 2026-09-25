@@ -792,10 +792,11 @@ export function evaluateAssessmentSubmission({
   };
 
   // Evidence policy evaluation: High score does not automatically grant verified if policy requires stronger proof
+  const isAiEvaluated = submission.evaluatedBy === 'ai' || validatedAssessment.evaluatedBy === 'ai';
   const requiresStrongerProof =
     (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER &&
       submission.evidencePolicy?.allowBeginnerVerified !== true) ||
-    submission.evaluatedBy === 'ai' ||
+    isAiEvaluated ||
     submission.isPractice === true ||
     validatedAssessment.isPractice === true ||
     submission.evidencePolicy?.requiresStrongerProof === true ||
@@ -816,12 +817,12 @@ export function evaluateAssessmentSubmission({
   } else if (requiresStrongerProof) {
     eligibleForVerified = false;
     evidenceStrength = EVIDENCE_STRENGTH.SUPPORTED;
-    if (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER) {
-      evidenceReason =
-        'Beginner assessments provide supported evidence but do not meet the intermediate threshold required for verified provenance.';
-    } else if (submission.evaluatedBy === 'ai') {
+    if (isAiEvaluated) {
       evidenceReason =
         'AI Copilot evaluations are advisory and cannot produce verified evidence directly.';
+    } else if (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER) {
+      evidenceReason =
+        'Beginner assessments provide supported evidence but do not meet the intermediate threshold required for verified provenance.';
     } else if (submission.isPractice || validatedAssessment.isPractice) {
       evidenceReason =
         'Practice assessments establish supported evidence but cannot produce verified provenance.';
@@ -852,7 +853,7 @@ export function evaluateAssessmentSubmission({
     passMark: validatedAssessment.passMark,
     difficulty: validatedAssessment.difficulty,
     isPractice: Boolean(validatedAssessment.isPractice || submission.isPractice),
-    evaluatedBy: submission.evaluatedBy ?? 'assessment-engine',
+    evaluatedBy: submission.evaluatedBy ?? validatedAssessment.evaluatedBy ?? 'assessment-engine',
     eligibleForVerified,
   });
 

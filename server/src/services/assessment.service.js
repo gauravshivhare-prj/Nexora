@@ -385,6 +385,10 @@ export async function submitAssessmentAttempt(userId, payload) {
       score: evalResult.score,
       assessmentId: fullAssessment.id,
       passMark: fullAssessment.passMark,
+      difficulty: fullAssessment.difficulty,
+      isPractice: Boolean(fullAssessment.isPractice),
+      evaluatedBy: fullAssessment.evaluatedBy ?? 'assessment-engine',
+      eligibleForVerified: evalResult.evidenceResult?.eligibleForVerified,
       completedAt: evalDate,
     });
     evidenceCheckId = evidenceDoc?.id ?? null;
