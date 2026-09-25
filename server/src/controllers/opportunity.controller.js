@@ -3,7 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 /** GET /api/opportunities */
 export const list = asyncHandler(async (req, res) => {
-  const data = await getOpportunities(req.auth.userId);
+  const data = await getOpportunities(req.auth.userId, req.query);
 
   res.status(200).json({
     success: true,

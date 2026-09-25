@@ -96,8 +96,13 @@ function matchOne(opportunity, verifiedSkills, targetRoleId) {
 }
 
 function resolveTargetRoleId(targetRole) {
-  if (!targetRole) return null;
-  return CAREER_ROLES.find((role) => role.title.toLowerCase() === targetRole.toLowerCase())?.id ?? null;
+  if (!targetRole || typeof targetRole !== 'string') return null;
+  const normalized = targetRole.trim().toLowerCase();
+  return (
+    CAREER_ROLES.find(
+      (role) => role.id === normalized || role.title.toLowerCase() === normalized,
+    )?.id ?? null
+  );
 }
 
 function source() {
