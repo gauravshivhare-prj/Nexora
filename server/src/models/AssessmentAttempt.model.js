@@ -166,6 +166,41 @@ export function toPublicAssessmentAttempt(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
 
+  const questionBreakdown = (raw.questionResults ?? []).map((qr) => ({
+    questionId: qr.questionId,
+    prompt: qr.prompt,
+    weight: qr.weight,
+    studentAnswer: qr.studentAnswer,
+    isCorrect: qr.isCorrect,
+    ratio: qr.ratio,
+    earnedPoints: qr.earnedPoints,
+    maxPoints: qr.maxPoints,
+  }));
+
+  const hasResult =
+    raw.status === ATTEMPT_STATUS.EVALUATED || raw.status === ATTEMPT_STATUS.TIMED_OUT;
+
+  const result = hasResult
+    ? {
+        assessmentId: raw.assessmentId,
+        canonicalSkill: raw.skillName || raw.skillKey,
+        difficulty: raw.difficulty,
+        score: raw.score,
+        earnedPoints: raw.earnedPoints,
+        maxPoints: raw.maxPoints,
+        passMark: raw.passMark,
+        passed: raw.passed,
+        outcome: raw.outcome,
+        evidenceStatus: raw.evidenceCheck
+          ? 'verified'
+          : raw.passed
+            ? 'supported'
+            : 'unsupported',
+        completedAt: raw.completedAt,
+        questionBreakdown,
+      }
+    : null;
+
   return {
     id: String(raw._id ?? raw.id),
     assessmentId: raw.assessmentId,
@@ -183,16 +218,8 @@ export function toPublicAssessmentAttempt(doc) {
     maxPoints: raw.maxPoints,
     totalQuestions: raw.totalQuestions,
     correctQuestionsCount: raw.correctQuestionsCount,
-    questionResults: (raw.questionResults ?? []).map((qr) => ({
-      questionId: qr.questionId,
-      prompt: qr.prompt,
-      weight: qr.weight,
-      studentAnswer: qr.studentAnswer,
-      isCorrect: qr.isCorrect,
-      ratio: qr.ratio,
-      earnedPoints: qr.earnedPoints,
-      maxPoints: qr.maxPoints,
-    })),
+    questionResults: questionBreakdown,
+    result,
     evidenceCheckId: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
     startedAt: raw.startedAt,
     completedAt: raw.completedAt,
