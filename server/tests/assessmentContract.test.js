@@ -24,6 +24,8 @@ import {
 
 import { buildCareerTwin } from '../src/domain/careerTwin/buildCareerTwin.js';
 import { CHECK_OUTCOMES } from '../src/domain/evidence/skillEvidenceCheck.js';
+import { toPublicAssessment } from '../src/models/Assessment.model.js';
+import { toPublicAssessmentAttempt } from '../src/models/AssessmentAttempt.model.js';
 
 describe('Assessment Domain Contract: Versioning and Enums', () => {
   it('exposes contract version 1', () => {
@@ -596,5 +598,176 @@ describe('Assessment Catalog: Canonical Nexora Assessments', () => {
 
     const nonExistent = getAssessmentById('does_not_exist');
     assert.equal(nonExistent, null);
+  });
+});
+
+describe('A05 — Assessment Contract Audit: Public Projections & Client Parity', () => {
+  const catalogItem = getAssessmentById('asm_nodejs_intermediate');
+
+  it('verifies toPublicAssessment aligns with both backend contract and frontend toAssessment consumer', () => {
+    const pub = toPublicAssessment(catalogItem);
+
+    // Primary identity & alias mappings
+    assert.equal(pub.id, catalogItem.id);
+    assert.equal(pub.assessmentId, catalogItem.id);
+    assert.equal(pub.slug, catalogItem.id);
+    assert.equal(pub.version, 1);
+
+    // Canonical skill grounding
+    assert.equal(pub.skillKey, 'nodejs');
+    assert.equal(pub.skillName, 'Node.js');
+    assert.equal(pub.canonicalSkill, 'Node.js');
+
+    // Metadata & timing
+    assert.equal(pub.difficulty, DIFFICULTY_LEVELS.INTERMEDIATE);
+    assert.equal(pub.passMark, 0.7);
+    assert.equal(pub.timeLimitMinutes, catalogItem.timeLimitMinutes);
+    assert.equal(pub.durationMinutes, catalogItem.timeLimitMinutes);
+    assert.equal(pub.totalQuestions, catalogItem.questions.length);
+
+    // Anti-leak check: expected answers and explanations are stripped
+    for (const q of pub.questions) {
+      assert.ok(q.id, 'Question must have id');
+      assert.equal(q.questionId, q.id, 'Question must provide questionId for frontend parity');
+      assert.ok(q.prompt, 'Question must have prompt');
+      assert.ok(q.type, 'Question must have type');
+      assert.equal(q.expectedAnswer, undefined, 'expectedAnswer must never be in public projection');
+      assert.equal(q.explanation, undefined, 'explanation must never be in public pre-submission projection');
+    }
+  });
+
+  it('verifies toPublicAssessmentAttempt provides attemptId, question breakdown status, and timings', () => {
+    const mockAttemptDoc = {
+      _id: '507f1f77bcf86cd799439011',
+      assessmentId: 'asm_nodejs_intermediate',
+      attemptNumber: 1,
+      version: 1,
+      skillKey: 'nodejs',
+      skillName: 'Node.js',
+      difficulty: 'intermediate',
+      status: ATTEMPT_STATUS.EVALUATED,
+      score: 0.85,
+      passMark: 0.7,
+      passed: true,
+      outcome: CHECK_OUTCOMES.PASS,
+      earnedPoints: 8.5,
+      maxPoints: 10,
+      totalQuestions: 4,
+      correctQuestionsCount: 3,
+      questionResults: [
+        {
+          questionId: 'q1',
+          status: 'correct',
+          prompt: 'Question 1',
+          weight: 2,
+          studentAnswer: 'opt1',
+          isCorrect: true,
+          ratio: 1,
+          earnedPoints: 2,
+          maxPoints: 2,
+        },
+        {
+          questionId: 'q2',
+          status: 'partial',
+          prompt: 'Question 2',
+          weight: 2,
+          studentAnswer: ['optA'],
+          isCorrect: false,
+          ratio: 0.5,
+          earnedPoints: 1,
+          maxPoints: 2,
+        },
+      ],
+      evidenceCheck: '507f1f77bcf86cd799439022',
+      startedAt: new Date('2026-09-25T10:00:00.000Z'),
+      completedAt: new Date('2026-09-25T10:15:00.000Z'),
+      durationSeconds: 900,
+    };
+
+    const pubAttempt = toPublicAssessmentAttempt(mockAttemptDoc);
+
+    assert.equal(pubAttempt.id, '507f1f77bcf86cd799439011');
+    assert.equal(pubAttempt.attemptId, '507f1f77bcf86cd799439011');
+    assert.equal(pubAttempt.assessmentId, 'asm_nodejs_intermediate');
+    assert.equal(pubAttempt.canonicalSkill, 'Node.js');
+    assert.equal(pubAttempt.status, ATTEMPT_STATUS.EVALUATED);
+    assert.equal(pubAttempt.score, 0.85);
+    assert.equal(pubAttempt.passed, true);
+    assert.equal(pubAttempt.durationSeconds, 900);
+    assert.equal(pubAttempt.timeSpentSeconds, 900);
+    assert.equal(pubAttempt.evidenceCheckId, '507f1f77bcf86cd799439022');
+    assert.equal(pubAttempt.evidenceCheck, '507f1f77bcf86cd799439022');
+
+    assert.equal(pubAttempt.questionResults.length, 2);
+    assert.equal(pubAttempt.questionResults[0].status, 'correct');
+    assert.equal(pubAttempt.questionResults[1].status, 'partial');
+  });
+
+  it('validates deterministic evaluation across all 5 canonical question types', () => {
+    // 1. Single Choice
+    const sc = scoreQuestion(
+      {
+        id: 'q_sc',
+        type: QUESTION_TYPES.SINGLE_CHOICE,
+        weight: 1,
+        expectedAnswer: { correctOptionId: 'opt_a' },
+      },
+      'opt_a',
+    );
+    assert.equal(sc.status, 'correct');
+    assert.equal(sc.isCorrect, true);
+    assert.equal(sc.earnedPoints, 1);
+
+    // 2. Multiple Choice Partial Credit
+    const mc = scoreQuestion(
+      {
+        id: 'q_mc',
+        type: QUESTION_TYPES.MULTIPLE_CHOICE,
+        weight: 2,
+        expectedAnswer: { correctOptionIds: ['opt_1', 'opt_2'], strategy: SCORING_STRATEGIES.PARTIAL_CREDIT },
+      },
+      ['opt_1'],
+    );
+    assert.equal(mc.status, 'partial');
+    assert.equal(mc.earnedPoints, 1);
+
+    // 3. Code Output
+    const code = scoreQuestion(
+      {
+        id: 'q_code',
+        type: QUESTION_TYPES.CODE_OUTPUT,
+        weight: 1,
+        expectedAnswer: { expectedOutput: 'hello world', trimWhitespace: true },
+      },
+      '  hello world  ',
+    );
+    assert.equal(code.status, 'correct');
+    assert.equal(code.earnedPoints, 1);
+
+    // 4. Short Answer
+    const sa = scoreQuestion(
+      {
+        id: 'q_sa',
+        type: QUESTION_TYPES.SHORT_ANSWER,
+        weight: 1,
+        expectedAnswer: { acceptedAnswers: ['npm', 'yarn'], caseSensitive: false, trimWhitespace: true },
+      },
+      'NPM',
+    );
+    assert.equal(sa.status, 'correct');
+    assert.equal(sa.earnedPoints, 1);
+
+    // 5. Boolean
+    const b = scoreQuestion(
+      {
+        id: 'q_b',
+        type: QUESTION_TYPES.BOOLEAN,
+        weight: 1,
+        expectedAnswer: { expectedValue: true },
+      },
+      true,
+    );
+    assert.equal(b.status, 'correct');
+    assert.equal(b.earnedPoints, 1);
   });
 });

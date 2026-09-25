@@ -209,22 +209,28 @@ assessmentSchema.index({ isActive: 1, skillKey: 1, difficulty: 1 });
 export function toPublicAssessment(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
+  const id = raw.assessmentId ?? raw.id;
 
   return {
-    id: raw.assessmentId ?? raw.id,
+    id,
+    assessmentId: id,
+    slug: id,
     version: raw.version,
     skillKey: raw.skillKey,
     skillName: raw.skillName,
+    canonicalSkill: raw.skillName ?? raw.skillKey,
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,
     timeLimitMinutes: raw.timeLimitMinutes,
+    durationMinutes: raw.timeLimitMinutes ?? 0,
     totalQuestions: raw.questions?.length ?? 0,
     questions: (raw.questions ?? []).map((q) => {
       const pub = {
         id: q.id,
+        questionId: q.id,
         type: q.type,
         prompt: q.prompt,
         weight: q.weight,

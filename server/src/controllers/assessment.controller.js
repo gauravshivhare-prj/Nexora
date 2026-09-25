@@ -106,6 +106,7 @@ export const submitAttemptHandler = asyncHandler(async (req, res) => {
     message: 'Assessment attempt submitted and evaluated',
     data: {
       attempt: result.attempt,
+      result: result.result ?? result.attempt,
       evidenceResult: result.evidenceResult,
       evidenceStatus: result.evidenceStatus,
     },

@@ -165,14 +165,18 @@ assessmentAttemptSchema.index({ user: 1, assessmentId: 1, status: 1, attemptNumb
 export function toPublicAssessmentAttempt(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
+  const id = String(raw._id ?? raw.id);
+  const evidenceCheckRef = raw.evidenceCheck ? String(raw.evidenceCheck) : null;
 
   return {
-    id: String(raw._id ?? raw.id),
+    id,
+    attemptId: id,
     assessmentId: raw.assessmentId,
     attemptNumber: raw.attemptNumber,
     version: raw.version,
     skillKey: raw.skillKey,
     skillName: raw.skillName,
+    canonicalSkill: raw.skillName ?? raw.skillKey,
     difficulty: raw.difficulty,
     status: raw.status,
     score: raw.score,
@@ -185,6 +189,7 @@ export function toPublicAssessmentAttempt(doc) {
     correctQuestionsCount: raw.correctQuestionsCount,
     questionResults: (raw.questionResults ?? []).map((qr) => ({
       questionId: qr.questionId,
+      status: qr.status ?? (qr.isCorrect ? 'correct' : 'incorrect'),
       prompt: qr.prompt,
       weight: qr.weight,
       studentAnswer: qr.studentAnswer,
@@ -193,10 +198,12 @@ export function toPublicAssessmentAttempt(doc) {
       earnedPoints: qr.earnedPoints,
       maxPoints: qr.maxPoints,
     })),
-    evidenceCheckId: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
+    evidenceCheckId: evidenceCheckRef,
+    evidenceCheck: evidenceCheckRef,
     startedAt: raw.startedAt,
     completedAt: raw.completedAt,
     durationSeconds: raw.durationSeconds,
+    timeSpentSeconds: raw.durationSeconds,
   };
 }
 

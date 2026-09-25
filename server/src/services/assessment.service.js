@@ -401,8 +401,11 @@ export async function submitAssessmentAttempt(userId, payload) {
     }
   }
 
+  const publicAttempt = toPublicAssessmentAttempt(updatedAttempt);
+
   return {
-    attempt: toPublicAssessmentAttempt(updatedAttempt),
+    attempt: publicAttempt,
+    result: publicAttempt,
     evidenceResult: evalResult.evidenceResult,
     evidenceStatus: evalResult.evidenceStatus,
   };
