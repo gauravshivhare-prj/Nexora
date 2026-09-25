@@ -553,12 +553,12 @@ export function scoreQuestion(question, studentAnswer) {
       }
 
       const { expectedOutput, trimWhitespace, caseSensitive } = question.expectedAnswer;
-      let rawStudent = String(studentAnswer);
-      let rawExpected = String(expectedOutput);
+      let rawStudent = String(studentAnswer).replace(/\r\n/g, '\n');
+      let rawExpected = String(expectedOutput).replace(/\r\n/g, '\n');
 
       if (trimWhitespace) {
-        rawStudent = rawStudent.replace(/\r\n/g, '\n').trim();
-        rawExpected = rawExpected.replace(/\r\n/g, '\n').trim();
+        rawStudent = rawStudent.trim();
+        rawExpected = rawExpected.trim();
       }
 
       if (!caseSensitive) {

@@ -289,7 +289,7 @@ print(word[1:4])`,
     type: QUESTION_TYPES.SHORT_ANSWER,
     prompt: 'What command moves working directory changes into the Git staging area (index)?',
     expectedAnswer: {
-      acceptedAnswers: ['git add', 'git add .', 'git add -A'],
+      acceptedAnswers: ['git add', 'git add .', 'git add -A', 'git add --all'],
       caseSensitive: false,
       trimWhitespace: true,
     },
@@ -343,6 +343,83 @@ print(word[1:4])`,
     ],
     expectedAnswer: { correctOptionId: 'opt_logn' },
     explanation: 'Binary search halves the search space at each comparison step, yielding logarithmic time complexity O(log N).',
+  },
+
+  // =========================================================================
+  // React (canonical: react)
+  // =========================================================================
+  {
+    id: 'qb_react_beg_props',
+    skillKey: 'React',
+    difficulty: DIFFICULTY_LEVELS.BEGINNER,
+    type: QUESTION_TYPES.SINGLE_CHOICE,
+    prompt: 'In standard React component design, what is the primary characteristic of component props?',
+    options: [
+      { id: 'opt_readonly', text: 'Props are read-only (immutable) inputs passed down from parent to child components.' },
+      { id: 'opt_mutable', text: 'Props can be directly mutated by the receiving child component to trigger re-renders.' },
+      { id: 'opt_global', text: 'Props are automatically synchronized across all components in the entire application.' },
+      { id: 'opt_state', text: 'Props can only store primitive string values.' },
+    ],
+    expectedAnswer: { correctOptionId: 'opt_readonly' },
+    explanation: 'In React, props are read-only inputs passed from a parent component to child components, upholding unidirectional data flow.',
+  },
+  {
+    id: 'qb_react_int_useeffect',
+    skillKey: 'React',
+    difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
+    type: QUESTION_TYPES.SINGLE_CHOICE,
+    prompt: 'In the React `useEffect(callback, deps)` hook, when does the cleanup function returned by the callback execute?',
+    options: [
+      { id: 'opt_cleanup', text: 'Before the component unmounts and before re-running the effect on subsequent renders when dependencies change.' },
+      { id: 'opt_render', text: 'Only when the browser window loses focus.' },
+      { id: 'opt_mount', text: 'Immediately after the initial DOM mount completes.' },
+      { id: 'opt_always', text: 'Synchronously before every JSX return statement.' },
+    ],
+    expectedAnswer: { correctOptionId: 'opt_cleanup' },
+    explanation: 'React executes the cleanup function when the component unmounts and before re-running the effect on re-renders where dependency values change.',
+  },
+  {
+    id: 'qb_react_adv_fiber',
+    skillKey: 'React',
+    difficulty: DIFFICULTY_LEVELS.ADVANCED,
+    type: QUESTION_TYPES.BOOLEAN,
+    prompt: 'True or False: React\'s Fiber architecture allows reconciliation and rendering work to be paused, aborted, or prioritized across different priority lanes.',
+    expectedAnswer: { expectedValue: true },
+    explanation: 'React Fiber is a complete rewrite of the reconciliation algorithm that enables incremental and prioritizable concurrent rendering.',
+  },
+
+  // =========================================================================
+  // HTML (canonical: html)
+  // =========================================================================
+  {
+    id: 'qb_html_beg_semantic',
+    skillKey: 'HTML',
+    difficulty: DIFFICULTY_LEVELS.BEGINNER,
+    type: QUESTION_TYPES.SINGLE_CHOICE,
+    prompt: 'Which HTML5 semantic element is designed to represent standalone, self-contained content that could be distributed independently?',
+    options: [
+      { id: 'opt_article', text: '<article>' },
+      { id: 'opt_section', text: '<section>' },
+      { id: 'opt_div', text: '<div>' },
+      { id: 'opt_span', text: '<span>' },
+    ],
+    expectedAnswer: { correctOptionId: 'opt_article' },
+    explanation: 'The <article> element represents a self-contained composition in a document, page, or application, intended to be independently distributable or reusable.',
+  },
+  {
+    id: 'qb_html_int_forms',
+    skillKey: 'HTML',
+    difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
+    type: QUESTION_TYPES.SINGLE_CHOICE,
+    prompt: 'Which HTML form input attribute specifies that the user must fill in a value before submitting the form?',
+    options: [
+      { id: 'opt_required', text: 'required' },
+      { id: 'opt_validate', text: 'validate' },
+      { id: 'opt_mandatory', text: 'mandatory' },
+      { id: 'opt_strict', text: 'strict' },
+    ],
+    expectedAnswer: { correctOptionId: 'opt_required' },
+    explanation: 'The boolean "required" attribute specifies that an input field must be filled out before submitting the form.',
   },
 ]);
 
