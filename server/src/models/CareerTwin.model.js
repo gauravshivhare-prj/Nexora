@@ -190,7 +190,9 @@ export function isCareerTwinStale(
   const reasons = [];
 
   const builtFrom = twin.sources?.profileUpdatedAt ?? null;
-  if (profileUpdatedAt && (!builtFrom || new Date(profileUpdatedAt) > new Date(builtFrom))) {
+  if (twin.sources?.hasProfile && !profileUpdatedAt) {
+    reasons.push('Your profile has changed since this was generated.');
+  } else if (profileUpdatedAt && (!builtFrom || new Date(profileUpdatedAt) > new Date(builtFrom))) {
     reasons.push('Your profile has changed since this was generated.');
   }
 
