@@ -255,21 +255,35 @@ export async function startAssessmentAttempt(userId, input) {
 
   const attemptNumber = previousAttempts.length + 1;
 
-  const attempt = await AssessmentAttempt.create({
-    user: userId,
-    assessmentId: fullAssessment.id,
-    attemptNumber,
-    version: fullAssessment.version,
-    skillKey: fullAssessment.skillKey,
-    skillName: fullAssessment.skillName,
-    difficulty: fullAssessment.difficulty,
-    passMark: fullAssessment.passMark,
-    status: ATTEMPT_STATUS.IN_PROGRESS,
-    startedAt: new Date(),
-    answers: {},
-  });
+  try {
+    const attempt = await AssessmentAttempt.create({
+      user: userId,
+      assessmentId: fullAssessment.id,
+      attemptNumber,
+      version: fullAssessment.version,
+      skillKey: fullAssessment.skillKey,
+      skillName: fullAssessment.skillName,
+      difficulty: fullAssessment.difficulty,
+      passMark: fullAssessment.passMark,
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+      startedAt: new Date(),
+      answers: {},
+    });
 
-  return toPublicAssessmentAttempt(attempt);
+    return toPublicAssessmentAttempt(attempt);
+  } catch (err) {
+    if (err.code === 11000) {
+      const active = await AssessmentAttempt.findOne({
+        user: userId,
+        assessmentId: fullAssessment.id,
+        status: ATTEMPT_STATUS.IN_PROGRESS,
+      });
+      if (active) {
+        return toPublicAssessmentAttempt(active);
+      }
+    }
+    throw err;
+  }
 }
 
 /**
