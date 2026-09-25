@@ -1,3 +1,5 @@
+import mongoose from 'mongoose';
+
 import { PROCESSING_STATUS } from '../constants/resumePolicy.js';
 import { CareerTwin, Resume, StudentProfile, isCareerTwinStale } from '../models/index.js';
 import { getCareerTwin } from './careerTwin.service.js';
@@ -50,16 +52,47 @@ const TOP_MATCHES = 3;
  * @param {string} userId From requireAuth. Every query below is scoped to it.
  */
 export async function getSummary(userId) {
-  const [profile, twinResult, resumeCounts] = await Promise.all([
+  const [profileResult, twinResult, resumeResult] = await Promise.allSettled([
     loadProfileStatus(userId),
     getCareerTwin(userId),
     loadResumeCounts(userId),
   ]);
 
+  const profile =
+    profileResult.status === 'fulfilled'
+      ? profileResult.value
+      : {
+          exists: false,
+          skillCount: 0,
+          projectCount: 0,
+          certificationCount: 0,
+          hasTargetRole: false,
+          updatedAt: null,
+        };
+  if (profileResult.status === 'rejected') {
+    logger.warn(`Summary: loadProfileStatus failed for user ${userId}`, profileResult.reason);
+  }
+
+  const twinData =
+    twinResult.status === 'fulfilled'
+      ? twinResult.value
+      : { twin: null, exists: false };
+  if (twinResult.status === 'rejected') {
+    logger.warn(`Summary: getCareerTwin failed for user ${userId}`, twinResult.reason);
+  }
+
+  const resumeCounts =
+    resumeResult.status === 'fulfilled'
+      ? resumeResult.value
+      : { total: 0, analysed: 0 };
+  if (resumeResult.status === 'rejected') {
+    logger.warn(`Summary: loadResumeCounts failed for user ${userId}`, resumeResult.reason);
+  }
+
   const summary = {
     profile,
     resumes: resumeCounts,
-    careerTwin: describeTwin(twinResult),
+    careerTwin: describeTwin(twinData),
     matches: { exists: false, top: [], method: null },
     focusRole: null,
     skillGap: null,
@@ -71,25 +104,30 @@ export async function getSummary(userId) {
   // Everything below is measured against the twin, so without one there is
   // nothing to measure. Not an error — a student who has not built one has
   // not failed at anything.
-  if (!twinResult.exists) {
+  if (!twinData.exists) {
     summary.nextStep = nextStepFor(summary);
     return summary;
   }
 
-  const ranking = await recommendRoles(userId, { limit: TOP_MATCHES });
+  let ranking = { matches: [], method: null };
+  try {
+    ranking = await recommendRoles(userId, { limit: TOP_MATCHES });
+  } catch (err) {
+    logger.warn(`Summary: recommendRoles failed for user ${userId}`, err);
+  }
 
   summary.matches = {
-    exists: ranking.matches.length > 0,
-    top: ranking.matches.map(toMatchSummary),
+    exists: Array.isArray(ranking.matches) && ranking.matches.length > 0,
+    top: (ranking.matches || []).map(toMatchSummary),
     method: ranking.method ?? null,
   };
 
-  const focus = ranking.matches[0];
+  const focus = ranking.matches?.[0];
   if (focus) {
     summary.focusRole = { roleId: focus.roleId, title: focus.title };
 
     // Only for the top match, and only its counts. A client that wants the
-    // detail has the per-role endpoints; duplicating their full output here
+    // drill-down has the per-role endpoints; duplicating their full output here
     // would make this response grow with every field they gain.
     //
     // Promise.allSettled rather than Promise.all: a transient failure in one
@@ -159,12 +197,39 @@ async function loadProfileStatus(userId) {
  * An unanalysed resume contributes nothing to the twin.
  */
 async function loadResumeCounts(userId) {
-  const [total, analysed] = await Promise.all([
-    Resume.countDocuments({ user: userId }),
-    Resume.countDocuments({ user: userId, 'analysis.status': PROCESSING_STATUS.COMPLETED }),
-  ]);
+  try {
+    const userObjectId =
+      typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
 
-  return { total, analysed };
+    const result = await Resume.aggregate([
+      { $match: { user: userObjectId } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          analysed: {
+            $sum: {
+              $cond: [{ $eq: ['$analysis.status', PROCESSING_STATUS.COMPLETED] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    if (result.length > 0) {
+      return { total: result[0].total, analysed: result[0].analysed };
+    }
+    return { total: 0, analysed: 0 };
+  } catch (error) {
+    logger.warn(`loadResumeCounts aggregate fallback for user ${userId}:`, error);
+    const [total, analysed] = await Promise.all([
+      Resume.countDocuments({ user: userId }),
+      Resume.countDocuments({ user: userId, 'analysis.status': PROCESSING_STATUS.COMPLETED }),
+    ]);
+    return { total, analysed };
+  }
 }
 
 /** The twin's own indicators and staleness, unchanged. */
