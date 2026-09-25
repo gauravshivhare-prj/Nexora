@@ -148,7 +148,7 @@ export async function requestCompletion(request) {
   // A provider that resolves with the wrong shape is as broken as one that
   // throws, and would otherwise surface much later as a confusing parse
   // failure against `undefined`.
-  if (typeof result?.text !== 'string') {
+  if (typeof result?.text !== 'string' || result.text.trim() === '') {
     logger.error(`AI provider "${provider.name}" returned no text`);
     throw ApiError.serviceUnavailable(
       'The AI service returned an unusable response. Please try again in a moment.',

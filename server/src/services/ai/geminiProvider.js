@@ -39,17 +39,39 @@ const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Extracts retry delay from Retry-After header if provided.
+ */
+function getRetryDelay(response, attempt) {
+  try {
+    const rawHeader = response?.headers?.get ? response.headers.get('retry-after') : response?.headers?.['retry-after'];
+    if (rawHeader) {
+      const seconds = Number.parseInt(rawHeader, 10);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.min(seconds * 1000, 5000);
+      }
+    }
+  } catch {
+    // Header parsing failed; fall back to exponential backoff
+  }
+  return RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+}
+
+/**
  * Waits out the backoff, unless there is no point.
  *
  * @returns {Promise<boolean>} True if the caller should try again. False on
  *   the last attempt, or when the overall deadline has already passed —
  *   sleeping through an expired budget only delays the error.
  */
-async function waitBeforeRetry(attempt, signal) {
+async function waitBeforeRetry(attempt, signal, delayMs) {
   if (attempt >= MAX_ATTEMPTS) return false;
   if (signal.aborted) return false;
 
-  await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+  const waitTime = typeof delayMs === 'number' && delayMs >= 0
+    ? delayMs
+    : RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+
+  await sleep(waitTime);
 
   return !signal.aborted;
 }
@@ -200,14 +222,18 @@ export function createGeminiProvider(options = {}) {
           const details = await readErrorDetails(response, apiKey);
           // `reason` and `status` are safe to log; the message may quote the
           // prompt and is not.
+          const errorReason = response.status === 429
+            ? 'rate_limit'
+            : (response.status >= 500 ? 'server_error' : 'http');
           const error = Object.assign(new Error(`Gemini API error (HTTP ${response.status}): ${details}`), {
-            reason: 'http',
+            reason: errorReason,
             status: response.status,
           });
 
           if (RETRYABLE_STATUSES.has(response.status)) {
             lastTransientError = error;
-            if (await waitBeforeRetry(attempt, signal)) continue;
+            const retryDelay = getRetryDelay(response, attempt);
+            if (await waitBeforeRetry(attempt, signal, retryDelay)) continue;
           }
 
           throw error;
@@ -229,21 +255,31 @@ export function createGeminiProvider(options = {}) {
       if (!candidate) {
         const blockReason = data.promptFeedback?.blockReason;
         if (blockReason) {
-          throw new Error(`Gemini request was blocked by safety filters: ${blockReason}`);
+          throw Object.assign(new Error(`Gemini request was blocked by safety filters: ${blockReason}`), {
+            reason: 'safety_blocked',
+          });
         }
-        throw new Error('Gemini API returned no candidates.');
+        throw Object.assign(new Error('Gemini API returned no candidates.'), {
+          reason: 'empty_candidates',
+        });
       }
 
       if (candidate.finishReason === 'SAFETY') {
-        throw new Error('Gemini generation stopped prematurely due to safety filters.');
+        throw Object.assign(new Error('Gemini generation stopped prematurely due to safety filters.'), {
+          reason: 'safety_blocked',
+        });
       }
       if (candidate.finishReason === 'RECITATION') {
-        throw new Error('Gemini generation stopped prematurely due to recitation policy.');
+        throw Object.assign(new Error('Gemini generation stopped prematurely due to recitation policy.'), {
+          reason: 'recitation_blocked',
+        });
       }
 
       const text = candidate.content?.parts?.[0]?.text;
-      if (typeof text !== 'string') {
-        throw new Error('Gemini API candidate response contains no text.');
+      if (typeof text !== 'string' || text.trim() === '') {
+        throw Object.assign(new Error('Gemini API candidate response contains no text.'), {
+          reason: 'empty_text',
+        });
       }
 
       return {

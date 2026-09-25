@@ -564,5 +564,97 @@ describe('geminiProvider', () => {
         },
       );
     });
+
+    it('rejects when provider returns whitespace-only text with 503 AI_PROVIDER_FAILED', async () => {
+      const mockEmptyProvider = {
+        name: 'mock-empty',
+        async complete() {
+          return { text: '   ', model: 'mock-empty' };
+        },
+      };
+
+      registerAiProvider(mockEmptyProvider);
+      useAiProvider('mock-empty');
+
+      await assert.rejects(
+        () => requestCompletion({ user: 'Resume text' }),
+        (err) => {
+          assert.equal(err.statusCode, 503);
+          assert.equal(err.errorCode, ERROR_CODES.AI_PROVIDER_FAILED);
+          assert.match(err.message, /unusable response/);
+          return true;
+        },
+      );
+    });
+
+    it('preserves client-safe error messages without exposing prompt content', async () => {
+      const sensitivePrompt = 'SECRET_CONFIDENTIAL_PROMPT_PAYLOAD';
+      global.fetch = async () => {
+        throw new Error(`Upstream failed while processing ${sensitivePrompt}`);
+      };
+
+      const provider = createGeminiProvider({ apiKey: 'test-key' });
+      registerAiProvider(provider);
+      useAiProvider('gemini');
+
+      await assert.rejects(
+        () => requestCompletion({ user: sensitivePrompt }),
+        (err) => {
+          assert.equal(err.statusCode, 503);
+          assert.equal(err.errorCode, ERROR_CODES.AI_PROVIDER_FAILED);
+          assert.doesNotMatch(err.message, new RegExp(sensitivePrompt));
+          assert.match(err.message, /service could not be reached/);
+          return true;
+        },
+      );
+    });
+  });
+
+  describe('resilience edge cases', () => {
+    it('parses Retry-After header on 429 rate limit and retries successfully', async () => {
+      let attempts = 0;
+      global.fetch = async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            ok: false,
+            status: 429,
+            headers: new Headers({ 'retry-after': '1' }),
+            async json() {
+              return { error: { message: 'RESOURCE_EXHAUSTED' } };
+            },
+          };
+        }
+        return completion('{"resilient":true}');
+      };
+
+      const provider = createGeminiProvider({ apiKey: 'test-key' });
+      const result = await provider.complete({ user: 'test' });
+      assert.equal(result.text, '{"resilient":true}');
+      assert.equal(attempts, 2);
+    });
+
+    it('throws error when candidate content has whitespace-only text', async () => {
+      global.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            candidates: [
+              {
+                finishReason: 'STOP',
+                content: { parts: [{ text: '   \n  ' }] },
+              },
+            ],
+          };
+        },
+      });
+
+      const provider = createGeminiProvider({ apiKey: 'key' });
+      await assert.rejects(
+        () => provider.complete({ user: 'test' }),
+        /Gemini API candidate response contains no text/,
+      );
+    });
   });
 });
