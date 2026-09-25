@@ -312,6 +312,18 @@ export async function submitQuestionAnswer(
     );
   }
 
+  const parsedDuration = Number(durationSeconds);
+  if (
+    !Number.isFinite(parsedDuration) ||
+    parsedDuration < 0 ||
+    parsedDuration > INTERVIEW_LIMITS.maxTimePerQuestionSeconds
+  ) {
+    throw ApiError.badRequest(
+      `durationSeconds must be a finite number between 0 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds}.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
   // Step: Run AI evaluation service
   const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
     question,
