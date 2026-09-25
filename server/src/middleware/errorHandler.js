@@ -98,7 +98,8 @@ function normaliseError(error) {
 export function errorHandler(error, req, res, next) {
   const { statusCode, message, errorCode, details } = normaliseError(error);
 
-  const logContext = `${req.method} ${req.originalUrl} → ${statusCode} ${errorCode}`;
+  const safeUrl = req.originalUrl?.replace(/([?&](?:token|key|apiKey|secret|password)=)[^&]+/gi, '$1[REDACTED]') || req.url || '';
+  const logContext = `${req.method} ${safeUrl} → ${statusCode} ${errorCode}`;
   if (statusCode >= 500) {
     logger.error(`Unhandled request failure: ${logContext}`, error);
   } else {
