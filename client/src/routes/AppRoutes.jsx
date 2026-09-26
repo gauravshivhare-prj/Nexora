@@ -14,6 +14,8 @@ import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
 import { RoadmapPage } from '../pages/RoadmapPage.jsx';
 import { SkillGapPage } from '../pages/SkillGapPage.jsx';
+import { InterviewsPage } from '../pages/InterviewsPage.jsx';
+import { InterviewSessionPage } from '../pages/InterviewSessionPage.jsx';
 
 /**
  * Application routes.
@@ -50,6 +52,9 @@ export function AppRoutes() {
         <Route path="/assessments" element={<AssessmentsPage />} />
         <Route path="/assessments/:assessmentId" element={<AssessmentRunnerPage />} />
         <Route path="/assessments/:assessmentId/run" element={<AssessmentRunnerPage />} />
+
+        <Route path="/interviews" element={<InterviewsPage />} />
+        <Route path="/interviews/:sessionId" element={<InterviewSessionPage />} />
 
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/careers/:roleId/skill-gap" element={<SkillGapPage />} />

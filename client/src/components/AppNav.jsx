@@ -22,6 +22,7 @@ const DESTINATIONS = [
   { to: '/resume', label: 'Resume' },
   { to: '/career-twin', label: 'CareerTwin' },
   { to: '/assessments', label: 'Assessments' },
+  { to: '/interviews', label: 'Interviews' },
   { to: '/careers', label: 'Careers' },
 ];
 
