@@ -222,14 +222,16 @@ export async function submitAssessmentAttempt(attemptId, { answers, timeSpentSec
   );
 
   const data = body?.data;
-  if (!data?.attempt || !data?.result) {
+  if (!data?.attempt) {
     throw new Error('The backend returned an unexpected response shape.');
   }
 
+  const rawResult = data.result || data.attempt;
+
   return {
     attempt: toAssessmentAttempt(data.attempt),
-    result: toAssessmentResult(data.result),
-    verification: data.verification ?? null,
+    result: toAssessmentResult(rawResult),
+    verification: data.verification ?? data.evidenceResult ?? null,
   };
 }
 
