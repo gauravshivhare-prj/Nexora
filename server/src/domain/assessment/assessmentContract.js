@@ -224,6 +224,7 @@ export function validateAssessmentDefinition(def) {
     timeLimitMinutes,
     isPractice: Boolean(def.isPractice),
     isActive: def.isActive !== false,
+    evaluatedBy: def.evaluatedBy ?? 'assessment-engine',
     evidencePolicy: def.evidencePolicy ?? null,
     questions: validatedQuestions,
   };

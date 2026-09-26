@@ -23,6 +23,8 @@ import {
   beginnerTestAssessment,
   correctSubmissionFixture,
   partialSubmissionFixture,
+  practiceHighScorerSubmissionFixture,
+  practiceTestAssessment,
   scoringTestAssessment,
 } from './fixtures/assessmentScoringFixtures.js';
 
@@ -75,6 +77,20 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
         passMark: beginnerTestAssessment.passMark,
         timeLimitMinutes: beginnerTestAssessment.timeLimitMinutes,
         questions: beginnerTestAssessment.questions,
+        isActive: true,
+      },
+      {
+        assessmentId: practiceTestAssessment.id,
+        version: practiceTestAssessment.version,
+        skillKey: practiceTestAssessment.skillKey,
+        skillName: practiceTestAssessment.skillKey,
+        difficulty: practiceTestAssessment.difficulty,
+        isPractice: true,
+        title: practiceTestAssessment.title,
+        description: practiceTestAssessment.description,
+        passMark: practiceTestAssessment.passMark,
+        timeLimitMinutes: practiceTestAssessment.timeLimitMinutes,
+        questions: practiceTestAssessment.questions,
         isActive: true,
       },
     ]);
@@ -384,6 +400,63 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
       assert.equal(submitRes.status, 200);
       assert.equal(submitRes.body.data.attempt.score, 1.0);
       assert.equal(submitRes.body.data.attempt.passed, true);
+      assert.equal(submitRes.body.data.evidenceResult?.eligibleForVerified, false);
+      assert.equal(submitRes.body.data.attempt.evidenceCheckId, null);
+
+      // Zero SkillEvidenceChecks created
+      const checkCount = await SkillEvidenceCheck.countDocuments();
+      assert.equal(checkCount, 0);
+
+      // CareerTwin should NOT be stale because no verified evidence was recorded
+      const twinRes = await getWithToken(server.baseUrl, '/api/career-twin', token);
+      assert.equal(twinRes.body.data.careerTwin.isStale, false);
+
+      // Regenerating CareerTwin leaves Node.js at claimed, NOT verified
+      const regenerated = await sendWithToken(server.baseUrl, '/api/career-twin', {
+        method: 'POST',
+        token,
+      });
+      const nodeSkill = regenerated.body.data.careerTwin.skills.find((s) => s.key === 'nodejs');
+      assert.equal(nodeSkill.strength, 'claimed');
+      assert.equal(regenerated.body.data.careerTwin.indicators.verified, 0);
+    });
+
+    it('practice assessment scoring 100% does NOT create verified evidence or elevate skill', async () => {
+      const { token } = await signUp('practice-hero');
+
+      // Create profile claiming Node.js
+      await sendJsonWithToken(server.baseUrl, '/api/profile', {
+        method: 'PATCH',
+        token,
+        payload: { skills: [{ name: 'Node.js', level: 'intermediate' }] },
+      });
+
+      // Generate initial twin
+      await sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token });
+
+      // Start and submit practice assessment with 100% correct answers
+      const startRes = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/assessments/${practiceTestAssessment.id}/attempts`,
+        { method: 'POST', token, payload: {} },
+      );
+      assert.equal(startRes.status, 201);
+      assert.equal(startRes.body.data.attempt.isPractice, true);
+      const attemptId = startRes.body.data.attempt.id;
+
+      const submitRes = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/assessments/attempts/${attemptId}/submit`,
+        {
+          method: 'POST',
+          token,
+          payload: { answers: practiceHighScorerSubmissionFixture.answers },
+        },
+      );
+      assert.equal(submitRes.status, 200);
+      assert.equal(submitRes.body.data.attempt.score, 1.0);
+      assert.equal(submitRes.body.data.attempt.passed, true);
+      assert.equal(submitRes.body.data.attempt.isPractice, true);
       assert.equal(submitRes.body.data.evidenceResult?.eligibleForVerified, false);
       assert.equal(submitRes.body.data.attempt.evidenceCheckId, null);
 

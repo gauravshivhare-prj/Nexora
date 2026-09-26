@@ -197,6 +197,11 @@ const assessmentSchema = new mongoose.Schema(
         message: `Assessment must contain between ${ASSESSMENT_LIMITS.questions.minItems} and ${ASSESSMENT_LIMITS.questions.maxItems} questions.`,
       },
     },
+    isPractice: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -231,6 +236,7 @@ export function toPublicAssessment(doc) {
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
     group: raw.group ?? null,
+    isPractice: raw.isPractice === true,
     isAvailable: raw.isActive !== false,
     title: raw.title,
     description: raw.description,
@@ -273,6 +279,7 @@ export function toAdminAssessment(doc) {
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
     group: raw.group ?? null,
+    isPractice: raw.isPractice === true,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,

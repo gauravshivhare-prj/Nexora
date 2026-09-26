@@ -67,6 +67,11 @@ const assessmentAttemptSchema = new mongoose.Schema(
       required: true,
       enum: DIFFICULTY_LEVEL_VALUES,
     },
+    isPractice: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     status: {
       type: String,
       required: true,
@@ -180,6 +185,7 @@ export function toPublicAssessmentAttempt(doc) {
     skillName: raw.skillName,
     canonicalSkill: raw.skillName ?? raw.skillKey,
     difficulty: raw.difficulty,
+    isPractice: raw.isPractice === true,
     status: raw.status,
     score: raw.score,
     passMark: raw.passMark,

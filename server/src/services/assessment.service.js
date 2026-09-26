@@ -45,6 +45,7 @@ export async function seedAssessmentCatalog() {
         description: item.description,
         passMark: item.passMark,
         timeLimitMinutes: item.timeLimitMinutes,
+        isPractice: item.isPractice === true,
         questions: item.questions,
         isActive: item.isActive !== false,
       });
@@ -182,6 +183,7 @@ export async function createAssessment(input) {
       description: validated.description,
       passMark: validated.passMark,
       timeLimitMinutes: validated.timeLimitMinutes,
+      isPractice: validated.isPractice === true,
       questions: validated.questions,
       isActive: input.isActive !== false,
     });
@@ -300,6 +302,7 @@ export async function startAssessmentAttempt(userId, input) {
     skillKey: fullAssessment.skillKey,
     skillName: fullAssessment.skillName,
     difficulty: fullAssessment.difficulty,
+    isPractice: Boolean(fullAssessment.isPractice),
     passMark: fullAssessment.passMark,
     status: ATTEMPT_STATUS.IN_PROGRESS,
     startedAt: new Date(),
@@ -376,6 +379,7 @@ export async function submitAssessmentAttempt(userId, payload) {
       assessmentId: fullAssessment.id,
       studentId: String(userId),
       startedAt: attempt.startedAt,
+      isPractice: Boolean(fullAssessment.isPractice || attempt.isPractice),
       answers,
     },
     evaluatedAt: evalDate,

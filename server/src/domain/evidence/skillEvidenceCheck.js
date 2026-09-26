@@ -50,14 +50,14 @@ export function buildAssessmentResult({
   const passed = score >= passMark;
   const outcome = passed ? CHECK_OUTCOMES.PASS : CHECK_OUTCOMES.FAIL;
 
-  // Invariant: AI evaluation, practice mode, and failing outcomes can never produce verified evidence.
+  // Invariant: AI evaluation, practice mode, beginner tier, and failing outcomes can never produce verified evidence.
   const isAi = evaluatedBy === 'ai';
   const isEligible =
-    isAi || isPractice || outcome !== CHECK_OUTCOMES.PASS
+    isAi || isPractice || difficulty === 'beginner' || outcome !== CHECK_OUTCOMES.PASS
       ? false
       : typeof eligibleForVerified === 'boolean'
         ? eligibleForVerified
-        : passed && difficulty !== 'beginner';
+        : passed;
 
   return result({
     kind: CHECK_KINDS.ASSESSMENT,
