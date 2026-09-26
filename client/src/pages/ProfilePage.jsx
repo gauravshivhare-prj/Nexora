@@ -18,6 +18,7 @@ import {
   SEMESTER_OPTIONS,
 } from '../constants/profileOptions.js';
 import { blankProfile, fetchProfile, saveProfile } from '../services/profile.service.js';
+import { ApiRequestError } from '../services/apiClient.js';
 import { toMessage } from '../utils/errorMessage.js';
 
 /**
