@@ -61,12 +61,16 @@ export const INJECTION_PATTERNS = Object.freeze([
   /give\s+(a\s+)?full\s+marks/i,
   /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
   /(award|give|receive|grant)\s+(a\s+)?(perfect|full|maximum|1(\.0)?)\s+(score|marks?)/i,
+  /(award|give|receive|grant|assign)\s+(the\s+candidate\s+)?(a\s+)?score\s+(of\s+)?1(\.0)?\b/i,
+  /(set|make|force|change)\s+(the\s+|all\s+)?scores?\s*(to|=|\:)?\s*1(\.0)?\b/i,
+  /all\s+dimensions?\s+(to\s+)?1(\.0)?\b/i,
   /score\s+is\s+100/i,
   /bypass\s+evaluation/i,
   /roleplay\s+game/i,
   /\bDAN\s*\(/i,
   /do\s+anything\s+now/i,
   /you\s+are\s+(now\s+)?(a\s+)?(helpful\s+)?(tutor|assistant|bot|Dan|an\s+unrestricted)/i,
+  /(developer|jailbreak|unrestricted)\s+mode\b/i,
   /reveal\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
   /repeat\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
   /what\s+is\s+your\s+system\s+prompt/i,
@@ -75,9 +79,11 @@ export const INJECTION_PATTERNS = Object.freeze([
   /ignore\s+(the\s+)?rubric/i,
   /do\s+not\s+grade/i,
 
-  // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace)
-  /<\s*\/?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules)\b[^>]*>/i,
-  /<!\[CDATA\[|\]\]>/i,
+  // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace, backslashes, or unclosed)
+  /<\s*[\/\\|]?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules)\b/i,
+  /<!--|-->/,
+  /<!\[CDATA\[|\]\]>|<!DOCTYPE/i,
+  /<\?xml|<\?(php|=|\w+)?/i,
 
   // LLM template and chat tokens
   /<\s*\|\s*im_(start|end)\s*\|>/i,

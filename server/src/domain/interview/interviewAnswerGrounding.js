@@ -73,9 +73,14 @@ export function escapeCandidateAnswerForPrompt(text) {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
       // 2. Strip Unicode zero-width and bidirectional formatting characters
       .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
-      // 3. Neutralize CDATA open and close
+      // 3. Neutralize XML comments, CDATA blocks, declarations, and processing instructions
+      .replace(/<!--/g, '&lt;!--')
+      .replace(/-->/g, '--&gt;')
       .replace(/<!\[CDATA\[/gi, '&lt;![CDATA[')
       .replace(/\]\]>/g, ']]&gt;')
+      .replace(/<!(\w+)/gi, '&lt;!$1')
+      .replace(/<\?(\w+)?/gi, '&lt;?$1')
+      .replace(/\?>/g, '?&gt;')
       // 4. Neutralize LLM special template and chat tokens
       .replace(/<\|\s*im_(start|end)\s*\|>/gi, '&lt;|im_$1|&gt;')
       .replace(/<\|\s*(startoftext|endoftext)\s*\|>/gi, '&lt;|$1|&gt;')
@@ -84,7 +89,9 @@ export function escapeCandidateAnswerForPrompt(text) {
       .replace(/<\s*(\/?)\s*turn_(start|end)\s*>/gi, '&lt;$1turn_$2&gt;')
       .replace(/<\s*(\/?)\s*s\s*>/gi, '&lt;$1s&gt;')
       // 5. Escape all XML-like tags (including tags with whitespace around opening/closing slashes)
-      .replace(/<(\s*\/?\s*[\w!|?_~.:-]+[^>]*)>/g, '&lt;$1&gt;')
+      .replace(/<(\s*[\/\\|]?\s*[\w!|?_~.:\\/-]+[^>]*)>/g, '&lt;$1&gt;')
+      // 6. Neutralize any unclosed opening/closing delimiter tags lacking a closing >
+      .replace(/<\s*([\/\\|]?)\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules)\b/gi, '&lt;$1$2')
   );
 }
 
