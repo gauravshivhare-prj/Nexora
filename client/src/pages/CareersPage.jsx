@@ -193,14 +193,14 @@ function MatchCard({ match }) {
   return (
     <article className="animate-rise rounded-xl border border-orange-100 bg-orange-50/30 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold text-ink">{match.title}</h3>
+        <h3 className="text-base font-semibold text-ink break-words">{match.title}</h3>
         <p className="text-sm font-semibold text-brand-text">
           {match.score}
           <span className="text-xs font-normal text-ink-muted">/100 · {match.band}</span>
         </p>
       </div>
 
-      {match.summary ? <p className="mt-1 text-sm text-ink-muted">{match.summary}</p> : null}
+      {match.summary ? <p className="mt-1 text-sm text-ink-muted break-words">{match.summary}</p> : null}
 
       <div
         role="img"
@@ -214,10 +214,10 @@ function MatchCard({ match }) {
       </div>
 
       {match.bandDescription ? (
-        <p className="mt-2 text-xs text-ink-muted">{match.bandDescription}</p>
+        <p className="mt-2 text-xs text-ink-muted break-words">{match.bandDescription}</p>
       ) : null}
 
-      {match.explanation ? <p className="mt-2 text-sm text-ink">{match.explanation}</p> : null}
+      {match.explanation ? <p className="mt-2 text-sm text-ink break-words">{match.explanation}</p> : null}
 
       <Dimensions dimensions={match.dimensions} />
 
