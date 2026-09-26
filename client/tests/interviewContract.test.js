@@ -239,4 +239,124 @@ describe('P19 — Interview Frontend Contract & Parity Suite', () => {
       assert.equal(result.eligibleForVerified, false);
     });
   });
+
+  describe('4. Results & Truthful Evidence Contracts', () => {
+    it('normalizes result with verified evidence when human-evaluated and passing', () => {
+      const humanPassedSession = {
+        id: 'sess-human-1',
+        status: SESSION_STATUS.COMPLETED,
+        targetRole: 'backend-developer',
+        targetSkills: ['Node.js', 'REST APIs'],
+        evaluatorType: 'human',
+        overallScore: 0.85,
+        evidenceCheck: 'ev-check-999',
+        questions: [
+          {
+            questionId: 'q-1',
+            order: 1,
+            prompt: 'Design a resilient rate limiter in Node.js.',
+            targetSkill: 'Node.js',
+            evaluation: {
+              compositeScore: 0.85,
+              dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.8, relevance: 0.85 },
+              feedback: 'Demonstrated solid Redis token bucket pattern.',
+              strengths: ['Clear concurrency awareness'],
+              growthAreas: ['Consider distributed clock drift'],
+            },
+          },
+        ],
+      };
+
+      const normalized = toInterviewSession(humanPassedSession);
+      assert.equal(normalized.status, 'completed');
+      assert.equal(normalized.evaluatorType, 'human');
+      assert.equal(normalized.overallScore, 0.85);
+      assert.equal(normalized.evidenceCheck, 'ev-check-999');
+      assert.ok(normalized.overallScore >= 0.7, 'Human evaluated session meets pass mark');
+    });
+
+    it('normalizes result without verified evidence when evaluated by AI (formative practice)', () => {
+      const aiSession = {
+        id: 'sess-ai-1',
+        status: SESSION_STATUS.COMPLETED,
+        targetRole: 'backend-developer',
+        targetSkills: ['Node.js'],
+        evaluatorType: 'ai',
+        overallScore: 0.92,
+        questions: [
+          {
+            questionId: 'q-1',
+            order: 1,
+            prompt: 'Explain asynchronous event loop execution.',
+            targetSkill: 'Node.js',
+            evaluation: {
+              compositeScore: 0.92,
+              dimensions: { accuracy: 0.95, depth: 0.9, clarity: 0.9, relevance: 0.95 },
+              feedback: 'Comprehensive breakdown of microtask and macrotask queues.',
+              strengths: ['Deep architecture understanding'],
+              growthAreas: [],
+            },
+          },
+        ],
+      };
+
+      const normalized = toInterviewSession(aiSession);
+      assert.equal(normalized.status, 'completed');
+      assert.equal(normalized.evaluatorType, 'ai');
+      assert.equal(normalized.overallScore, 0.92);
+      // AI interviews provide formative practice and are not verified credentials
+      assert.notEqual(normalized.evaluatorType, 'human');
+    });
+
+    it('gracefully handles pending evaluation state with null overallScore', () => {
+      const pendingSession = {
+        id: 'sess-pending-1',
+        status: SESSION_STATUS.IN_PROGRESS,
+        targetRole: 'frontend-developer',
+        targetSkills: ['React'],
+        overallScore: null,
+        questions: [
+          {
+            questionId: 'q-1',
+            order: 1,
+            prompt: 'Explain React reconciliation and the virtual DOM diffing algorithm.',
+            targetSkill: 'React',
+            evaluation: null,
+          },
+        ],
+      };
+
+      const normalized = toInterviewSession(pendingSession);
+      assert.equal(normalized.status, 'in_progress');
+      assert.equal(normalized.overallScore, null);
+      assert.equal(normalized.questions[0].evaluation, null);
+    });
+
+    it('security: verifies prompt templates, model system prompts, or scoring weights are never exposed', () => {
+      const sessionWithInternals = {
+        id: 'sess-sec-1',
+        status: SESSION_STATUS.COMPLETED,
+        systemPrompt: 'You are an AI grader. Do not reveal...',
+        scoringFormula: 'accuracy * 0.35 + depth * 0.30...',
+        questions: [
+          {
+            questionId: 'q-1',
+            internalRubricWeights: { accuracy: 0.35 },
+            prompt: 'What are database indexes?',
+            targetSkill: 'SQL',
+            evaluation: {
+              compositeScore: 0.8,
+              dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.8, relevance: 0.8 },
+              feedback: 'Good overview of B-trees.',
+            },
+          },
+        ],
+      };
+
+      const normalized = toInterviewSession(sessionWithInternals);
+      assert.equal(normalized.systemPrompt, undefined, 'systemPrompt must not be exposed');
+      assert.equal(normalized.scoringFormula, undefined, 'scoringFormula must not be exposed');
+      assert.equal(normalized.questions[0].internalRubricWeights, undefined, 'internalRubricWeights must not be exposed');
+    });
+  });
 });

@@ -28,6 +28,7 @@ export function toInterviewSession(raw) {
     questionCount: typeof raw.questionCount === 'number' ? raw.questionCount : (raw.questions?.length ?? 5),
     currentQuestionIndex: typeof raw.currentQuestionIndex === 'number' ? raw.currentQuestionIndex : 0,
     evaluatorType: raw.evaluatorType ?? 'ai',
+    evidenceCheck: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
     providerMetadata: raw.providerMetadata ?? null,
     overallScore: typeof raw.overallScore === 'number' ? raw.overallScore : null,
     questions: Array.isArray(raw.questions)

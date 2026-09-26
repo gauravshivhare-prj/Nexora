@@ -90,9 +90,9 @@ export function InterviewSessionPage() {
 
   async function handleSubmitAnswer() {
     if (isSubmitting || !session) return;
-    const questions = session.questions || [];
-    const currentQIndex = Math.min(activeQuestionIndex, Math.max(0, questions.length - 1));
-    const currentQuestion = questions[currentQIndex];
+    const questionsList = session.questions || [];
+    const currentQIndex = Math.min(activeQuestionIndex, Math.max(0, questionsList.length - 1));
+    const currentQuestion = questionsList[currentQIndex];
     if (!currentQuestion) return;
 
     if (currentQuestion.answer) {
@@ -199,6 +199,50 @@ export function InterviewSessionPage() {
   const charCount = currentDraft.trim().length;
   const isAnswered = Boolean(currentQuestion?.answer);
   const allQuestionsAnswered = questions.length > 0 && questions.every((q) => Boolean(q.answer));
+
+  // Compute aggregate statistics for the completed results view
+  const evaluatedQuestions = questions.filter(
+    (q) => q.evaluation && typeof q.evaluation.compositeScore === 'number',
+  );
+
+  const avgAccuracy = evaluatedQuestions.length
+    ? Math.round(
+        (evaluatedQuestions.reduce((s, q) => s + (q.evaluation.dimensions?.accuracy ?? 0), 0) /
+          evaluatedQuestions.length) *
+          100,
+      )
+    : null;
+
+  const avgDepth = evaluatedQuestions.length
+    ? Math.round(
+        (evaluatedQuestions.reduce((s, q) => s + (q.evaluation.dimensions?.depth ?? 0), 0) /
+          evaluatedQuestions.length) *
+          100,
+      )
+    : null;
+
+  const avgClarity = evaluatedQuestions.length
+    ? Math.round(
+        (evaluatedQuestions.reduce((s, q) => s + (q.evaluation.dimensions?.clarity ?? 0), 0) /
+          evaluatedQuestions.length) *
+          100,
+      )
+    : null;
+
+  const avgRelevance = evaluatedQuestions.length
+    ? Math.round(
+        (evaluatedQuestions.reduce((s, q) => s + (q.evaluation.dimensions?.relevance ?? 0), 0) /
+          evaluatedQuestions.length) *
+          100,
+      )
+    : null;
+
+  const allStrengths = [
+    ...new Set(evaluatedQuestions.flatMap((q) => q.evaluation?.strengths || [])),
+  ];
+  const allGrowthAreas = [
+    ...new Set(evaluatedQuestions.flatMap((q) => q.evaluation?.growthAreas || [])),
+  ];
 
   return (
     <PageShell>
@@ -621,41 +665,240 @@ export function InterviewSessionPage() {
           </div>
         )}
 
-        {/* Completed View */}
+        {/* Completed & Comprehensive Results View */}
         {isCompleted && (
-          <Card title="Interview Complete & Evaluated">
-            <div className="flex flex-col items-center py-6 text-center">
-              <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-4 py-1 text-sm font-semibold text-green-700">
-                Evaluation Complete
-              </span>
+          <div className="flex flex-col gap-6">
+            {/* Header Score Card */}
+            <Card>
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-3.5 py-1 text-xs font-semibold text-green-700">
+                    Evaluation Complete
+                  </span>
+                  <span className={`inline-flex rounded-full border px-3.5 py-1 text-xs font-semibold ${
+                    session.evaluatorType === 'human'
+                      ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+                      : 'border-orange-200 bg-orange-50 text-brand-text'
+                  }`}>
+                    {session.evaluatorType === 'human' ? 'Human Evaluator' : 'AI Formative Evaluation'}
+                  </span>
+                </div>
 
-              {session.overallScore !== null ? (
-                <h2 className="mt-4 text-3xl font-bold tracking-tight text-ink">
-                  Overall Score: {Math.round(session.overallScore * 100)}%
-                </h2>
-              ) : null}
+                {session.overallScore !== null ? (
+                  <div className="mt-4 flex flex-col items-center">
+                    <span className="text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+                      {Math.round(session.overallScore * 100)}%
+                    </span>
+                    <span className="mt-1 text-sm font-medium text-ink-muted">Overall Technical Score</span>
+                    <span className={`mt-2 inline-flex rounded-full px-3 py-0.5 text-xs font-semibold ${
+                      session.overallScore >= 0.7
+                        ? 'border border-green-200 bg-green-50 text-green-800'
+                        : 'border border-amber-200 bg-amber-50 text-amber-800'
+                    }`}>
+                      {session.overallScore >= 0.7 ? 'Strong Competency' : 'Needs Reinforcement'}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-base font-semibold text-ink-muted">Evaluation in progress or pending.</p>
+                )}
 
-              <p className="mt-2 max-w-md text-sm text-ink-muted">
-                Your interview has been processed and analyzed according to the technical evaluation rubric across{' '}
-                {session.questions?.length ?? 0} questions.
-              </p>
+                <p className="mt-3 max-w-lg text-sm text-ink-muted leading-relaxed">
+                  Results computed across {evaluatedQuestions.length} answered questions targeting{' '}
+                  <strong className="text-ink">{session.targetSkills.join(', ')}</strong>.
+                </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  to="/interviews"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand hover:bg-brand-soft"
-                >
-                  Back to Interviews
-                </Link>
-                <Link
-                  to="/career-twin"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
-                >
-                  View CareerTwin Profile
-                </Link>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                  <Link
+                    to="/interviews"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft shadow-sm"
+                  >
+                    Back to Interviews
+                  </Link>
+                  <Link
+                    to="/career-twin"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-6 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+                  >
+                    View CareerTwin Profile
+                  </Link>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+
+            {/* Skill Evidence & Credential Status Card */}
+            <Card title="Skill Evidence Status" description="Evaluation authority and verified credential eligibility">
+              <div className="flex flex-col gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {session.targetSkills.map((skill) => (
+                    <div
+                      key={skill}
+                      className="flex flex-col justify-between rounded-xl border border-orange-100 bg-orange-50/20 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-ink text-sm">{skill}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                          session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
+                            ? 'border-green-200 bg-green-50 text-green-800'
+                            : 'border-amber-200 bg-amber-50 text-amber-800'
+                        }`}>
+                          {session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
+                            ? 'Verified Credential'
+                            : 'Formative Evidence'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-ink-muted leading-relaxed">
+                        {session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
+                          ? 'Evidence granted with institutional verified credential status.'
+                          : 'Recorded as formative interview practice. Institutional verification requires human evaluator sign-off.'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {session.evidenceCheck ? (
+                  <p className="text-xs text-ink-muted">
+                    Skill Evidence Check ID: <code className="font-mono text-ink">{session.evidenceCheck}</code>
+                  </p>
+                ) : null}
+              </div>
+            </Card>
+
+            {/* Multi-Dimensional Aggregate Performance Card */}
+            {evaluatedQuestions.length > 0 && (
+              <Card title="Rubric Dimensions Breakdown" description="Aggregate average score across all answered questions">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3.5 text-center">
+                    <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Accuracy (35%)</p>
+                    <p className="mt-1 text-2xl font-bold text-ink">{avgAccuracy ?? '—'}%</p>
+                    <p className="mt-1 text-[11px] text-ink-muted">Technical precision</p>
+                  </div>
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3.5 text-center">
+                    <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Depth (30%)</p>
+                    <p className="mt-1 text-2xl font-bold text-ink">{avgDepth ?? '—'}%</p>
+                    <p className="mt-1 text-[11px] text-ink-muted">Trade-offs & architecture</p>
+                  </div>
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3.5 text-center">
+                    <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Clarity (20%)</p>
+                    <p className="mt-1 text-2xl font-bold text-ink">{avgClarity ?? '—'}%</p>
+                    <p className="mt-1 text-[11px] text-ink-muted">Structured reasoning</p>
+                  </div>
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3.5 text-center">
+                    <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Relevance (15%)</p>
+                    <p className="mt-1 text-2xl font-bold text-ink">{avgRelevance ?? '—'}%</p>
+                    <p className="mt-1 text-[11px] text-ink-muted">Scope alignment</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Consolidated Strengths & Growth Areas */}
+            {(allStrengths.length > 0 || allGrowthAreas.length > 0) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {allStrengths.length > 0 && (
+                  <Card title="Demonstrated Strengths">
+                    <ul className="list-disc list-inside space-y-1.5 text-xs text-ink leading-relaxed">
+                      {allStrengths.map((str, i) => (
+                        <li key={i} className="break-words">{str}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+                {allGrowthAreas.length > 0 && (
+                  <Card title="Recommended Growth Areas">
+                    <ul className="list-disc list-inside space-y-1.5 text-xs text-ink leading-relaxed">
+                      {allGrowthAreas.map((area, i) => (
+                        <li key={i} className="break-words">{area}</li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* Detailed Per-Question Evaluation Breakdown */}
+            <Card title="Question-by-Question Evaluation Breakdown" description="Detailed review of your answers and evaluator feedback">
+              <div className="flex flex-col gap-6">
+                {session.questions.map((q, idx) => (
+                  <div
+                    key={q.questionId || idx}
+                    className="flex flex-col gap-3 rounded-xl border border-orange-100 bg-surface p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-ink text-sm">Question {idx + 1}</span>
+                        <span className="rounded-full border border-orange-200 bg-orange-50/50 px-2 py-0.5 text-[11px] font-medium text-ink">
+                          {q.targetSkill}
+                        </span>
+                      </div>
+                      {q.evaluation?.compositeScore !== null && q.evaluation?.compositeScore !== undefined ? (
+                        <span className="rounded-full bg-orange-100 px-3 py-0.5 text-xs font-bold text-brand-text">
+                          Score: {Math.round(q.evaluation.compositeScore * 100)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-muted">Not answered</span>
+                      )}
+                    </div>
+
+                    <p className="text-sm font-medium text-ink leading-relaxed break-words whitespace-pre-wrap">
+                      {q.prompt}
+                    </p>
+
+                    {q.answer ? (
+                      <div className="flex flex-col gap-1.5 rounded-lg border border-orange-100 bg-orange-50/10 p-3">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                          Your Answer:
+                        </span>
+                        <p className="text-xs text-ink leading-relaxed break-words whitespace-pre-wrap max-h-48 overflow-y-auto">
+                          {q.answer.answerText}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {q.evaluation ? (
+                      <div className="flex flex-col gap-3 pt-1">
+                        {q.evaluation.dimensions ? (
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-center text-xs">
+                            <div className="rounded bg-surface border border-orange-100 p-2">
+                              <p className="text-[10px] text-ink-muted">Accuracy</p>
+                              <p className="font-bold text-ink">
+                                {Math.round((q.evaluation.dimensions.accuracy ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded bg-surface border border-orange-100 p-2">
+                              <p className="text-[10px] text-ink-muted">Depth</p>
+                              <p className="font-bold text-ink">
+                                {Math.round((q.evaluation.dimensions.depth ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded bg-surface border border-orange-100 p-2">
+                              <p className="text-[10px] text-ink-muted">Clarity</p>
+                              <p className="font-bold text-ink">
+                                {Math.round((q.evaluation.dimensions.clarity ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded bg-surface border border-orange-100 p-2">
+                              <p className="text-[10px] text-ink-muted">Relevance</p>
+                              <p className="font-bold text-ink">
+                                {Math.round((q.evaluation.dimensions.relevance ?? 0) * 100)}%
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {q.evaluation.feedback ? (
+                          <div className="rounded-lg border border-orange-100 bg-surface p-3 text-xs text-ink leading-relaxed break-words whitespace-pre-wrap">
+                            <p className="font-semibold text-ink-muted uppercase text-[10px] tracking-wider mb-1">
+                              Feedback
+                            </p>
+                            {q.evaluation.feedback}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
         )}
       </div>
     </PageShell>
