@@ -94,6 +94,56 @@ export const RUBRIC_DIMENSION_WEIGHTS = Object.freeze({
 });
 
 /**
+ * Forbidden security-sensitive fields that an untrusted AI model (or an attacker
+ * attempting prompt injection) must NEVER be permitted to set or influence.
+ */
+export const FORBIDDEN_SECURITY_FIELDS = Object.freeze([
+  'verified',
+  'eligibleforverified',
+  'outcome',
+  'evaluatortype',
+  'evaluator',
+  'evidence',
+  'evidencecheck',
+  'user',
+  'userid',
+  'role',
+  'admin',
+  'isadmin',
+  'permissions',
+  'token',
+  'apikey',
+  'secret',
+  'password',
+  'sessionstatus',
+  'passmark',
+  'proto',
+  'prototype',
+  'constructor',
+  'studentid',
+  'sessionid',
+  'credential',
+  'credentials',
+  'jwt',
+]);
+
+/**
+ * Checks whether a key is a forbidden security field, prototype pollution target,
+ * or MongoDB operator.
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isForbiddenOrPrototypeKey(key) {
+  if (typeof key !== 'string') return true;
+  const lower = key.toLowerCase();
+  if (lower === '__proto__' || lower === 'prototype' || lower === 'constructor') return true;
+  if (key.startsWith('$')) return true;
+  const normalized = lower.replace(/[^a-z]/g, '');
+  return FORBIDDEN_SECURITY_FIELDS.includes(normalized);
+}
+
+/**
  * Bounded limits for interview sessions, questions, and answers.
  */
 export const INTERVIEW_LIMITS = Object.freeze({
@@ -140,6 +190,7 @@ const ALLOWED_TRANSITIONS = new Map([
 export function canTransitionSession(fromStatus, toStatus) {
   const allowed = ALLOWED_TRANSITIONS.get(fromStatus);
   if (!allowed) return false;
+  if (isForbiddenOrPrototypeKey(toStatus) || isForbiddenOrPrototypeKey(fromStatus)) return false;
   return allowed.has(toStatus);
 }
 
@@ -150,8 +201,14 @@ export function canTransitionSession(fromStatus, toStatus) {
  * @returns {object} Normalized session initialization definition
  */
 export function validateSessionInit(params) {
-  if (!params || typeof params !== 'object') {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
     throw new Error('Session initialization parameters must be an object.');
+  }
+
+  for (const key of Object.keys(params)) {
+    if (isForbiddenOrPrototypeKey(key) && key.toLowerCase() !== 'sessionid' && key.toLowerCase() !== 'studentid') {
+      throw new Error(`Session initialization contains forbidden security field "${key}".`);
+    }
   }
 
   const {
@@ -253,8 +310,14 @@ export function validateSessionInit(params) {
  * @returns {object} Validated question definition
  */
 export function validateInterviewQuestion(question, index = 0) {
-  if (!question || typeof question !== 'object') {
+  if (!question || typeof question !== 'object' || Array.isArray(question)) {
     throw new Error(`Question at index ${index} must be an object.`);
+  }
+
+  for (const key of Object.keys(question)) {
+    if (isForbiddenOrPrototypeKey(key)) {
+      throw new Error(`Question contains forbidden security or prototype field "${key}".`);
+    }
   }
 
   const { id, type, targetSkill, prompt, rubricCriteria = [], timeLimitSeconds = 180, weight = 1 } = question;
@@ -317,8 +380,14 @@ export function validateInterviewQuestion(question, index = 0) {
  * @returns {object} Validated answer definition
  */
 export function validateStudentAnswer(answer) {
-  if (!answer || typeof answer !== 'object') {
+  if (!answer || typeof answer !== 'object' || Array.isArray(answer)) {
     throw new Error('Answer must be an object.');
+  }
+
+  for (const key of Object.keys(answer)) {
+    if (isForbiddenOrPrototypeKey(key)) {
+      throw new Error(`Answer contains forbidden security or prototype field "${key}".`);
+    }
   }
 
   const { questionId, answerText, durationSeconds = 0, submittedAt = new Date() } = answer;
@@ -363,10 +432,14 @@ export function validateStudentAnswer(answer) {
  * @returns {number} Weighted composite score bounded in [0, 1]
  */
 export function calculateCompositeQuestionScore(dimensions) {
+  if (!dimensions || typeof dimensions !== 'object') {
+    return 0;
+  }
   let composite = 0;
   for (const [key, weight] of Object.entries(RUBRIC_DIMENSION_WEIGHTS)) {
-    const rawVal = dimensions?.[key] ?? 0;
-    const bounded = Math.max(0, Math.min(1, rawVal));
+    const rawVal = dimensions[key];
+    const num = typeof rawVal === 'number' && Number.isFinite(rawVal) ? rawVal : 0;
+    const bounded = Math.max(0, Math.min(1, num));
     composite += bounded * weight;
   }
   return Math.round(composite * 10000) / 10000;
@@ -376,7 +449,7 @@ export function calculateCompositeQuestionScore(dimensions) {
  * Validates and sanitizes raw, untrusted AI evaluation output.
  *
  * Enforces strict rubric boundaries, clamps numeric fields to [0, 1],
- * filters hallucinated skills, and rejects malformed outputs.
+ * filters hallucinated skills, rejects forbidden security fields, and rejects malformed outputs.
  *
  * @param {unknown} raw Raw output from AI model completion
  * @returns {object} Clean, validated, bounded evaluation object
@@ -386,8 +459,25 @@ export function validateAiQuestionEvaluation(raw) {
     throw new Error('AI evaluation output must be an object.');
   }
 
-  if (!raw.dimensions || typeof raw.dimensions !== 'object') {
+  for (const key of Object.keys(raw)) {
+    if (isForbiddenOrPrototypeKey(key)) {
+      throw new Error(`AI evaluation output contains forbidden security field "${key}".`);
+    }
+  }
+
+  if (!raw.dimensions || typeof raw.dimensions !== 'object' || Array.isArray(raw.dimensions)) {
     throw new Error('Missing required rubric dimensions object.');
+  }
+
+  for (const dKey of Object.keys(raw.dimensions)) {
+    if (isForbiddenOrPrototypeKey(dKey)) {
+      throw new Error(`AI evaluation dimensions contains forbidden field "${dKey}".`);
+    }
+    if (!RUBRIC_DIMENSION_KEYS.includes(dKey)) {
+      throw new Error(
+        `Unexpected dimension "${dKey}". Allowed dimensions are: ${RUBRIC_DIMENSION_KEYS.join(', ')}.`,
+      );
+    }
   }
 
   const parsedDimensions = {};
@@ -395,8 +485,17 @@ export function validateAiQuestionEvaluation(raw) {
     if (raw.dimensions[key] === undefined || raw.dimensions[key] === null) {
       throw new Error(`Missing required rubric dimension: "${key}".`);
     }
-    const num = Number(raw.dimensions[key]);
-    if (Number.isNaN(num)) {
+    const rawVal = raw.dimensions[key];
+    if (
+      typeof rawVal === 'boolean' ||
+      Array.isArray(rawVal) ||
+      (typeof rawVal === 'object' && rawVal !== null) ||
+      (typeof rawVal === 'string' && rawVal.trim() === '')
+    ) {
+      throw new Error(`Dimension "${key}" must be a numeric value.`);
+    }
+    const num = Number(rawVal);
+    if (Number.isNaN(num) || !Number.isFinite(num)) {
       throw new Error(`Dimension "${key}" must be a numeric value.`);
     }
     parsedDimensions[key] = Math.max(0, Math.min(1, Math.round(num * 10000) / 10000));
@@ -431,6 +530,7 @@ export function validateAiQuestionEvaluation(raw) {
 
   return {
     score: compositeScore,
+    compositeScore,
     dimensions: parsedDimensions,
     feedback: raw.feedback.trim(),
     strengths,
@@ -502,11 +602,12 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
   const questionResults = [];
 
   for (const q of questions) {
-    const weight = q.weight ?? 1;
+    const weight = typeof q.weight === 'number' && Number.isFinite(q.weight) && q.weight > 0 ? q.weight : 1;
     totalWeight += weight;
 
     const evaluation = evaluations[q.id];
-    const score = evaluation?.score ?? 0;
+    const rawScore = evaluation?.compositeScore ?? evaluation?.score ?? 0;
+    const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? Math.max(0, Math.min(1, rawScore)) : 0;
     totalWeightedScore += score * weight;
 
     questionResults.push({
@@ -515,6 +616,7 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
       targetSkillName: q.targetSkillName,
       weight,
       score,
+      compositeScore: score,
       dimensions: evaluation?.dimensions ?? null,
       feedback: evaluation?.feedback ?? null,
       strengths: evaluation?.strengths ?? [],

@@ -1,35 +1,14 @@
 import { parseJsonObject } from '../../services/ai/aiJson.js';
 import { canonicalSkill } from '../skills/skillKey.js';
 import {
+  FORBIDDEN_SECURITY_FIELDS,
+  isForbiddenOrPrototypeKey,
   INTERVIEW_LIMITS,
   RUBRIC_DIMENSION_KEYS,
   calculateCompositeQuestionScore,
 } from './interviewContract.js';
 
-/**
- * Forbidden security-sensitive fields that an untrusted AI model (or an attacker
- * attempting prompt injection) must NEVER be permitted to set or influence.
- */
-export const FORBIDDEN_SECURITY_FIELDS = Object.freeze([
-  'verified',
-  'eligibleforverified',
-  'outcome',
-  'evaluatortype',
-  'evaluator',
-  'evidence',
-  'evidencecheck',
-  'user',
-  'userid',
-  'role',
-  'admin',
-  'permissions',
-  'token',
-  'apikey',
-  'secret',
-  'password',
-  'sessionstatus',
-  'passmark',
-]);
+export { FORBIDDEN_SECURITY_FIELDS, isForbiddenOrPrototypeKey };
 
 /**
  * Permitted top-level keys for an AI interview question evaluation payload.
@@ -155,8 +134,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
 
   // Step 3: Scan for forbidden security-sensitive fields (root & nested)
   for (const key of Object.keys(raw)) {
-    const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
-    if (FORBIDDEN_SECURITY_FIELDS.includes(normalizedKey)) {
+    if (isForbiddenOrPrototypeKey(key)) {
       errors.push(
         `Security violation: AI evaluation output contains forbidden security field "${key}".`,
       );
@@ -165,7 +143,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
 
   // Check top-level unknown keys
   for (const key of Object.keys(raw)) {
-    if (!ALLOWED_EVALUATION_FIELDS.includes(key)) {
+    if (!ALLOWED_EVALUATION_FIELDS.includes(key) && !isForbiddenOrPrototypeKey(key)) {
       if (strict) {
         errors.push(`Unexpected field "${key}" in AI evaluation output.`);
       } else {
@@ -181,16 +159,11 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   } else {
     // Check for nested security fields inside dimensions
     for (const dKey of Object.keys(raw.dimensions)) {
-      const normalizedDKey = dKey.toLowerCase().replace(/[^a-z]/g, '');
-      if (FORBIDDEN_SECURITY_FIELDS.includes(normalizedDKey)) {
+      if (isForbiddenOrPrototypeKey(dKey)) {
         errors.push(
           `Security violation: AI evaluation dimensions contains forbidden security field "${dKey}".`,
         );
       }
-    }
-
-    // Check for unexpected extra dimensions
-    for (const dKey of Object.keys(raw.dimensions)) {
       if (!RUBRIC_DIMENSION_KEYS.includes(dKey)) {
         errors.push(
           `Unexpected dimension "${dKey}". Allowed dimensions are: ${RUBRIC_DIMENSION_KEYS.join(', ')}.`,
@@ -206,7 +179,12 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         continue;
       }
 
-      if (typeof rawVal === 'boolean' || Array.isArray(rawVal) || (typeof rawVal === 'object' && rawVal !== null)) {
+      if (
+        typeof rawVal === 'boolean' ||
+        Array.isArray(rawVal) ||
+        (typeof rawVal === 'object' && rawVal !== null) ||
+        (typeof rawVal === 'string' && rawVal.trim() === '')
+      ) {
         errors.push(`Dimension "${dimKey}" must be a numeric value.`);
         continue;
       }
@@ -349,6 +327,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   const cleanData = {
     dimensions: validDimensions,
     compositeScore,
+    score: compositeScore,
     feedback: validFeedback,
     strengths: validStrengths,
     growthAreas: validGrowthAreas,

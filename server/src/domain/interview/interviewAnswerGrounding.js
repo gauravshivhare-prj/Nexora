@@ -268,6 +268,7 @@ export function groundAnswerEvaluation(evaluation, { question, candidateAnswer }
 
   // Check 4: Deterministically recalculate composite score
   grounded.compositeScore = calculateCompositeQuestionScore(grounded.dimensions);
+  grounded.score = grounded.compositeScore;
 
   return {
     evaluation: grounded,
