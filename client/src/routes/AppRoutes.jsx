@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppLayout } from '../layouts/AppLayout.jsx';
+import { AssessmentsPage } from '../pages/AssessmentsPage.jsx';
 import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
 import { CareersPage } from '../pages/CareersPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -45,6 +46,7 @@ export function AppRoutes() {
         <Route path="/resume/:resumeId" element={<ResumeDetailPage />} />
 
         <Route path="/career-twin" element={<CareerTwinPage />} />
+        <Route path="/assessments" element={<AssessmentsPage />} />
 
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/careers/:roleId/skill-gap" element={<SkillGapPage />} />

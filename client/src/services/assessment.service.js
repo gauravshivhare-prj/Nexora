@@ -34,24 +34,30 @@ export function toAssessment(raw) {
     throw new Error('Invalid assessment data: expected an object.');
   }
 
-  const assessmentId = raw.assessmentId || raw.slug || '';
+  const assessmentId = raw.assessmentId || raw.id || raw.slug || '';
   return {
     assessmentId,
+    id: assessmentId,
     slug: raw.slug || assessmentId,
     title: raw.title ?? '',
     description: raw.description ?? '',
-    canonicalSkill: raw.canonicalSkill ?? '',
+    canonicalSkill: raw.canonicalSkill || raw.skillName || raw.skillKey || '',
+    skillKey: raw.skillKey || '',
+    skillName: raw.skillName || raw.canonicalSkill || raw.skillKey || '',
     difficulty: raw.difficulty ?? DIFFICULTY_LEVEL.BEGINNER,
     version: raw.version ?? 1,
-    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : 0,
+    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : (typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : 0),
+    timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : (typeof raw.durationMinutes === 'number' ? raw.durationMinutes : 0),
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     totalQuestions: typeof raw.totalQuestions === 'number' ? raw.totalQuestions : (raw.questions?.length ?? 0),
     questions: Array.isArray(raw.questions)
       ? raw.questions.map((q) => ({
-          questionId: q.questionId ?? '',
+          questionId: q.questionId || q.id || '',
+          id: q.id || q.questionId || '',
           prompt: q.prompt ?? '',
           type: q.type ?? QUESTION_TYPE.SINGLE_CHOICE,
           weight: typeof q.weight === 'number' ? q.weight : 1,
+          codeSnippet: q.codeSnippet ?? null,
           options: Array.isArray(q.options)
             ? q.options.map((opt) => ({
                 id: opt.id ?? '',
