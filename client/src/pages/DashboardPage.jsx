@@ -139,7 +139,7 @@ function Tile({ section, title, description, empty, emptyAction, onRetry, childr
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-danger-text transition-colors duration-200 hover:bg-red-100"
+            className="mt-2 rounded-lg border border-red-300 px-3 py-2.5 text-xs font-semibold text-danger-text transition-colors duration-200 hover:bg-red-100"
           >
             Try again
           </button>
@@ -172,8 +172,8 @@ function Action({ to, children, primary = false }) {
       to={to}
       className={
         primary
-          ? 'inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft'
-          : 'inline-block rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text'
+          ? 'inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft'
+          : 'inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text'
       }
     >
       {children}
@@ -347,7 +347,7 @@ function MatchesTile({ section, onRetry }) {
                 </span>
                 <Link
                   to={`/careers/${match.roleId}/skill-gap`}
-                  className="rounded-lg border border-orange-200 px-3 py-1 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+                  className="rounded-lg border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
                 >
                   Gap
                 </Link>
