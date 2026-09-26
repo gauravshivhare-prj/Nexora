@@ -226,13 +226,13 @@ function MatchCard({ match }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           to={`/careers/${match.roleId}/skill-gap`}
-          className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+          className="inline-flex min-h-[44px] items-center rounded-lg border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
         >
           See the skill gap
         </Link>
         <Link
           to={`/careers/${match.roleId}/roadmap`}
-          className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+          className="inline-flex min-h-[44px] items-center rounded-lg border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
         >
           See the roadmap
         </Link>
@@ -377,7 +377,7 @@ function RoleCatalogue({ catalogue }) {
 
             <Link
               to={`/careers/${role.id}/skill-gap`}
-              className="shrink-0 rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+              className="inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
             >
               Skill gap
             </Link>
