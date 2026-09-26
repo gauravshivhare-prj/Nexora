@@ -387,6 +387,7 @@ export async function submitQuestionAnswer(
     question,
     answerText: answerText.trim(),
     signal: options.signal,
+    timeoutMs: options.timeoutMs,
   });
 
   // Record answer and evaluation on question subdocument
