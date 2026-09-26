@@ -242,7 +242,7 @@ export function ResumeDetailPage() {
         </Card>
 
         <Card title="Stored text" description="Exactly what was saved, and what gets analysed.">
-          <pre className="max-h-96 overflow-auto rounded-xl border border-orange-100 bg-orange-50/30 p-4 text-xs whitespace-pre-wrap text-ink">
+          <pre className="max-h-96 overflow-auto rounded-xl border border-orange-100 bg-orange-50/30 p-4 text-xs whitespace-pre-wrap break-all text-ink">
             {resume.extractedText}
           </pre>
         </Card>
