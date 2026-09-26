@@ -510,7 +510,12 @@ export async function getLatestAssessmentResult(userId, assessmentId) {
 // -----------------------------------------------------------------------------
 
 function validateAssessmentIdParam(id) {
-  if (typeof id !== 'string' || id.trim().length === 0 || !/^[a-z0-9_-]+$/i.test(id.trim())) {
+  if (
+    typeof id !== 'string' ||
+    id.trim().length < ASSESSMENT_LIMITS.id.min ||
+    id.trim().length > ASSESSMENT_LIMITS.id.max ||
+    !/^[a-z0-9_-]+$/i.test(id.trim())
+  ) {
     throw ApiError.badRequest('assessmentId parameter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
   }
 }

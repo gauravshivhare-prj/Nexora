@@ -639,8 +639,8 @@ describe('TASK A08 — Assessment Scoring Correctness: Malformed Submissions', (
   });
 });
 
-describe('TASK A08 — Assessment Scoring Correctness: Model Projection Parity', () => {
-  it('verifies toPublicAssessmentAttempt accurately projects status and scoringRule for client review', () => {
+describe('TASK A08 — Assessment Scoring Correctness: Model Projection Parity & Security', () => {
+  it('verifies toPublicAssessmentAttempt accurately projects status and performance metrics while stripping internal scoringRule', () => {
     const mockAttemptDoc = {
       _id: '507f1f77bcf86cd799439011',
       assessmentId: 'asm_mock_test',
@@ -697,12 +697,12 @@ describe('TASK A08 — Assessment Scoring Correctness: Model Projection Parity',
 
     const qr1 = publicAttempt.questionResults[0];
     assert.equal(qr1.status, 'correct');
-    assert.equal(qr1.scoringRule, 'exact_single_choice_match');
+    assert.equal(qr1.scoringRule, undefined, 'scoringRule must be stripped from public projection');
     assert.equal(qr1.isCorrect, true);
 
     const qr2 = publicAttempt.questionResults[1];
     assert.equal(qr2.status, 'partial');
-    assert.equal(qr2.scoringRule, 'partial_credit_proportional');
+    assert.equal(qr2.scoringRule, undefined, 'scoringRule must be stripped from public projection');
     assert.equal(qr2.isCorrect, false);
   });
 });

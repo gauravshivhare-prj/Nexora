@@ -116,8 +116,15 @@ export function validateAssessmentDefinition(def) {
   }
 
   // ID validation
-  if (typeof def.id !== 'string' || !/^[a-z0-9_-]+$/i.test(def.id.trim())) {
-    throw new Error('Assessment ID must be a non-empty alphanumeric slug (letters, numbers, hyphens, underscores).');
+  if (
+    typeof def.id !== 'string' ||
+    def.id.trim().length < 3 ||
+    def.id.trim().length > 64 ||
+    !/^[a-z0-9_-]+$/i.test(def.id.trim())
+  ) {
+    throw new Error(
+      'Assessment ID must be a non-empty alphanumeric slug between 3 and 64 characters (letters, numbers, hyphens, underscores).',
+    );
   }
   const id = def.id.trim();
 

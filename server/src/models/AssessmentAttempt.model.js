@@ -192,7 +192,6 @@ export function toPublicAssessmentAttempt(doc) {
     questionResults: (raw.questionResults ?? []).map((qr) => ({
       questionId: qr.questionId,
       status: qr.status ?? (qr.isCorrect ? 'correct' : 'incorrect'),
-      scoringRule: qr.scoringRule ?? null,
       prompt: qr.prompt,
       weight: qr.weight,
       studentAnswer: qr.studentAnswer,
