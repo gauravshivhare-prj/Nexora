@@ -166,6 +166,40 @@ describe('R3 — InterviewSession Model & Ownership Suite', () => {
         async () => session.save(),
         /Invalid session lifecycle transition from "abandoned" to "in_progress"/,
       );
+
+      // Verify timed_out auto-sets completedAt and prevents transitions
+      const timedOutSession = new InterviewSession({
+        user: testUserId,
+        targetRole: 'Backend Engineer',
+        targetSkills: ['Node.js'],
+      });
+      await timedOutSession.save();
+      timedOutSession.status = SESSION_STATUS.TIMED_OUT;
+      await timedOutSession.save();
+      assert.ok(timedOutSession.completedAt instanceof Date);
+
+      timedOutSession.status = SESSION_STATUS.IN_PROGRESS;
+      await assert.rejects(
+        async () => timedOutSession.save(),
+        /Invalid session lifecycle transition from "timed_out" to "in_progress"/,
+      );
+
+      // Verify failed auto-sets completedAt and prevents transitions
+      const failedSession = new InterviewSession({
+        user: testUserId,
+        targetRole: 'Backend Engineer',
+        targetSkills: ['Node.js'],
+      });
+      await failedSession.save();
+      failedSession.status = SESSION_STATUS.FAILED;
+      await failedSession.save();
+      assert.ok(failedSession.completedAt instanceof Date);
+
+      failedSession.status = SESSION_STATUS.IN_PROGRESS;
+      await assert.rejects(
+        async () => failedSession.save(),
+        /Invalid session lifecycle transition from "failed" to "in_progress"/,
+      );
     });
   });
 

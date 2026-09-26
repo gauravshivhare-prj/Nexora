@@ -542,6 +542,54 @@ describe('R8 — Interview API & Ownership Suite', () => {
       );
       assert.equal(startRes.status, 400);
       assert.equal(startRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+
+      // Verify answering an expired/timed-out session rejects with INTERVIEW_SESSION_EXPIRED
+      const answerRes = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Answer to expired session' },
+        },
+      );
+      assert.equal(answerRes.status, 400);
+      assert.equal(answerRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+
+      // Verify GET on expired session returns timed_out status with completedAt
+      const getRes = await sendWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}`,
+        { method: 'GET', token: user.token },
+      );
+      assert.equal(getRes.status, 200);
+      assert.equal(getRes.body.data.session.status, SESSION_STATUS.TIMED_OUT);
+      assert.ok(getRes.body.data.session.completedAt);
+    });
+
+    it('concurrent start requests allow exactly one transition to in_progress', async () => {
+      const user = await createAccount('racing_start_user');
+      const createRes = await createTestSession(user.token);
+      const sessionId = createRes.body.data.session.id;
+
+      const responses = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          sendWithToken(
+            server.baseUrl,
+            `/api/interviews/sessions/${sessionId}/start`,
+            { method: 'POST', token: user.token },
+          ),
+        ),
+      );
+
+      const successful = responses.filter((r) => r.status === 200);
+      const rejected = responses.filter((r) => r.status === 400);
+
+      assert.equal(successful.length, 1);
+      assert.equal(rejected.length, 3);
+      for (const r of rejected) {
+        assert.equal(r.body.errorCode, ERROR_CODES.INTERVIEW_INVALID_STATE);
+      }
     });
   });
 

@@ -73,6 +73,24 @@ export const SESSION_STATUS = Object.freeze({
   FAILED: 'failed',
 });
 
+/** Terminal states where session execution is finished. */
+export const TERMINAL_SESSION_STATUSES = Object.freeze([
+  SESSION_STATUS.COMPLETED,
+  SESSION_STATUS.TIMED_OUT,
+  SESSION_STATUS.ABANDONED,
+  SESSION_STATUS.FAILED,
+]);
+
+/**
+ * Checks whether a given session status is terminal.
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isTerminalSessionStatus(status) {
+  return TERMINAL_SESSION_STATUSES.includes(status);
+}
+
 /** UI presentation tokens for session lifecycle states. */
 export const SESSION_STATUS_PRESENTATION = Object.freeze({
   [SESSION_STATUS.INITIALIZED]: {

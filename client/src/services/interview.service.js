@@ -16,6 +16,8 @@ import {
   RUBRIC_DIMENSION_WEIGHTS,
   SESSION_STATUS,
   SESSION_STATUS_PRESENTATION,
+  TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus,
 } from '../constants/interviewOptions.js';
 
 // Re-export constants for easy access by UI consumers
@@ -36,6 +38,8 @@ export {
   RUBRIC_DIMENSION_WEIGHTS,
   SESSION_STATUS,
   SESSION_STATUS_PRESENTATION,
+  TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus,
 };
 
 /**

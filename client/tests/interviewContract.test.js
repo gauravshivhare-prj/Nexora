@@ -31,6 +31,8 @@ import {
   toInterviewEvaluation,
   toInterviewQuestion,
   toInterviewSession,
+  TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus,
 } from '../src/services/interview.service.js';
 
 import {
@@ -60,6 +62,21 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
         assert.ok(SESSION_STATUS_PRESENTATION[status].label, `Missing label for session status "${status}"`);
         assert.ok(SESSION_STATUS_PRESENTATION[status].badgeClass, `Missing badgeClass for session status "${status}"`);
       }
+    });
+
+    it('identifies terminal session statuses correctly', () => {
+      assert.deepEqual(TERMINAL_SESSION_STATUSES, [
+        SESSION_STATUS.COMPLETED,
+        SESSION_STATUS.TIMED_OUT,
+        SESSION_STATUS.ABANDONED,
+        SESSION_STATUS.FAILED,
+      ]);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.INITIALIZED), false);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.IN_PROGRESS), false);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.COMPLETED), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.ABANDONED), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.FAILED), true);
     });
 
     it('difficulty levels and order match server definition', () => {

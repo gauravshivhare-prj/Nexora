@@ -181,6 +181,21 @@ export async function createSession(userId, input = {}) {
  * @returns {Promise<Array<object>>}
  */
 export async function listSessions(userId) {
+  const now = new Date();
+  await InterviewSession.updateMany(
+    {
+      user: userId,
+      status: { $in: [SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS] },
+      expiresAt: { $lt: now },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.TIMED_OUT,
+        completedAt: now,
+      },
+    },
+  );
+
   const sessions = await InterviewSession.find({ user: userId })
     .sort({ createdAt: -1 })
     .lean();
@@ -197,6 +212,16 @@ export async function listSessions(userId) {
  */
 export async function getSession(userId, sessionId) {
   const session = await findOwnedSession(userId, sessionId);
+
+  if (
+    (session.status === SESSION_STATUS.INITIALIZED || session.status === SESSION_STATUS.IN_PROGRESS) &&
+    session.isExpired()
+  ) {
+    session.status = SESSION_STATUS.TIMED_OUT;
+    session.completedAt = session.completedAt || new Date();
+    await session.save();
+  }
+
   return toPublicInterviewSession(session);
 }
 
@@ -210,6 +235,18 @@ export async function getSession(userId, sessionId) {
 export async function startSession(userId, sessionId) {
   const session = await findOwnedSession(userId, sessionId);
 
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session has expired and cannot be started.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
+
   if (session.status !== SESSION_STATUS.INITIALIZED) {
     throw ApiError.badRequest(
       `Cannot start session in status "${session.status}".`,
@@ -217,20 +254,43 @@ export async function startSession(userId, sessionId) {
     );
   }
 
-  if (session.isExpired()) {
-    session.status = SESSION_STATUS.TIMED_OUT;
-    await session.save();
+  const now = new Date();
+  const updated = await InterviewSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: userId,
+      status: SESSION_STATUS.INITIALIZED,
+      expiresAt: { $gt: now },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.IN_PROGRESS,
+        startedAt: now,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!updated) {
+    const current = await findOwnedSession(userId, sessionId);
+    if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
+      if (current.status !== SESSION_STATUS.TIMED_OUT) {
+        current.status = SESSION_STATUS.TIMED_OUT;
+        current.completedAt = current.completedAt || new Date();
+        await current.save();
+      }
+      throw ApiError.badRequest(
+        'Session has expired and cannot be started.',
+        ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+      );
+    }
     throw ApiError.badRequest(
-      'Session has expired and cannot be started.',
-      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+      `Cannot start session in status "${current.status}".`,
+      ERROR_CODES.INTERVIEW_INVALID_STATE,
     );
   }
 
-  session.status = SESSION_STATUS.IN_PROGRESS;
-  session.startedAt = new Date();
-  await session.save();
-
-  return toPublicInterviewSession(session);
+  return toPublicInterviewSession(updated);
 }
 
 /**
@@ -253,21 +313,24 @@ export async function submitQuestionAnswer(
 ) {
   const session = await findOwnedSession(userId, sessionId);
 
+  // Check expiration before checking active status
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
+
   // Status check: Must be in_progress
   if (session.status !== SESSION_STATUS.IN_PROGRESS) {
     throw ApiError.badRequest(
       `Cannot submit answer: session is in "${session.status}" state (must be in_progress).`,
       ERROR_CODES.INTERVIEW_INVALID_STATE,
-    );
-  }
-
-  // Check expiration
-  if (session.isExpired()) {
-    session.status = SESSION_STATUS.TIMED_OUT;
-    await session.save();
-    throw ApiError.badRequest(
-      'Session time limit has expired.',
-      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
     );
   }
 
@@ -330,18 +393,25 @@ export async function submitQuestionAnswer(
   const previousAttemptCount = session.attemptCount || 0;
   const questionPath = `questions.${questionIndex}`;
 
-  // Written conditionally rather than with save(): the AI call above takes
-  // seconds, and two concurrent submissions for the same question would
-  // otherwise both pass the attempt checks and overwrite each other. The
-  // filter only matches if nothing has been recorded since this request read
-  // the session, so exactly one of them lands and the other gets a 409.
+  const attemptFilter = previousAttemptNumber === 0
+    ? {
+        $or: [
+          { [`${questionPath}.answer.attemptNumber`]: { $exists: false } },
+          { [`${questionPath}.answer`]: null },
+          { [`${questionPath}.answer`]: { $exists: false } },
+        ],
+      }
+    : { [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber };
+
+  // Atomically update: must still be in_progress, not expired, and attempt not yet recorded
   const updated = await InterviewSession.findOneAndUpdate(
     {
       _id: session._id,
       user: userId,
       status: SESSION_STATUS.IN_PROGRESS,
+      expiresAt: { $gt: new Date() },
       attemptCount: previousAttemptCount,
-      [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber || { $exists: false },
+      ...attemptFilter,
     },
     {
       $set: {
@@ -372,6 +442,26 @@ export async function submitQuestionAnswer(
   );
 
   if (!updated) {
+    const current = await findOwnedSession(userId, sessionId);
+    if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
+      if (current.status !== SESSION_STATUS.TIMED_OUT) {
+        current.status = SESSION_STATUS.TIMED_OUT;
+        current.completedAt = current.completedAt || new Date();
+        await current.save();
+      }
+      throw ApiError.badRequest(
+        'Session time limit has expired.',
+        ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+      );
+    }
+
+    if (current.status !== SESSION_STATUS.IN_PROGRESS) {
+      throw ApiError.badRequest(
+        `Cannot submit answer: session is in "${current.status}" state (must be in_progress).`,
+        ERROR_CODES.INTERVIEW_INVALID_STATE,
+      );
+    }
+
     throw ApiError.conflict(
       'This answer was already recorded by another request. Reload the session and try again.',
       ERROR_CODES.CONFLICT,
@@ -403,6 +493,18 @@ export async function submitQuestionAnswer(
 export async function completeSession(userId, sessionId, options = {}) {
   const session = await findOwnedSession(userId, sessionId);
 
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
+
   if (session.status !== SESSION_STATUS.IN_PROGRESS) {
     throw ApiError.badRequest(
       `Cannot complete session in "${session.status}" state.`,
@@ -428,19 +530,25 @@ export async function completeSession(userId, sessionId, options = {}) {
       evaluatorType,
     });
 
-  session.overallScore = overallScore;
-  session.evaluatorType = evaluatorType;
-  session.status = SESSION_STATUS.COMPLETED;
-  session.completedAt = new Date();
+  const completedAt = new Date();
 
   // Claim the completion atomically before writing any evidence. Two
   // concurrent completes would otherwise both pass the status check above and
   // each insert a full set of evidence records.
-  const claim = await InterviewSession.updateOne(
+  const completedSession = await InterviewSession.findOneAndUpdate(
     { _id: session._id, user: userId, status: SESSION_STATUS.IN_PROGRESS },
-    { $set: { status: SESSION_STATUS.COMPLETED, completedAt: session.completedAt } },
+    {
+      $set: {
+        status: SESSION_STATUS.COMPLETED,
+        completedAt,
+        overallScore,
+        evaluatorType,
+      },
+    },
+    { new: true, runValidators: true },
   );
-  if (claim.modifiedCount === 0) {
+
+  if (!completedSession) {
     throw ApiError.badRequest(
       'Cannot complete session: it is no longer in progress.',
       ERROR_CODES.INTERVIEW_INVALID_STATE,
@@ -461,20 +569,23 @@ export async function completeSession(userId, sessionId, options = {}) {
       eligibleForVerified: ev.eligibleForVerified,
       evaluatedBy: ev.evaluatedBy,
       reference: String(session._id),
-      completedAt: session.completedAt,
+      completedAt,
     });
     savedChecks.push(check);
   }
 
   if (savedChecks.length > 0) {
-    session.evidenceCheck = savedChecks[0]._id;
+    completedSession.evidenceCheck = savedChecks[0]._id;
+    await InterviewSession.updateOne(
+      { _id: completedSession._id },
+      { $set: { evidenceCheck: savedChecks[0]._id } },
+    );
   }
 
-  await session.save();
-  logger.info(`Interview session completed: ${session._id} with overall score ${overallScore}`);
+  logger.info(`Interview session completed: ${completedSession._id} with overall score ${overallScore}`);
 
   return {
-    session: toPublicInterviewSession(session),
+    session: toPublicInterviewSession(completedSession),
     overallScore,
     eligibleForVerified,
     evidenceResults,
@@ -499,9 +610,29 @@ export async function abandonSession(userId, sessionId) {
     );
   }
 
-  session.status = SESSION_STATUS.ABANDONED;
-  session.completedAt = new Date();
-  await session.save();
+  const completedAt = new Date();
+  const updated = await InterviewSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: userId,
+      status: { $in: [SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS] },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.ABANDONED,
+        completedAt,
+      },
+    },
+    { new: true, runValidators: true },
+  );
 
-  return toPublicInterviewSession(session);
+  if (!updated) {
+    const current = await findOwnedSession(userId, sessionId);
+    throw ApiError.badRequest(
+      `Cannot abandon session in status "${current.status}".`,
+      ERROR_CODES.INTERVIEW_INVALID_STATE,
+    );
+  }
+
+  return toPublicInterviewSession(updated);
 }
