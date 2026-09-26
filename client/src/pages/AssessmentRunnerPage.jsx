@@ -446,7 +446,7 @@ export function AssessmentRunnerPage() {
                       setCurrentIndex(idx);
                       setShowReview(false);
                     }}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-xs font-semibold transition-colors duration-200 ${
+                    className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-xs font-semibold transition-colors duration-200 ${
                       isCurrent
                         ? 'bg-brand text-on-brand ring-2 ring-brand/30'
                         : isAnswered
@@ -618,15 +618,20 @@ export function AssessmentRunnerPage() {
                   const answered =
                     answers[qId] !== undefined && answers[qId] !== null && answers[qId] !== '';
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={qId || idx}
-                      className="flex items-center justify-between rounded-lg border border-orange-100 bg-orange-50/20 p-2.5 text-xs"
+                      onClick={() => {
+                        setCurrentIndex(idx);
+                        setShowReview(false);
+                      }}
+                      className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-orange-100 bg-orange-50/20 p-3 text-xs text-left transition-colors duration-200 hover:border-brand"
                     >
-                      <span className="font-semibold text-ink">
+                      <span className="font-semibold text-ink break-words pr-2">
                         {idx + 1}. {q.prompt?.slice(0, 40)}…
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                           answered
                             ? 'bg-green-100 text-green-800'
                             : 'bg-amber-100 text-amber-800'
@@ -634,7 +639,7 @@ export function AssessmentRunnerPage() {
                       >
                         {answered ? 'Answered' : 'Unanswered'}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -653,23 +658,23 @@ export function AssessmentRunnerPage() {
         )}
 
         {/* Navigation & Submit Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <button
             type="button"
             disabled={currentIndex === 0 || isSubmitting}
             onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-2.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-40"
           >
             ← Previous
           </button>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {currentIndex < totalQuestions - 1 ? (
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => setCurrentIndex((idx) => Math.min(totalQuestions - 1, idx + 1))}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -680,7 +685,7 @@ export function AssessmentRunnerPage() {
               disabled={isSubmitting}
               onClick={() => handleSubmit(false)}
               aria-busy={isSubmitting}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? 'Evaluating Submission…' : 'Submit Assessment'}
             </button>

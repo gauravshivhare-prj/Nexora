@@ -22,7 +22,7 @@ export function PageHeader({ backTo = '/app', backLabel = 'Back', title, childre
     <header className="animate-rise mb-6">
       <Link
         to={backTo}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:text-brand-text"
+        className="inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:text-brand-text"
       >
         <span aria-hidden="true">←</span>
         {backLabel}

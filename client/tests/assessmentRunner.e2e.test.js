@@ -214,6 +214,49 @@ describe('assessment runner page', { timeout: 180_000 }, () => {
     assert.match(await page.bodyText(), /Maximum Attempts \(5 of 5\) Reached/);
   });
 
+  // ------------------------------------------------ responsive & mobile pass
+
+  it('renders catalog and runner cleanly without horizontal overflow at mobile widths (320px–375px)', async () => {
+    await signUp();
+
+    for (const width of [320, 375]) {
+      await page.setViewport({ width, height: 800, mobile: true });
+
+      // Check catalog
+      await page.goto(`${stack.appUrl}/assessments`);
+      await page.waitFor('document.body.innerText.includes("Available Assessments")');
+      const catalogOverflow = await page.evaluate(
+        'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+      );
+      assert.ok(catalogOverflow <= 1, `catalog horizontal overflow of ${catalogOverflow}px at ${width}px`);
+
+      // Check runner
+      await page.clickText('Start Assessment');
+      await page.waitFor('document.body.innerText.includes("Question 1")');
+      const runnerOverflow = await page.evaluate(
+        'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+      );
+      assert.ok(runnerOverflow <= 1, `runner horizontal overflow of ${runnerOverflow}px at ${width}px`);
+
+      // Verify interactive controls meet >= 44px touch targets
+      const touchTargetViolations = await page.evaluate(`(() => {
+        const interactive = Array.from(document.querySelectorAll('main button, main a, main textarea'));
+        return interactive
+          .filter(el => {
+            const rect = el.getBoundingClientRect();
+            // Ignore hidden/zero-size or unrendered elements
+            if (rect.width === 0 || rect.height === 0) return false;
+            return rect.height < 43; // allow 1px rounding tolerance
+          })
+          .map(el => ({ tag: el.tagName, text: el.textContent?.slice(0, 20), height: el.getBoundingClientRect().height }));
+      })()`);
+      assert.equal(touchTargetViolations.length, 0, `found touch targets < 44px: ${JSON.stringify(touchTargetViolations)}`);
+    }
+
+    // Reset viewport
+    await page.setViewport({ width: 1280, height: 900, mobile: false });
+  });
+
   // ------------------------------------------------------- accessibility
 
   it('marks runner page with proper headings and produces no console errors', async () => {
