@@ -226,8 +226,10 @@ export function isCareerTwinStale(
     reasons.push('New skill evidence has been recorded since this was generated.');
   } else if (
     typeof verifiedEvidenceCount === 'number' &&
-    typeof twin.sources?.verifiedEvidenceCount === 'number' &&
-    verifiedEvidenceCount !== twin.sources.verifiedEvidenceCount
+    verifiedEvidenceCount !==
+      (typeof twin.sources?.verifiedEvidenceCount === 'number'
+        ? twin.sources.verifiedEvidenceCount
+        : 0)
   ) {
     reasons.push('New skill evidence has been recorded since this was generated.');
   }

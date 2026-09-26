@@ -581,13 +581,20 @@ export function validateProviderMetadata(meta) {
  * @param {string} [options.evaluatedBy=EVALUATOR_TYPES.AI]
  * @returns {object} Full session evaluation and evidence result
  */
-export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPES.AI } = {}) {
+export function evaluateInterviewSession(
+  session,
+  { evaluatedBy = EVALUATOR_TYPES.AI, passMark = INTERVIEW_PASS_MARK } = {},
+) {
   if (!session || typeof session !== 'object') {
     throw new Error('session must be an object.');
   }
 
   if (!EVALUATOR_TYPE_VALUES.includes(evaluatedBy)) {
     throw new Error(`evaluatedBy must be one of: ${EVALUATOR_TYPE_VALUES.join(', ')}.`);
+  }
+
+  if (typeof passMark !== 'number' || !Number.isFinite(passMark) || passMark <= 0 || passMark > 1) {
+    throw new Error('passMark must be a number greater than 0 and at most 1.');
   }
 
   const questions = session.questions ?? [];
@@ -627,10 +634,10 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
   const overallScore = totalWeight > 0 ? Math.round((totalWeightedScore / totalWeight) * 10000) / 10000 : 0;
 
   const isHuman = evaluatedBy === EVALUATOR_TYPES.HUMAN;
-  const passed = isHuman && overallScore >= INTERVIEW_PASS_MARK;
+  const passed = isHuman && overallScore >= passMark;
 
   const outcome = isHuman
-    ? overallScore >= INTERVIEW_PASS_MARK
+    ? overallScore >= passMark
       ? CHECK_OUTCOMES.PASS
       : CHECK_OUTCOMES.FAIL
     : CHECK_OUTCOMES.UNCERTAIN;
@@ -642,13 +649,31 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
 
   // Build skill evidence checks for each target skill
   const skillEvidenceResults = (session.targetSkills ?? []).map((target) => {
+    const rawSkillName = typeof target === 'string' ? target : (target?.name || target?.key);
+    const canonical = canonicalSkill(rawSkillName);
+    const skillKey = canonical?.key;
+
+    // Filter questions specific to this skill if present
+    const skillQuestions = questionResults.filter((qr) => {
+      if (qr.targetSkillKey && skillKey && qr.targetSkillKey === skillKey) return true;
+      if (qr.targetSkillName && canonical && canonicalSkill(qr.targetSkillName)?.key === skillKey) return true;
+      return false;
+    });
+
+    let skillScore = overallScore;
+    if (skillQuestions.length > 0) {
+      const skillScoreSum = skillQuestions.reduce((sum, q) => sum + q.score * q.weight, 0);
+      const skillWeightSum = skillQuestions.reduce((sum, q) => sum + q.weight, 0);
+      skillScore = skillWeightSum > 0 ? Math.round((skillScoreSum / skillWeightSum) * 10000) / 10000 : overallScore;
+    }
+
     return buildInterviewResult({
-      skill: target.name || target.key,
-      score: overallScore,
+      skill: canonical?.name || rawSkillName,
+      score: skillScore,
       interviewId: session.sessionId,
       evaluatedBy,
       completedAt: new Date(),
-      passMark: INTERVIEW_PASS_MARK,
+      passMark,
     });
   });
 
@@ -659,7 +684,7 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
     roleSlug: session.roleSlug,
     difficulty: session.difficulty,
     overallScore,
-    passMark: INTERVIEW_PASS_MARK,
+    passMark,
     passed,
     outcome,
     eligibleForVerified,
