@@ -14,7 +14,11 @@ import {
 } from '../src/domain/interview/interviewQuestions.js';
 import { canonicalSkill } from '../src/domain/skills/skillKey.js';
 import { CAREER_ROLES, findRole } from '../src/domain/careers/roleCatalogue.js';
-import { INTERVIEW_DIFFICULTY_VALUES, INTERVIEW_QUESTION_TYPE_VALUES } from '../src/domain/interview/interviewContract.js';
+import {
+  INTERVIEW_DIFFICULTY_VALUES,
+  INTERVIEW_LIMITS,
+  INTERVIEW_QUESTION_TYPE_VALUES,
+} from '../src/domain/interview/interviewContract.js';
 
 describe('R4 — Curated Interview Questions Suite', () => {
   describe('1. Taxonomy & Role Alignment', () => {
@@ -95,6 +99,30 @@ describe('R4 — Curated Interview Questions Suite', () => {
       }
     });
 
+    it('ensures zero duplicate prompts or intent summaries across the entire question bank', () => {
+      const seenPrompts = new Map();
+      const seenSummaries = new Map();
+
+      for (const question of INTERVIEW_QUESTION_BANK) {
+        const normalizedPrompt = question.intent.prompt.trim().toLowerCase();
+        const normalizedSummary = question.intent.summary.trim().toLowerCase();
+
+        assert.equal(
+          seenPrompts.has(normalizedPrompt),
+          false,
+          `Duplicate prompt detected between ${question.id} and ${seenPrompts.get(normalizedPrompt)}`,
+        );
+        seenPrompts.set(normalizedPrompt, question.id);
+
+        assert.equal(
+          seenSummaries.has(normalizedSummary),
+          false,
+          `Duplicate summary detected between ${question.id} and ${seenSummaries.get(normalizedSummary)}`,
+        );
+        seenSummaries.set(normalizedSummary, question.id);
+      }
+    });
+
     it('getQuestionById returns the requested question or null if missing', () => {
       const found = getQuestionById('iq-node-001');
       assert.ok(found);
@@ -144,6 +172,30 @@ describe('R4 — Curated Interview Questions Suite', () => {
           question.evaluationCriteria.scoringGuidelines &&
             typeof question.evaluationCriteria.scoringGuidelines === 'object',
           `Question ${question.id} must have scoringGuidelines`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.accuracy,
+          `Question ${question.id} must have accuracy scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.depth,
+          `Question ${question.id} must have depth scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.clarity,
+          `Question ${question.id} must have clarity scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.relevance,
+          `Question ${question.id} must have relevance scoring guideline`,
+        );
+
+        // Time limit bounds
+        assert.equal(typeof question.timeLimitSeconds, 'number');
+        assert.ok(
+          question.timeLimitSeconds > 0 &&
+            question.timeLimitSeconds <= INTERVIEW_LIMITS.maxTimePerQuestionSeconds,
+          `Question ${question.id} time limit must be between 1 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds} seconds`,
         );
       }
     });
@@ -263,6 +315,18 @@ describe('R4 — Curated Interview Questions Suite', () => {
             targetSkills: ['Flutter'],
           }),
         /No curated interview questions are currently available for: "Flutter"/,
+      );
+    });
+
+    it('rejects invalid difficulty values with informative error message', () => {
+      assert.throws(
+        () =>
+          selectQuestionsForSession({
+            targetRole: 'backend-developer',
+            targetSkills: ['Node.js'],
+            difficulty: 'grandmaster',
+          }),
+        /Difficulty "grandmaster" is not a recognized interview difficulty level/,
       );
     });
   });

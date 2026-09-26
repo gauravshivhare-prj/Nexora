@@ -361,7 +361,7 @@ export const INTERVIEW_QUESTION_BANK = Object.freeze([
     version: 1,
     targetSkill: 'SQL',
     skillKey: 'sql',
-    roles: ['backend-developer', 'full-stack-developer', 'data-analyst'],
+    roles: ['backend-developer', 'full-stack-developer', 'data-analyst', 'data-scientist'],
     difficulty: 'advanced',
     type: INTERVIEW_QUESTION_TYPES.SCENARIO,
     timeLimitSeconds: 240,
@@ -448,7 +448,7 @@ export const INTERVIEW_QUESTION_BANK = Object.freeze([
     version: 1,
     targetSkill: 'Docker',
     skillKey: 'docker',
-    roles: ['devops-engineer', 'cloud-engineer', 'backend-developer'],
+    roles: ['devops-engineer', 'cloud-engineer', 'backend-developer', 'full-stack-developer'],
     difficulty: 'intermediate',
     type: INTERVIEW_QUESTION_TYPES.TECHNICAL_DEEP_DIVE,
     timeLimitSeconds: 200,
@@ -577,7 +577,7 @@ export const INTERVIEW_QUESTION_BANK = Object.freeze([
     version: 1,
     targetSkill: 'Git',
     skillKey: 'git',
-    roles: ['devops-engineer', 'backend-developer', 'frontend-developer'],
+    roles: ['devops-engineer', 'backend-developer', 'frontend-developer', 'full-stack-developer'],
     difficulty: 'intermediate',
     type: INTERVIEW_QUESTION_TYPES.SCENARIO,
     timeLimitSeconds: 180,
@@ -823,6 +823,10 @@ export function selectQuestionsForSession({
 
   if (!Array.isArray(targetSkills) || targetSkills.length === 0) {
     throw new Error('targetSkills must be a non-empty array of skills.');
+  }
+
+  if (difficulty && !INTERVIEW_DIFFICULTY_VALUES.includes(difficulty)) {
+    throw new Error(`Difficulty "${difficulty}" is not a recognized interview difficulty level.`);
   }
 
   // Validate canonical skills
