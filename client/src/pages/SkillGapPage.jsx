@@ -88,7 +88,7 @@ export function SkillGapPage() {
             <div>
               <Link
                 to="/career-twin"
-                className="inline-block rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
               >
                 Go to CareerTwin
               </Link>
@@ -168,7 +168,7 @@ export function SkillGapPage() {
                   key={skill.name}
                   className="flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 py-1 pr-1 pl-3 text-sm text-ink"
                 >
-                  {skill.name}
+                  <span className="break-words">{skill.name}</span>
                   <GapStatusBadge status={skill.strength} />
                 </li>
               ))}
@@ -179,7 +179,7 @@ export function SkillGapPage() {
         <div className="flex flex-wrap gap-3">
           <Link
             to={`/careers/${gap.roleId}/roadmap`}
-            className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
           >
             Turn this into a roadmap
           </Link>
@@ -203,7 +203,7 @@ function SkillGapRow({ skill }) {
     <li className="animate-rise rounded-xl border border-orange-100 bg-orange-50/30 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-semibold text-ink">{skill.name}</span>
+          <span className="font-semibold text-ink break-words">{skill.name}</span>
           <GapStatusBadge status={skill.status} />
           <span className="rounded-full border border-orange-200 px-2 py-0.5 text-xs text-ink-muted">
             {skill.importance}
@@ -212,10 +212,10 @@ function SkillGapRow({ skill }) {
       </div>
 
       {skill.yourSkill && skill.yourSkill !== skill.name ? (
-        <p className="mt-1 text-xs text-ink-muted">You call it “{skill.yourSkill}”.</p>
+        <p className="mt-1 text-xs text-ink-muted break-words">You call it “{skill.yourSkill}”.</p>
       ) : null}
 
-      <p className="mt-2 text-sm text-ink">{skill.reason}</p>
+      <p className="mt-2 text-sm text-ink break-words">{skill.reason}</p>
 
       {skill.suggestedEvidence?.length > 0 ? (
         <div className="mt-3">
@@ -226,7 +226,7 @@ function SkillGapRow({ skill }) {
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {skill.suggestedEvidence.map((suggestion, index) => (
               <li key={index} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                <span className={suggestion.available ? 'text-ink' : 'text-ink-muted'}>
+                <span className={suggestion.available ? 'text-ink break-words' : 'text-ink-muted break-words'}>
                   {suggestion.action}
                 </span>
 
@@ -236,7 +236,7 @@ function SkillGapRow({ skill }) {
                 </span>
 
                 {suggestion.note ? (
-                  <span className="basis-full text-xs text-ink-muted">{suggestion.note}</span>
+                  <span className="basis-full text-xs text-ink-muted break-words">{suggestion.note}</span>
                 ) : null}
               </li>
             ))}
