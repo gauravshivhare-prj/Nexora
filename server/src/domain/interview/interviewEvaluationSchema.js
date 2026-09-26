@@ -29,38 +29,45 @@ export const ALLOWED_EVALUATION_FIELDS = Object.freeze([
  */
 export const INJECTION_PATTERNS = Object.freeze([
   // Prompt overrides and instruction hijacking
-  /ignore\s+(all\s+)?(previous|prior)\s+instructions/i,
-  /disregard\s+(all\s+)?(previous|prior)\s+instructions/i,
-  /forget\s+(all\s+)?(your\s+)?(previous\s+)?instructions/i,
-  /system\s*(_|\s*)?(override|instruction|prompt|note|directive)\b/i,
+  /(ignore|disregard|forget)\s+(all\s+|the\s+|your\s+)*(previous|prior|earlier|past|preceding|above|former)?\s*(instructions|directives|rules|guidelines|prompts|rubrics?|text)\b/i,
+  /(ignore|disregard|forget)\s+(about\s+)?(the\s+)?(rubric|grading|criteria|rules|instructions)\b/i,
+  /(system|admin|administrator|developer|evaluation|instruction)\s*(_|\s*)?(override|directive|instruction|mode|prompt|note)\b/i,
   /new\s+system\s+(prompt|directive|rule|instruction)/i,
   /give\s+(a\s+)?full\s+marks/i,
   /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
-  /(award|give|receive|grant)\s+(a\s+)?(perfect|full|maximum|1(\.0)?)\s+(score|marks?)/i,
+  /(award|give|receive|grant|assign|set|return)\s+(a\s+)?(perfect|full|maximum|1(\.0)?|100%?)\s*(score|marks?)?/i,
+  /(set|make|change)\s+(all\s+)?(the\s+)?(scores?|dimensions?|ratings?)\s*(to|=)?\s*1(\.0)?/i,
   /score\s+is\s+100/i,
-  /bypass\s+evaluation/i,
+  /bypass\s+(all\s+)?(the\s+)?(evaluation|scoring|rubric|grading|assessment|checks?)/i,
   /roleplay\s+game/i,
   /\bDAN\s*\(/i,
+  /\b(DAN|jailbreak|unrestricted)\s+mode\b/i,
   /do\s+anything\s+now/i,
-  /you\s+are\s+(now\s+)?(a\s+)?(helpful\s+)?(tutor|assistant|bot|Dan|an\s+unrestricted)/i,
+  /you\s+are\s+(now\s+)?(in\s+)?(a\s+)?(helpful\s+)?(tutor|assistant|bot|Dan|an\s+unrestricted|override\s+mode|developer\s+mode|jailbreak\s+mode)/i,
+  /(act|behave|respond)\s+as\s+(an?\s+)?(unrestricted|jailbroken|helpful\s+assistant|tutor|system\s+administrator)/i,
   /reveal\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
   /repeat\s+(your\s+)?(complete\s+)?(system\s+)?(prompt|instructions)/i,
   /what\s+is\s+your\s+system\s+prompt/i,
   /output\s+JSON\s+immediately/i,
   /override\s+all\s+(rules|rubrics|criteria)/i,
-  /ignore\s+(the\s+)?rubric/i,
   /do\s+not\s+grade/i,
+
+  // Institutional evidence poisoning
+  /(set|output|include|grant)\s+["']?(verified|eligibleForVerified)["']?\s*(:|\s*to)?\s*true/i,
+  /grant\s+(verified\s+)?(credentials|evidence|status|diploma|certificate)/i,
+  /mark\s+(this\s+)?(as\s+)?verified/i,
 
   // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace)
   /<\s*\/?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules)\b[^>]*>/i,
   /<!\[CDATA\[|\]\]>/i,
 
-  // LLM template and chat tokens
-  /<\s*\|\s*im_(start|end)\s*\|>/i,
+  // LLM template and chat tokens (including fullwidth bars and Anthropic turns)
+  /<\s*[|｜]\s*(im_(start|end)|User|Assistant|system|end of sentence|begin of sentence)\s*[|｜]>/i,
   /\[\s*\/?\s*INST\s*\]/i,
   /<<\s*\/?\s*SYS\s*>>/i,
   /<\s*\/?\s*turn_(start|end)\s*>/i,
   /<\s*\/?\s*s\s*>/i,
+  /(^|\n)\s*(Human|Assistant)\s*:\s*/i,
 
   // HTML / Script / XSS payloads
   /<\s*script\b[^>]*>/i,
@@ -80,15 +87,21 @@ export const INJECTION_PATTERNS = Object.freeze([
 
 /**
  * Scans a string for malicious or injection-like patterns.
- * Normalizes invisible zero-width and directionality override characters before checking.
+ * Normalizes invisible zero-width characters, bidirectional overrides, fullwidth brackets and vertical bars.
  *
  * @param {string} text
  * @returns {boolean} True if suspicious injection pattern is detected
  */
 export function hasInjectionContent(text) {
   if (typeof text !== 'string') return false;
-  const normalized = text.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '');
-  return INJECTION_PATTERNS.some((pattern) => pattern.test(text) || pattern.test(normalized));
+  const stripped = text.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '');
+  const normalized = stripped
+    .replace(/\uFF1C/g, '<')
+    .replace(/\uFF1E/g, '>')
+    .replace(/\uFF5C/g, '|');
+  return INJECTION_PATTERNS.some(
+    (pattern) => pattern.test(text) || pattern.test(stripped) || pattern.test(normalized),
+  );
 }
 
 /**
