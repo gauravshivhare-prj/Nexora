@@ -27,6 +27,17 @@ export const DIFFICULTY_LEVELS = Object.freeze({
 export const DIFFICULTY_LEVEL_VALUES = Object.freeze(Object.values(DIFFICULTY_LEVELS));
 
 /**
+ * Canonical assessment domain groups aligning with engineering and role tracks.
+ */
+export const ASSESSMENT_GROUPS = Object.freeze({
+  ENGINEERING: 'engineering',
+  DATA: 'data',
+  INFRASTRUCTURE: 'infrastructure',
+});
+
+export const ASSESSMENT_GROUP_VALUES = Object.freeze(Object.values(ASSESSMENT_GROUPS));
+
+/**
  * Supported deterministic question types.
  */
 export const QUESTION_TYPES = Object.freeze({
@@ -144,6 +155,21 @@ export function validateAssessmentDefinition(def) {
     throw new Error(`Invalid difficulty "${def.difficulty}". Must be one of: ${DIFFICULTY_LEVEL_VALUES.join(', ')}.`);
   }
 
+  // Group validation (optional, must match ASSESSMENT_GROUP_VALUES if provided)
+  let group = null;
+  if (def.group !== undefined && def.group !== null) {
+    if (typeof def.group !== 'string' || def.group.trim().length === 0) {
+      throw new Error('Assessment group must be a non-empty string if provided.');
+    }
+    const normalizedGroup = def.group.trim().toLowerCase();
+    if (!ASSESSMENT_GROUP_VALUES.includes(normalizedGroup)) {
+      throw new Error(
+        `Invalid assessment group: "${def.group}". Allowed values: ${ASSESSMENT_GROUP_VALUES.join(', ')}.`,
+      );
+    }
+    group = normalizedGroup;
+  }
+
   // Title & description validation
   if (typeof def.title !== 'string' || def.title.trim().length === 0) {
     throw new Error('Assessment title is required.');
@@ -184,11 +210,13 @@ export function validateAssessmentDefinition(def) {
     skillName: canonical.name,
     secondarySkillKeys: secondarySkills.map((s) => s.key),
     difficulty: def.difficulty,
+    group,
     title: def.title.trim(),
     description: def.description.trim(),
     passMark,
     timeLimitMinutes,
     isPractice: Boolean(def.isPractice),
+    isActive: def.isActive !== false,
     evidencePolicy: def.evidencePolicy ?? null,
     questions: validatedQuestions,
   };

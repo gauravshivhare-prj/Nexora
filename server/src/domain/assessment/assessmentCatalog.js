@@ -1,10 +1,14 @@
 import {
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_VALUES,
   DIFFICULTY_LEVELS,
   QUESTION_TYPES,
   SCORING_STRATEGIES,
   validateAssessmentDefinition,
 } from './assessmentContract.js';
 import { skillKey } from '../skills/skillKey.js';
+
+export { ASSESSMENT_GROUPS, ASSESSMENT_GROUP_VALUES };
 
 /**
  * Canonical curated assessments representing core skills in Nexora's taxonomy.
@@ -16,6 +20,8 @@ export const ASSESSMENT_CATALOG = Object.freeze([
     id: 'asm_javascript_intermediate',
     version: 1,
     skillKey: 'JavaScript',
+    group: ASSESSMENT_GROUPS.ENGINEERING,
+    isActive: true,
     difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
     title: 'JavaScript Core & Asynchronous Runtime',
     description: 'Measures proficiency in closures, event loop execution order, promises, and scoping.',
@@ -99,6 +105,8 @@ console.log('4');`,
     id: 'asm_nodejs_intermediate',
     version: 1,
     skillKey: 'Node.js',
+    group: ASSESSMENT_GROUPS.ENGINEERING,
+    isActive: true,
     difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
     title: 'Node.js Architecture, Streams & Event Loop',
     description: 'Evaluates knowledge of libuv event loop phases, process.nextTick, streams, and module resolution.',
@@ -152,6 +160,8 @@ console.log('main');`,
     id: 'asm_mongodb_intermediate',
     version: 1,
     skillKey: 'MongoDB',
+    group: ASSESSMENT_GROUPS.DATA,
+    isActive: true,
     difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
     title: 'MongoDB Querying, Aggregation & Indexing',
     description: 'Tests expertise in document modeling, compound indexes, and aggregation stages.',
@@ -197,6 +207,8 @@ console.log('main');`,
     id: 'asm_docker_beginner',
     version: 1,
     skillKey: 'Docker',
+    group: ASSESSMENT_GROUPS.INFRASTRUCTURE,
+    isActive: true,
     difficulty: DIFFICULTY_LEVELS.BEGINNER,
     title: 'Docker Fundamentals & Containerization',
     description: 'Basic concepts of images, containers, Dockerfile instructions, and port binding.',
@@ -244,6 +256,8 @@ console.log('main');`,
     id: 'asm_python_beginner',
     version: 1,
     skillKey: 'Python',
+    group: ASSESSMENT_GROUPS.ENGINEERING,
+    isActive: true,
     difficulty: DIFFICULTY_LEVELS.BEGINNER,
     title: 'Python Language Fundamentals',
     description: 'Evaluates basic syntax, list comprehensions, slicing, and mutable vs immutable data types.',
@@ -296,21 +310,32 @@ const CATALOG_BY_ID = new Map(
 /**
  * Returns all validated assessments in the catalog.
  *
+ * @param {object} [options]
+ * @param {boolean} [options.activeOnly=false]
  * @returns {object[]}
  */
-export function getAssessmentCatalog() {
-  return [...CATALOG_BY_ID.values()];
+export function getAssessmentCatalog({ activeOnly = false } = {}) {
+  const list = [...CATALOG_BY_ID.values()];
+  if (activeOnly) {
+    return list.filter((asm) => asm.isActive !== false);
+  }
+  return list;
 }
 
 /**
  * Retrieves a single validated assessment by ID.
  *
  * @param {string} id
+ * @param {object} [options]
+ * @param {boolean} [options.activeOnly=false]
  * @returns {object|null}
  */
-export function getAssessmentById(id) {
+export function getAssessmentById(id, { activeOnly = false } = {}) {
   if (typeof id !== 'string') return null;
-  return CATALOG_BY_ID.get(id.trim()) ?? null;
+  const asm = CATALOG_BY_ID.get(id.trim()) ?? null;
+  if (!asm) return null;
+  if (activeOnly && asm.isActive === false) return null;
+  return asm;
 }
 
 /**
@@ -318,17 +343,55 @@ export function getAssessmentById(id) {
  * Matches against canonical skill key.
  *
  * @param {string} skillNameOrKey
+ * @param {object} [options]
+ * @param {boolean} [options.activeOnly=false]
  * @returns {object[]}
  */
-export function getAssessmentsForSkill(skillNameOrKey) {
+export function getAssessmentsForSkill(skillNameOrKey, { activeOnly = false } = {}) {
   if (typeof skillNameOrKey !== 'string') return [];
   const targetKey = skillKey(skillNameOrKey);
   if (!targetKey) return [];
 
-  return [...CATALOG_BY_ID.values()].filter((asm) => {
+  return getAssessmentCatalog({ activeOnly }).filter((asm) => {
     return (
       asm.skillKey === targetKey ||
       asm.secondarySkillKeys.includes(targetKey)
     );
   });
+}
+
+/**
+ * Retrieves all validated assessments belonging to a specific domain group.
+ *
+ * @param {string} group Group identifier
+ * @param {object} [options]
+ * @param {boolean} [options.activeOnly=false]
+ * @returns {object[]}
+ */
+export function getAssessmentsByGroup(group, { activeOnly = false } = {}) {
+  if (typeof group !== 'string') return [];
+  const normalized = group.trim().toLowerCase();
+  return getAssessmentCatalog({ activeOnly }).filter(
+    (asm) => (asm.group || ASSESSMENT_GROUPS.ENGINEERING) === normalized,
+  );
+}
+
+/**
+ * Groups all catalog assessments by their domain group.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.activeOnly=false]
+ * @returns {Record<string, object[]>}
+ */
+export function getAssessmentCatalogGroups({ activeOnly = false } = {}) {
+  const groups = {};
+  for (const group of ASSESSMENT_GROUP_VALUES) {
+    groups[group] = [];
+  }
+  for (const asm of getAssessmentCatalog({ activeOnly })) {
+    const grp = asm.group || ASSESSMENT_GROUPS.ENGINEERING;
+    if (!groups[grp]) groups[grp] = [];
+    groups[grp].push(asm);
+  }
+  return groups;
 }

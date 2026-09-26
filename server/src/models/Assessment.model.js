@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 import {
+  ASSESSMENT_GROUP_VALUES,
   DIFFICULTY_LEVEL_VALUES,
   QUESTION_TYPE_VALUES,
 } from '../domain/assessment/assessmentContract.js';
@@ -139,6 +140,13 @@ const assessmentSchema = new mongoose.Schema(
       required: true,
       enum: DIFFICULTY_LEVEL_VALUES,
     },
+    group: {
+      type: String,
+      enum: [...ASSESSMENT_GROUP_VALUES, null],
+      default: null,
+      trim: true,
+      index: true,
+    },
     title: {
       type: String,
       required: true,
@@ -202,6 +210,7 @@ const assessmentSchema = new mongoose.Schema(
 assessmentSchema.index({ skillKey: 1, difficulty: 1, isActive: 1 });
 assessmentSchema.index({ isActive: 1, title: 1 });
 assessmentSchema.index({ isActive: 1, skillKey: 1, difficulty: 1 });
+assessmentSchema.index({ group: 1, isActive: 1 });
 
 /**
  * Strips answers and explanations before exposing assessment to students.
@@ -221,6 +230,8 @@ export function toPublicAssessment(doc) {
     canonicalSkill: raw.skillName ?? raw.skillKey,
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
+    group: raw.group ?? null,
+    isAvailable: raw.isActive !== false,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,
@@ -261,6 +272,7 @@ export function toAdminAssessment(doc) {
     skillName: raw.skillName,
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
+    group: raw.group ?? null,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,

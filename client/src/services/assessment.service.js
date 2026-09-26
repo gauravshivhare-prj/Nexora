@@ -1,5 +1,9 @@
 import { post, request } from './apiClient.js';
 import {
+  ASSESSMENT_GROUP,
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_LABELS,
+  ASSESSMENT_GROUP_VALUES,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   DIFFICULTY_ORDER,
@@ -12,6 +16,10 @@ import {
 
 // Re-export constants for easy access by UI consumers
 export {
+  ASSESSMENT_GROUP,
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_LABELS,
+  ASSESSMENT_GROUP_VALUES,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   DIFFICULTY_ORDER,
@@ -42,6 +50,7 @@ export function toAssessment(raw) {
     description: raw.description ?? '',
     canonicalSkill: raw.canonicalSkill ?? raw.skillName ?? raw.skillKey ?? '',
     difficulty: raw.difficulty ?? DIFFICULTY_LEVEL.BEGINNER,
+    group: raw.group ?? null,
     version: raw.version ?? 1,
     durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : (raw.timeLimitMinutes ?? 0),
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,

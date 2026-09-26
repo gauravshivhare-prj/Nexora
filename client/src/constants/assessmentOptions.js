@@ -15,6 +15,23 @@ export const DIFFICULTY_LEVELS = Object.freeze({
 // Alias for singular convention
 export const DIFFICULTY_LEVEL = DIFFICULTY_LEVELS;
 
+/** Canonical assessment domain groups aligning with engineering and role tracks. */
+export const ASSESSMENT_GROUPS = Object.freeze({
+  ENGINEERING: 'engineering',
+  DATA: 'data',
+  INFRASTRUCTURE: 'infrastructure',
+});
+
+export const ASSESSMENT_GROUP = ASSESSMENT_GROUPS;
+
+export const ASSESSMENT_GROUP_VALUES = Object.freeze(Object.values(ASSESSMENT_GROUPS));
+
+export const ASSESSMENT_GROUP_LABELS = Object.freeze({
+  [ASSESSMENT_GROUPS.ENGINEERING]: 'Software Engineering',
+  [ASSESSMENT_GROUPS.DATA]: 'Data & Analytics',
+  [ASSESSMENT_GROUPS.INFRASTRUCTURE]: 'Cloud & Infrastructure',
+});
+
 /** Ordered list of difficulty tiers from easiest to hardest. */
 export const DIFFICULTY_ORDER = Object.freeze([
   DIFFICULTY_LEVELS.BEGINNER,
