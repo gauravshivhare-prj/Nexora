@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
@@ -26,6 +26,9 @@ export function CareersPage() {
   const [needsTwin, setNeedsTwin] = useState(false);
   const [includeAll, setIncludeAll] = useState(false);
 
+  const catalogueRef = useRef(catalogue);
+  catalogueRef.current = catalogue;
+
   const load = useCallback(
     async (signal) => {
       setLoadStatus(LOAD_STATUS.LOADING);
@@ -34,15 +37,19 @@ export function CareersPage() {
 
       try {
         // The catalogue is reference data every student sees, so it loads
-        // even when there is no twin to rank it against. That is what makes
-        // the no-twin state useful rather than blank.
-        const [recommendations, roles] = await Promise.allSettled([
-          fetchRecommendations({ includeAll, signal }),
-          fetchRoles({ signal }),
-        ]);
+        // even when there is no twin to rank it against. If already fetched,
+        // do not re-fetch on includeAll toggle.
+        const recPromise = fetchRecommendations({ includeAll, signal });
+        const rolesPromise = catalogueRef.current
+          ? Promise.resolve(catalogueRef.current)
+          : fetchRoles({ signal });
+
+        const [recommendations, roles] = await Promise.allSettled([recPromise, rolesPromise]);
         if (signal?.aborted) return;
 
-        if (roles.status === 'fulfilled') setCatalogue(roles.value);
+        if (roles.status === 'fulfilled' && roles.value && !catalogueRef.current) {
+          setCatalogue(roles.value);
+        }
 
         if (recommendations.status === 'fulfilled') {
           setData(recommendations.value);

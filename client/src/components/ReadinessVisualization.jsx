@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -10,10 +10,11 @@ export { CONTRIBUTOR_DEFINITIONS, READINESS_STATUS_PRESENTATION };
 
 /**
  * Rich, explainable career readiness visualization bound to real API data.
+ * Memoized to prevent redundant DOM recalcs during dashboard updates.
  *
  * @param {{ readiness: object, role?: object }} props
  */
-export function ReadinessVisualization({ readiness, role }) {
+export const ReadinessVisualization = memo(function ReadinessVisualization({ readiness, role }) {
   const [showInfo, setShowInfo] = useState(false);
 
   if (!readiness) {
@@ -267,4 +268,4 @@ export function ReadinessVisualization({ readiness, role }) {
       </div>
     </div>
   );
-}
+});

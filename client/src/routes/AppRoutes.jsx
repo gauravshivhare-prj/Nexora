@@ -24,16 +24,11 @@ import { OpportunitiesPage } from '../pages/OpportunitiesPage.jsx';
  * Public routes sit at the top level; everything a signed-in student uses
  * sits inside AppLayout, which carries both the navigation and the auth
  * guard. Nesting the guard means a route added below it is protected
- * because of where it is, not because someone remembered to wrap it — the
- * previous arrangement repeated ProtectedRoute per route, which is one
- * omission away from a leak.
+ * because of where it is, not because someone remembered to wrap it.
  *
- * Only routes for currently delivered UI views exist. While assessment backend
- * endpoints are delivered and ready for client service integration, their UI views
- * (along with AI interviews and opportunities) are scheduled for subsequent UI phases.
- *
- * The catch-all is routing infrastructure rather than a feature: without it
- * an unknown URL renders nothing, which would look like a broken build.
+ * All pages are lazily loaded with React.lazy and wrapped in Suspense so that
+ * the initial payload remains lean and users only download code for the views
+ * they actually visit.
  */
 export function AppRoutes() {
   return (

@@ -58,35 +58,37 @@ export function OpportunitiesPage() {
 
   const allOpportunities = data?.opportunities ?? [];
 
-  // Filtered opportunities
-  const filteredOpportunities = useMemo(() => {
-    return allOpportunities.filter((opp) => {
+  // Single-pass memoized filtering and count calculation
+  const { filteredOpportunities, curatedCount, liveCount } = useMemo(() => {
+    let curated = 0;
+    let live = 0;
+    const filtered = [];
+    const query = searchQuery.trim().toLowerCase();
+
+    for (const opp of allOpportunities) {
+      if (opp.isCurated) curated++;
+      if (opp.isLive) live++;
+
       // Source filter
-      if (sourceFilter === OPPORTUNITY_FILTER_TYPES.CURATED && !opp.isCurated) {
-        return false;
-      }
-      if (sourceFilter === OPPORTUNITY_FILTER_TYPES.LIVE && !opp.isLive) {
-        return false;
-      }
+      if (sourceFilter === OPPORTUNITY_FILTER_TYPES.CURATED && !opp.isCurated) continue;
+      if (sourceFilter === OPPORTUNITY_FILTER_TYPES.LIVE && !opp.isLive) continue;
 
       // Keyword search
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
+      if (query) {
         const matchesTitle = opp.title.toLowerCase().includes(query);
         const matchesSummary = opp.summary.toLowerCase().includes(query);
         const matchesSkills = opp.requiredSkills.some((s) => s.toLowerCase().includes(query));
         const matchesRoles = opp.targetRoleIds.some((r) => r.toLowerCase().includes(query));
         if (!matchesTitle && !matchesSummary && !matchesSkills && !matchesRoles) {
-          return false;
+          continue;
         }
       }
 
-      return true;
-    });
-  }, [allOpportunities, sourceFilter, searchQuery]);
+      filtered.push(opp);
+    }
 
-  const curatedCount = allOpportunities.filter((o) => o.isCurated).length;
-  const liveCount = allOpportunities.filter((o) => o.isLive).length;
+    return { filteredOpportunities: filtered, curatedCount: curated, liveCount: live };
+  }, [allOpportunities, sourceFilter, searchQuery]);
 
   if (loadStatus === LOAD_STATUS.LOADING) {
     return (

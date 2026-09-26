@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
@@ -51,6 +51,39 @@ export function AssessmentsPage() {
     return () => controller.abort();
   }, [loadData]);
 
+  // Memoized filter assessments
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return assessments.filter((item) => {
+      const matchesDifficulty =
+        selectedDifficulty === 'all' || item.difficulty === selectedDifficulty;
+      const matchesQuery =
+        !query ||
+        item.title.toLowerCase().includes(query) ||
+        (item.canonicalSkill && item.canonicalSkill.toLowerCase().includes(query)) ||
+        (item.skillName && item.skillName.toLowerCase().includes(query)) ||
+        item.description.toLowerCase().includes(query);
+
+      return matchesDifficulty && matchesQuery;
+    });
+  }, [assessments, selectedDifficulty, searchQuery]);
+
+  // Memoized grouping of latest attempt and attempt count per assessment
+  const { attemptsByAssessment, attemptCountsByAssessment } = useMemo(() => {
+    const byId = {};
+    const counts = {};
+    for (const att of attempts) {
+      const aId = att.assessmentId || att.assessment?.id || att.assessment?._id;
+      if (aId) {
+        if (!byId[aId]) {
+          byId[aId] = att;
+        }
+        counts[aId] = (counts[aId] || 0) + 1;
+      }
+    }
+    return { attemptsByAssessment: byId, attemptCountsByAssessment: counts };
+  }, [attempts]);
+
   if (loadStatus === LOAD_STATUS.LOADING) {
     return (
       <PageShell>
@@ -69,34 +102,6 @@ export function AssessmentsPage() {
         />
       </PageShell>
     );
-  }
-
-  // Filter assessments
-  const filtered = assessments.filter((item) => {
-    const matchesDifficulty =
-      selectedDifficulty === 'all' || item.difficulty === selectedDifficulty;
-    const query = searchQuery.trim().toLowerCase();
-    const matchesQuery =
-      !query ||
-      item.title.toLowerCase().includes(query) ||
-      (item.canonicalSkill && item.canonicalSkill.toLowerCase().includes(query)) ||
-      (item.skillName && item.skillName.toLowerCase().includes(query)) ||
-      item.description.toLowerCase().includes(query);
-
-    return matchesDifficulty && matchesQuery;
-  });
-
-  // Group latest attempt and count attempts per assessment
-  const attemptsByAssessment = {};
-  const attemptCountsByAssessment = {};
-  for (const att of attempts) {
-    const aId = att.assessmentId || att.assessment?.id || att.assessment?._id;
-    if (aId) {
-      if (!attemptsByAssessment[aId]) {
-        attemptsByAssessment[aId] = att;
-      }
-      attemptCountsByAssessment[aId] = (attemptCountsByAssessment[aId] || 0) + 1;
-    }
   }
 
   return (
@@ -195,7 +200,7 @@ export function AssessmentsPage() {
   );
 }
 
-function AssessmentCard({ assessment, latestAttempt, attemptCount = 0 }) {
+const AssessmentCard = memo(function AssessmentCard({ assessment, latestAttempt, attemptCount = 0 }) {
   const diffPresentation =
     DIFFICULTY_PRESENTATION[assessment.difficulty] ??
     DIFFICULTY_PRESENTATION[DIFFICULTY_LEVELS.BEGINNER];
@@ -332,4 +337,4 @@ function AssessmentCard({ assessment, latestAttempt, attemptCount = 0 }) {
       </div>
     </div>
   );
-}
+});
