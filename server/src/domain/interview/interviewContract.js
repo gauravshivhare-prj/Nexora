@@ -394,10 +394,14 @@ export function validateStudentAnswer(answer) {
  * @returns {number} Weighted composite score bounded in [0, 1]
  */
 export function calculateCompositeQuestionScore(dimensions) {
+  if (!dimensions || typeof dimensions !== 'object') {
+    return 0;
+  }
   let composite = 0;
   for (const [key, weight] of Object.entries(RUBRIC_DIMENSION_WEIGHTS)) {
-    const rawVal = dimensions?.[key] ?? 0;
-    const bounded = Math.max(0, Math.min(1, rawVal));
+    const rawVal = Number(dimensions?.[key]);
+    const safeVal = Number.isFinite(rawVal) ? rawVal : 0;
+    const bounded = Math.max(0, Math.min(1, safeVal));
     composite += bounded * weight;
   }
   return Math.round(composite * 10000) / 10000;
@@ -426,8 +430,16 @@ export function validateAiQuestionEvaluation(raw) {
     if (raw.dimensions[key] === undefined || raw.dimensions[key] === null) {
       throw new Error(`Missing required rubric dimension: "${key}".`);
     }
+    if (
+      typeof raw.dimensions[key] === 'boolean' ||
+      Array.isArray(raw.dimensions[key]) ||
+      (typeof raw.dimensions[key] === 'object' && raw.dimensions[key] !== null) ||
+      (typeof raw.dimensions[key] === 'string' && raw.dimensions[key].trim() === '')
+    ) {
+      throw new Error(`Dimension "${key}" must be a numeric value.`);
+    }
     const num = Number(raw.dimensions[key]);
-    if (Number.isNaN(num)) {
+    if (Number.isNaN(num) || !Number.isFinite(num)) {
       throw new Error(`Dimension "${key}" must be a numeric value.`);
     }
     parsedDimensions[key] = Math.max(0, Math.min(1, Math.round(num * 10000) / 10000));
@@ -539,7 +551,8 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
     totalWeight += weight;
 
     const evaluation = evaluations[qId] || (q.id ? evaluations[q.id] : null) || q.evaluation;
-    const score = evaluation?.score ?? evaluation?.compositeScore ?? 0;
+    const rawScore = Number(evaluation?.score ?? evaluation?.compositeScore ?? 0);
+    const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(1, rawScore)) : 0;
     totalWeightedScore += score * weight;
 
     const canonical = canonicalSkill(q.targetSkill || q.targetSkillName || q.targetSkillKey);
@@ -557,7 +570,9 @@ export function evaluateInterviewSession(session, { evaluatedBy = EVALUATOR_TYPE
     });
   }
 
-  const overallScore = totalWeight > 0 ? Math.round((totalWeightedScore / totalWeight) * 10000) / 10000 : 0;
+  const overallScore = totalWeight > 0
+    ? Math.max(0, Math.min(1, Math.round((totalWeightedScore / totalWeight) * 10000) / 10000))
+    : 0;
 
   const isHuman = evaluatedBy === EVALUATOR_TYPES.HUMAN;
   const passed = isHuman && overallScore >= INTERVIEW_PASS_MARK;

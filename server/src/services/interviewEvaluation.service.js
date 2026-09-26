@@ -163,9 +163,13 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
   }
 
   const questions = Array.isArray(session.questions) ? session.questions : [];
-  const evaluatedQuestions = questions.filter(
-    (q) => q.evaluation && typeof q.evaluation.compositeScore === 'number',
-  );
+  const evaluatedQuestions = questions.filter((q) => {
+    if (!q || !q.evaluation) return false;
+    const scoreVal = typeof q.evaluation.compositeScore === 'number'
+      ? q.evaluation.compositeScore
+      : (typeof q.evaluation.score === 'number' ? q.evaluation.score : null);
+    return scoreVal !== null && Number.isFinite(scoreVal);
+  });
 
   if (evaluatedQuestions.length === 0) {
     throw ApiError.badRequest(
@@ -175,11 +179,16 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
   }
 
   // Calculate composite average
-  const totalScore = evaluatedQuestions.reduce(
-    (sum, q) => sum + q.evaluation.compositeScore,
+  const totalScore = evaluatedQuestions.reduce((sum, q) => {
+    const scoreVal = typeof q.evaluation.compositeScore === 'number'
+      ? q.evaluation.compositeScore
+      : (typeof q.evaluation.score === 'number' ? q.evaluation.score : 0);
+    return sum + (Number.isFinite(scoreVal) ? Math.max(0, Math.min(1, scoreVal)) : 0);
+  }, 0);
+  const overallScore = Math.max(
     0,
+    Math.min(1, Math.round((totalScore / evaluatedQuestions.length) * 10000) / 10000),
   );
-  const overallScore = Math.round((totalScore / evaluatedQuestions.length) * 10000) / 10000;
 
   const targetSkills = Array.isArray(session.targetSkills) ? session.targetSkills : [];
   const interviewId = String(session._id ?? session.id ?? 'interview-session');
@@ -199,7 +208,20 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
     });
 
     const skillScore = skillQuestions.length > 0
-      ? Math.round((skillQuestions.reduce((sum, q) => sum + q.evaluation.compositeScore, 0) / skillQuestions.length) * 10000) / 10000
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            Math.round(
+              (skillQuestions.reduce((sum, q) => {
+                const scoreVal = typeof q.evaluation.compositeScore === 'number'
+                  ? q.evaluation.compositeScore
+                  : (typeof q.evaluation.score === 'number' ? q.evaluation.score : 0);
+                return sum + (Number.isFinite(scoreVal) ? Math.max(0, Math.min(1, scoreVal)) : 0);
+              }, 0) / skillQuestions.length) * 10000,
+            ) / 10000,
+          ),
+        )
       : overallScore;
 
     const evidenceCheck = buildInterviewResult({

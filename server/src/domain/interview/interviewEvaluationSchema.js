@@ -29,6 +29,9 @@ export const FORBIDDEN_SECURITY_FIELDS = Object.freeze([
   'password',
   'sessionstatus',
   'passmark',
+  'proto',
+  'prototype',
+  'constructor',
 ]);
 
 /**
@@ -206,7 +209,12 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         continue;
       }
 
-      if (typeof rawVal === 'boolean' || Array.isArray(rawVal) || (typeof rawVal === 'object' && rawVal !== null)) {
+      if (
+        typeof rawVal === 'boolean' ||
+        Array.isArray(rawVal) ||
+        (typeof rawVal === 'object' && rawVal !== null) ||
+        (typeof rawVal === 'string' && rawVal.trim() === '')
+      ) {
         errors.push(`Dimension "${dimKey}" must be a numeric value.`);
         continue;
       }
@@ -349,6 +357,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   const cleanData = {
     dimensions: validDimensions,
     compositeScore,
+    score: compositeScore,
     feedback: validFeedback,
     strengths: validStrengths,
     growthAreas: validGrowthAreas,
