@@ -1,5 +1,6 @@
 import {
   INTERVIEW_DIFFICULTY_VALUES,
+  INTERVIEW_LIMITS,
   INTERVIEW_QUESTION_TYPES,
   INTERVIEW_QUESTION_TYPE_VALUES,
 } from './interviewContract.js';
@@ -842,6 +843,12 @@ export function selectQuestionsForSession({
     if (!canonicalTargets.some((t) => t.key === resolved.key)) {
       canonicalTargets.push(resolved);
     }
+  }
+
+  if (canonicalTargets.length > INTERVIEW_LIMITS.maxTargetSkills) {
+    throw new Error(
+      `targetSkills cannot exceed maximum of ${INTERVIEW_LIMITS.maxTargetSkills} skills.`,
+    );
   }
 
   // Partition into supported vs unsupported skills
