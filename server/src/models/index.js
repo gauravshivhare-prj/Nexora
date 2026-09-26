@@ -1,6 +1,10 @@
 import { logger } from '../utils/logger.js';
 import { CareerTwin, isCareerTwinStale, toPublicCareerTwin } from './CareerTwin.model.js';
-import { InterviewSession, toPublicInterviewSession } from './InterviewSession.model.js';
+import {
+  InterviewSession,
+  toPublicInterviewQuestion,
+  toPublicInterviewSession,
+} from './InterviewSession.model.js';
 import { Resume, toPublicResume, toResumeSummary } from './Resume.model.js';
 import { StudentProfile, emptyProfile, toPublicProfile } from './StudentProfile.model.js';
 import { User, toPublicUser } from './User.model.js';
@@ -62,6 +66,7 @@ export {
   toPublicAssessment,
   toPublicAssessmentAttempt,
   toPublicCareerTwin,
+  toPublicInterviewQuestion,
   toPublicInterviewSession,
   toPublicProfile,
   toPublicResume,

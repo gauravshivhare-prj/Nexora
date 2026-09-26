@@ -153,7 +153,10 @@ export function toInterviewEvaluation(raw) {
 
   return {
     dimensions,
-    compositeScore: typeof raw.compositeScore === 'number' ? raw.compositeScore : null,
+    compositeScore:
+      typeof raw.compositeScore === 'number'
+        ? raw.compositeScore
+        : (typeof raw.score === 'number' ? raw.score : null),
     feedback: raw.feedback ?? '',
     strengths: Array.isArray(raw.strengths) ? [...raw.strengths] : [],
     growthAreas: Array.isArray(raw.growthAreas) ? [...raw.growthAreas] : [],

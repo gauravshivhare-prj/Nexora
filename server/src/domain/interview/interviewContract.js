@@ -58,6 +58,26 @@ export const SESSION_STATUS_VALUES = Object.freeze(
 );
 
 /**
+ * Terminal session lifecycle states.
+ */
+export const TERMINAL_SESSION_STATUSES = Object.freeze([
+  SESSION_STATUS.COMPLETED,
+  SESSION_STATUS.TIMED_OUT,
+  SESSION_STATUS.ABANDONED,
+  SESSION_STATUS.FAILED,
+]);
+
+/**
+ * Checks whether a session status is in a terminal state.
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isTerminalSessionStatus(status) {
+  return TERMINAL_SESSION_STATUSES.includes(status);
+}
+
+/**
  * Evaluator authority types.
  */
 export const EVALUATOR_TYPES = Object.freeze({
@@ -442,6 +462,7 @@ export function validateAiQuestionEvaluation(raw) {
 
   return {
     score: compositeScore,
+    compositeScore,
     dimensions: parsedDimensions,
     feedback: raw.feedback.trim(),
     strengths,

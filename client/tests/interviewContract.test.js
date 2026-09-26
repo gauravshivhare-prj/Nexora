@@ -45,6 +45,8 @@ import {
   RUBRIC_DIMENSIONS as SERVER_RUBRIC_DIMENSIONS,
   RUBRIC_DIMENSION_WEIGHTS as SERVER_RUBRIC_DIMENSION_WEIGHTS,
   SESSION_STATUS as SERVER_SESSION_STATUS,
+  TERMINAL_SESSION_STATUSES as SERVER_TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus as serverIsTerminalSessionStatus,
 } from '../../server/src/domain/interview/interviewContract.js';
 
 describe('R01 — Interview Frontend Contract & Parity Suite', () => {
@@ -65,6 +67,7 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
     });
 
     it('identifies terminal session statuses correctly', () => {
+      assert.deepEqual(TERMINAL_SESSION_STATUSES, SERVER_TERMINAL_SESSION_STATUSES, 'Terminal statuses drifted from server');
       assert.deepEqual(TERMINAL_SESSION_STATUSES, [
         SESSION_STATUS.COMPLETED,
         SESSION_STATUS.TIMED_OUT,
@@ -77,6 +80,9 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
       assert.equal(isTerminalSessionStatus(SESSION_STATUS.TIMED_OUT), true);
       assert.equal(isTerminalSessionStatus(SESSION_STATUS.ABANDONED), true);
       assert.equal(isTerminalSessionStatus(SESSION_STATUS.FAILED), true);
+
+      assert.equal(serverIsTerminalSessionStatus(SESSION_STATUS.INITIALIZED), false);
+      assert.equal(serverIsTerminalSessionStatus(SESSION_STATUS.COMPLETED), true);
     });
 
     it('difficulty levels and order match server definition', () => {

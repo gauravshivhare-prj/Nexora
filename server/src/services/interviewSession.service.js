@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
 import {
   InterviewSession,
+  toPublicInterviewQuestion,
   toPublicInterviewSession,
 } from '../models/InterviewSession.model.js';
 import {
@@ -197,6 +198,7 @@ export async function listSessions(userId) {
   );
 
   const sessions = await InterviewSession.find({ user: userId })
+    .select('-user -__v')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -472,12 +474,7 @@ export async function submitQuestionAnswer(
 
   return {
     session: toPublicInterviewSession(updated),
-    evaluatedQuestion: {
-      questionId: recorded.questionId,
-      order: recorded.order,
-      answer: recorded.answer,
-      evaluation: recorded.evaluation,
-    },
+    evaluatedQuestion: toPublicInterviewQuestion(recorded),
     warnings,
   };
 }

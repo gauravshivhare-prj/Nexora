@@ -10,6 +10,7 @@ import {
 } from '../src/domain/interview/interviewContract.js';
 import {
   InterviewSession,
+  toPublicInterviewQuestion,
   toPublicInterviewSession,
 } from '../src/models/InterviewSession.model.js';
 import {
@@ -467,6 +468,67 @@ describe('R3 — InterviewSession Model & Ownership Suite', () => {
       assert.equal(publicDto.providerMetadata.provider, 'gemini');
       assert.equal(publicDto.providerMetadata.promptTokens, undefined); // Token counts internal
       assert.equal(publicDto.providerMetadata.latencyMs, 250);
+    });
+
+    it('toObject transform strips user, _id, and __v from serialized documents', async () => {
+      const session = new InterviewSession({
+        user: testUserId,
+        targetRole: 'Backend Engineer',
+        targetSkills: ['Node.js'],
+      });
+      await session.save();
+
+      const obj = session.toObject();
+      assert.equal(obj.id, session._id.toString());
+      assert.equal(obj.user, undefined);
+      assert.equal(obj._id, undefined);
+      assert.equal(obj.__v, undefined);
+    });
+
+    it('toPublicInterviewQuestion serializes clean question DTOs and prevents subdocument leakage', () => {
+      const question = {
+        questionId: 'q-clean-1',
+        order: 1,
+        type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+        prompt: 'Explain Node.js event loop in detail.',
+        targetSkill: 'Node.js',
+        difficulty: INTERVIEW_DIFFICULTY.INTERMEDIATE,
+        rubricCriteria: ['timers phase', 'poll phase'],
+        answer: {
+          answerText: 'Timers, pending, idle, poll, check, close.',
+          submittedAt: '2026-09-26T20:00:00.000Z',
+          durationSeconds: 40,
+          attemptNumber: 1,
+          _internalState: 'should_not_leak',
+        },
+        evaluation: {
+          dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.8, relevance: 0.9 },
+          compositeScore: 0.87,
+          score: 0.87,
+          feedback: 'Accurate and concise.',
+          strengths: ['Clear terminology'],
+          growthAreas: [],
+          groundedSkills: ['Node.js'],
+          evaluatedAt: '2026-09-26T20:01:00.000Z',
+          _evaluatorToken: 'secret_token_never_leak',
+        },
+      };
+
+      const dto = toPublicInterviewQuestion(question);
+
+      assert.equal(dto.id, 'q-clean-1');
+      assert.equal(dto.questionId, 'q-clean-1');
+      assert.equal(dto.order, 1);
+      assert.equal(dto.type, INTERVIEW_QUESTION_TYPES.CONCEPTUAL);
+      assert.equal(dto.targetSkill, 'Node.js');
+      assert.deepEqual(dto.rubricCriteria, ['timers phase', 'poll phase']);
+      assert.equal(dto.answer.answerText, 'Timers, pending, idle, poll, check, close.');
+      assert.ok(dto.answer.submittedAt instanceof Date);
+      assert.equal(dto.answer._internalState, undefined);
+      assert.equal(dto.evaluation.compositeScore, 0.87);
+      assert.equal(dto.evaluation.dimensions.accuracy, 0.9);
+      assert.ok(dto.evaluation.evaluatedAt instanceof Date);
+      assert.equal(dto.evaluation._evaluatorToken, undefined);
     });
   });
 
