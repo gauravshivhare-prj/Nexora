@@ -130,11 +130,18 @@ describe('assessment runner page', { timeout: 180_000 }, () => {
     const resultText = await page.bodyText();
     assert.match(resultText, /Attempt Complete/);
     assert.match(resultText, /Score:\s*\d+%/);
+    assert.match(resultText, /points earned/i);
+    assert.match(resultText, /Skill Evidence Status/i);
+    assert.match(resultText, /Question Breakdown/i);
+    assert.match(resultText, /Question 1/i);
     assert.match(resultText, /Return to Assessments/);
+    assert.match(resultText, /View CareerTwin/);
 
     // Absolute zero answer-key leakage in result view
     assert.doesNotMatch(resultText, /expectedAnswer/i);
     assert.doesNotMatch(resultText, /scoringRule/i);
+    assert.doesNotMatch(resultText, /answerKey/i);
+    assert.doesNotMatch(resultText, /correctAnswer/i);
   });
 
   // ------------------------------------------------ timer & attempt limits UX

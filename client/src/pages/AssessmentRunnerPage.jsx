@@ -5,6 +5,7 @@ import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } fro
 import {
   ATTEMPT_STATUS,
   DIFFICULTY_PRESENTATION,
+  QUESTION_RESULT_STATUS,
   QUESTION_TYPES,
 } from '../constants/assessmentOptions.js';
 import {
@@ -206,9 +207,24 @@ export function AssessmentRunnerPage() {
 
   // If submission completed, show outcome banner / transition
   if (submissionResult) {
-    const isPassed = submissionResult.result?.passed;
-    const score = submissionResult.result?.score ?? 0;
+    const res = submissionResult.result || submissionResult.attempt || {};
+    const isPassed = Boolean(res.passed);
+    const score = res.score ?? 0;
     const scorePercent = Math.round(score * 100);
+    const passPercent = Math.round((assessment?.passMark ?? res.passMark ?? 0.7) * 100);
+    const earnedPoints = res.earnedPoints ?? 0;
+    const maxPoints = res.maxPoints ?? 0;
+    const breakdown = res.questionBreakdown || [];
+    const evidenceId =
+      res.evidenceCheckId ||
+      submissionResult.attempt?.evidenceCheckId ||
+      submissionResult.attempt?.evidenceCheck ||
+      null;
+    const evidenceStatus =
+      submissionResult.evidenceStatus || res.evidenceStatus || (evidenceId ? 'VERIFIED' : null);
+    const isEvidenceEligible =
+      isPassed &&
+      (Boolean(evidenceId) || evidenceStatus === 'VERIFIED' || evidenceStatus === 'VERIFIED_CREATED');
 
     return (
       <PageShell>
@@ -221,6 +237,7 @@ export function AssessmentRunnerPage() {
         </PageHeader>
 
         <div className="flex flex-col gap-6">
+          {/* Primary Score & Outcome Card */}
           <Card>
             <div className="flex flex-col items-center py-6 text-center">
               {autoSubmitted ? (
@@ -243,7 +260,11 @@ export function AssessmentRunnerPage() {
                 Score: {scorePercent}%
               </h2>
 
-              <p className="mt-2 max-w-md text-sm text-ink-muted">
+              <p className="mt-1 text-xs font-medium text-ink-muted">
+                {earnedPoints} / {maxPoints} points earned · Pass mark: {passPercent}%
+              </p>
+
+              <p className="mt-3 max-w-md text-sm text-ink-muted">
                 {isPassed
                   ? 'Congratulations! You met the passing criteria for this assessment. Verified skill evidence has been registered on your profile.'
                   : 'You did not reach the required passing threshold. Review the core concepts and try again.'}
@@ -265,6 +286,106 @@ export function AssessmentRunnerPage() {
               </div>
             </div>
           </Card>
+
+          {/* Evidence Verification Card */}
+          <Card title="Skill Evidence Status">
+            {isEvidenceEligible ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-800">
+                    <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+                    Verified Evidence Generated
+                  </span>
+                  {evidenceId ? (
+                    <span className="font-mono text-[11px] text-green-700">
+                      ID: {evidenceId}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Your performance in this assessment satisfies verified skill requirements for{' '}
+                  <strong className="text-ink">{assessment.canonicalSkill || assessment.skillName}</strong>.
+                  This evidence is permanently attached to your CareerTwin graph.
+                </p>
+                <div>
+                  <Link
+                    to="/career-twin"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-on-brand hover:bg-brand-soft"
+                  >
+                    View CareerTwin Profile →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 rounded-xl border border-orange-200 bg-surface p-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+                    Not Eligible for Verified Evidence
+                  </span>
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Verified skill evidence is only granted for attempts that achieve a score of {passPercent}% or higher.
+                  Review the topics below and retake the assessment when ready.
+                </p>
+              </div>
+            )}
+          </Card>
+
+          {/* Question Breakdown (Zero Answer Key Leakage!) */}
+          {breakdown.length > 0 ? (
+            <Card
+              title="Question Breakdown"
+              description="Review your performance per question. Correct answers and scoring formulas are server-guarded to ensure credential integrity."
+            >
+              <div className="flex flex-col divide-y divide-orange-100">
+                {breakdown.map((item, idx) => (
+                  <div key={item.questionId || idx} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-ink">
+                        Question {idx + 1}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                            item.isCorrect || item.status === QUESTION_RESULT_STATUS.CORRECT
+                              ? 'border-green-200 bg-green-50 text-green-700'
+                              : 'border-amber-200 bg-amber-50 text-amber-800'
+                          }`}
+                        >
+                          {item.isCorrect || item.status === QUESTION_RESULT_STATUS.CORRECT
+                            ? 'Correct'
+                            : 'Incorrect'}
+                        </span>
+                        <span className="text-xs font-medium text-ink-muted tabular-nums">
+                          {item.earnedPoints ?? 0} / {item.maxPoints ?? 1} pts
+                        </span>
+                      </div>
+                    </div>
+
+                    {item.prompt ? (
+                      <p className="mt-2 text-xs text-ink-muted break-words">
+                        {item.prompt}
+                      </p>
+                    ) : null}
+
+                    {item.studentAnswer !== undefined && item.studentAnswer !== null && item.studentAnswer !== '' ? (
+                      <div className="mt-2 rounded-lg bg-orange-50/50 p-2 text-xs">
+                        <span className="font-medium text-ink-muted">Your response: </span>
+                        <span className="font-mono text-ink">
+                          {Array.isArray(item.studentAnswer)
+                            ? item.studentAnswer.join(', ')
+                            : String(item.studentAnswer)}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-ink-muted italic">No answer provided.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : null}
         </div>
       </PageShell>
     );

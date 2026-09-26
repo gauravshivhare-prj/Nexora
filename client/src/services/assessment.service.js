@@ -93,8 +93,13 @@ export function toAssessmentAttempt(raw) {
     timeSpentSeconds: typeof raw.timeSpentSeconds === 'number' ? raw.timeSpentSeconds : null,
     timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : null,
     answers: Array.isArray(raw.answers) ? raw.answers : [],
-    result: raw.result ? toAssessmentResult(raw.result) : null,
-    evidenceCheck: raw.evidenceCheck ?? null,
+    result: raw.result
+      ? toAssessmentResult(raw.result)
+      : raw.status === ATTEMPT_STATUS.EVALUATED || typeof raw.score === 'number'
+        ? toAssessmentResult(raw)
+        : null,
+    evidenceCheck: raw.evidenceCheck ?? raw.evidenceCheckId ?? null,
+    evidenceCheckId: raw.evidenceCheckId ?? raw.evidenceCheck ?? null,
   };
 }
 
@@ -119,12 +124,25 @@ export function toAssessmentResult(raw) {
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     passed: Boolean(raw.passed),
     outcome: raw.outcome ?? (raw.passed ? EVALUATION_OUTCOME.PASS : EVALUATION_OUTCOME.FAIL),
-    evidenceStatus: raw.evidenceStatus ?? (raw.evidenceCheckId ? EVIDENCE_STATUS.VERIFIED : (raw.passed ? EVIDENCE_STATUS.SUPPORTED : EVIDENCE_STATUS.UNSUPPORTED)),
+    evidenceStatus:
+      raw.evidenceStatus ??
+      (raw.evidenceCheckId || raw.evidenceCheck
+        ? EVIDENCE_STATUS.VERIFIED
+        : raw.passed
+          ? EVIDENCE_STATUS.SUPPORTED
+          : EVIDENCE_STATUS.UNSUPPORTED),
+    evidenceCheckId: raw.evidenceCheckId || raw.evidenceCheck || null,
     completedAt: raw.completedAt ?? null,
     questionBreakdown: Array.isArray(raw.questionBreakdown || raw.questionResults)
-      ? (raw.questionBreakdown || raw.questionResults).map((item) => ({
-          questionId: item.questionId ?? '',
-          status: item.status ?? (item.isCorrect ? QUESTION_RESULT_STATUS.CORRECT : QUESTION_RESULT_STATUS.INCORRECT),
+      ? (raw.questionBreakdown || raw.questionResults).map((item, idx) => ({
+          questionId: item.questionId ?? `q_${idx + 1}`,
+          prompt: item.prompt ?? `Question ${idx + 1}`,
+          status:
+            item.status ??
+            (item.isCorrect
+              ? QUESTION_RESULT_STATUS.CORRECT
+              : QUESTION_RESULT_STATUS.INCORRECT),
+          isCorrect: Boolean(item.isCorrect),
           earnedPoints: typeof item.earnedPoints === 'number' ? item.earnedPoints : 0,
           maxPoints: typeof item.maxPoints === 'number' ? item.maxPoints : 1,
           studentAnswer: item.studentAnswer ?? item.selectedOption ?? null,
