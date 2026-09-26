@@ -10,7 +10,7 @@ import { CAREER_ROLES, findRole } from '../careers/roleCatalogue.js';
  * Version of the curated interview question bank.
  * Increment whenever questions are added, updated, or deprecated.
  */
-export const QUESTION_BANK_VERSION = 1;
+export const QUESTION_BANK_VERSION = 2;
 
 /**
  * Curated question bank for technical and behavioral interviews.
@@ -651,6 +651,1112 @@ export const INTERVIEW_QUESTION_BANK = Object.freeze([
       },
     },
   },
+
+  // ==========================================
+  // HTML
+  // ==========================================
+  {
+    id: 'iq-html-001',
+    version: 1,
+    targetSkill: 'HTML',
+    skillKey: 'html',
+    roles: ['frontend-developer', 'full-stack-developer', 'ui-ux-designer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain semantic HTML tags, accessibility benefits, and SEO impact.',
+      prompt:
+        'Why is using semantic HTML5 elements (such as <header>, <nav>, <main>, <article>, and <aside>) superior to generic <div> tags, and how do semantic elements impact web accessibility and search engine ranking?',
+      context:
+        'Tests basic understanding of semantic markup, accessibility assistive tech, and SEO structure.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains accessibility advantages: screen readers can navigate document landmarks directly',
+        'Explains SEO benefits: search crawlers infer page structure and content hierarchy accurately',
+        'Contrasts specific semantic tags (<main>, <nav>, <article>, <section>) with generic <div> containers',
+      ],
+      expectedKeyConcepts: [
+        'landmarks',
+        'screen readers',
+        'SEO crawlability',
+        'document outline',
+        'div soup',
+      ],
+      commonMisconceptions: [
+        'Thinking semantic tags are only for CSS styling defaults',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate distinction between layout containers and semantic landmarks.',
+        depth: 'Discusses accessibility trees and screen reader navigation modes.',
+        clarity: 'Provides concrete examples of replacing div structures with semantic tags.',
+        relevance: 'Focused on HTML semantics.',
+      },
+    },
+  },
+  {
+    id: 'iq-html-002',
+    version: 1,
+    targetSkill: 'HTML',
+    skillKey: 'html',
+    roles: ['frontend-developer', 'full-stack-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.TECHNICAL_DEEP_DIVE,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Examine browser script loading: standard vs async vs defer execution.',
+      prompt:
+        'Compare standard <script>, <script async>, and <script defer> in HTML. How do they affect the browser parser, DOMContentLoaded, and script execution order?',
+      context:
+        'Evaluates browser rendering pipeline and script loading performance.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains parser-blocking behavior of standard inline/external scripts',
+        'Explains async downloads in background and executes immediately when ready, out of order',
+        'Explains defer downloads in background and executes in document order right before DOMContentLoaded',
+      ],
+      expectedKeyConcepts: [
+        'parser blocking',
+        'DOMContentLoaded',
+        'execution order',
+        'critical rendering path',
+      ],
+      commonMisconceptions: [
+        'Assuming async scripts maintain mutual dependency order',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate mapping of script attributes to parsing and execution timing.',
+        depth: 'Discusses DOMContentLoaded and rendering waterfall.',
+        clarity: 'Clear comparison of all three modes.',
+        relevance: 'Focused on HTML script loading.',
+      },
+    },
+  },
+
+  // ==========================================
+  // CSS
+  // ==========================================
+  {
+    id: 'iq-css-001',
+    version: 1,
+    targetSkill: 'CSS',
+    skillKey: 'css',
+    roles: ['frontend-developer', 'full-stack-developer', 'ui-ux-designer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain the CSS Box Model and box-sizing property differences.',
+      prompt:
+        'Describe the layers of the CSS Box Model (content, padding, border, margin), and explain why modern web developers almost universally set "box-sizing: border-box" in their global CSS reset.',
+      context: 'Core CSS layout fundamentals and dimension calculation.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines the four layers in order: content, padding, border, and margin',
+        'Explains content-box adds padding and border to declared width/height',
+        'Explains border-box includes padding and border within the declared width/height, preventing layout overflow',
+      ],
+      expectedKeyConcepts: [
+        'content-box vs border-box',
+        'box model layers',
+        'CSS reset',
+        'dimension calculations',
+      ],
+      commonMisconceptions: [
+        'Thinking margin is included inside the border-box calculation',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Precise formula of rendered width under content-box vs border-box.',
+        depth: 'Explains impact on responsive grids and nested percentage widths.',
+        clarity: 'Concise explanation with simple mathematical breakdown.',
+        relevance: 'Directly addresses CSS box sizing.',
+      },
+    },
+  },
+  {
+    id: 'iq-css-002',
+    version: 1,
+    targetSkill: 'CSS',
+    skillKey: 'css',
+    roles: ['frontend-developer', 'full-stack-developer', 'ui-ux-designer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Architect a responsive layout choosing between CSS Flexbox and CSS Grid.',
+      prompt:
+        'When building a modern responsive web application, what architectural principles guide your choice between CSS Flexbox and CSS Grid, and how do you handle responsive card layouts with auto-fit and minmax()?',
+      context: 'Evaluates layout architecture decision-making and modern CSS mastery.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Distinguishes Flexbox as one-dimensional (content-first rows or columns) vs Grid as two-dimensional (layout-first rows and columns)',
+        'Explains repeat(auto-fit, minmax(250px, 1fr)) for responsive wrapping without media queries',
+        'Recommends Flexbox for components (navbars, button groups) and Grid for page-level or card layouts',
+      ],
+      expectedKeyConcepts: [
+        '1D vs 2D layout',
+        'auto-fit vs auto-fill',
+        'minmax()',
+        'content-driven vs layout-driven',
+      ],
+      commonMisconceptions: [
+        'Believing Flexbox and Grid are mutually exclusive rivals rather than complementary',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate technical distinction between 1D and 2D layout models.',
+        depth: 'Explains auto-fit vs auto-fill behavior when items are few.',
+        clarity: 'Structured decision framework for layout choices.',
+        relevance: 'Focused on CSS layout architecture.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Testing
+  // ==========================================
+  {
+    id: 'iq-testing-001',
+    version: 1,
+    targetSkill: 'Testing',
+    skillKey: 'testing',
+    roles: ['qa-engineer', 'backend-developer', 'frontend-developer', 'full-stack-developer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain the testing pyramid: unit, integration, and end-to-end tests.',
+      prompt:
+        'Explain the Test Pyramid model. What are the key characteristics, execution speeds, and trade-offs of unit tests, integration tests, and end-to-end (E2E) tests?',
+      context: 'Evaluates fundamental software testing strategy and quality mindset.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Differentiates unit tests (isolated, fast, high volume), integration tests (service boundaries, moderate speed), and E2E tests (real environments, slow, low volume)',
+        'Explains the trade-offs: cost and maintenance burden increase as you move up the pyramid',
+        'Discusses why an inverted "ice cream cone" test suite causes slow feedback and flakiness',
+      ],
+      expectedKeyConcepts: [
+        'test pyramid',
+        'isolation vs realism',
+        'execution speed',
+        'test maintenance cost',
+        'test flakiness',
+      ],
+      commonMisconceptions: [
+        'Thinking having only E2E tests is optimal because they test real user paths',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate categorization and cost/speed trade-offs across tiers.',
+        depth: 'Explains boundary mocking in unit tests vs real databases in integration tests.',
+        clarity: 'Clear structured comparison.',
+        relevance: 'Focuses on testing strategy.',
+      },
+    },
+  },
+  {
+    id: 'iq-testing-002',
+    version: 1,
+    targetSkill: 'Testing',
+    skillKey: 'testing',
+    roles: ['qa-engineer', 'full-stack-developer', 'backend-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Design boundary value and equivalence partition test cases for financial calculations.',
+      prompt:
+        'Suppose you are testing an e-commerce checkout discount engine that applies percentage coupons, minimum purchase thresholds, and sales tax. What equivalence partitioning and boundary value test cases would you create to verify precision and business rules?',
+      context: 'Tests black-box and white-box test design techniques on business-critical logic.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Applies boundary value analysis on thresholds (e.g. exactly at threshold, threshold - 0.01, threshold + 0.01)',
+        'Tests edge cases: negative amounts, zero amount, 100% discount, discount greater than total',
+        'Addresses floating-point arithmetic hazards (e.g. 0.1 + 0.2 precision issues in currency calculations)',
+      ],
+      expectedKeyConcepts: [
+        'boundary value analysis',
+        'equivalence partitioning',
+        'floating point rounding',
+        'zero/negative boundaries',
+      ],
+      commonMisconceptions: [
+        'Only testing "happy path" round numbers like $100 with 10% coupon',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Thorough coverage of valid and invalid partitions.',
+        depth: 'Identifies currency rounding and IEEE 754 float precision hazards.',
+        clarity: 'Organized test matrix or table.',
+        relevance: 'Directly solves the checkout scenario.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Test Automation
+  // ==========================================
+  {
+    id: 'iq-testauto-001',
+    version: 1,
+    targetSkill: 'Test Automation',
+    skillKey: 'testautomation',
+    roles: ['qa-engineer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.TECHNICAL_DEEP_DIVE,
+    timeLimitSeconds: 200,
+    intent: {
+      summary: 'Architect resilient browser automation tests avoiding flakiness and tight coupling.',
+      prompt:
+        'What strategies and design patterns (such as the Page Object Model and explicit wait conditions) do you use in automated end-to-end tests to prevent test flakiness and maintainability bottlenecks?',
+      context: 'Evaluates automated testing architectural maturity and anti-flakiness practices.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Describes Page Object Model (POM) to decouple UI element selectors from test assertions',
+        'Advocates explicit smart waits (waiting for DOM states/network idle) over arbitrary sleep timers',
+        'Recommends user-facing accessible locators (role, label, text) over fragile CSS/XPath selectors',
+      ],
+      expectedKeyConcepts: [
+        'Page Object Model',
+        'explicit vs implicit vs sleep waits',
+        'test flakiness',
+        'accessible locators',
+      ],
+      commonMisconceptions: [
+        'Using hardcoded time sleeps (e.g. sleep(5000)) to fix asynchronous race conditions',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate articulation of POM structure and wait mechanisms.',
+        depth: 'Compares locator stability (data-testid, ARIA roles vs auto-generated classes).',
+        clarity: 'Structured explanation of maintainable automation suites.',
+        relevance: 'Focuses on test automation engineering.',
+      },
+    },
+  },
+  {
+    id: 'iq-testauto-002',
+    version: 1,
+    targetSkill: 'Test Automation',
+    skillKey: 'testautomation',
+    roles: ['qa-engineer', 'devops-engineer'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Design a continuous automated testing pipeline with parallel execution and triage.',
+      prompt:
+        'How would you architect a CI/CD test automation pipeline for a microservices platform with 2,000 automated tests to achieve sub-10-minute feedback, handle quarantine of flaky tests, and generate actionable failure reports?',
+      context: 'Tests enterprise test pipeline design, sharding, and quality governance.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Proposes test sharding and parallel container runners based on execution runtime history',
+        'Defines test tiering: fast unit/smoke tests on PR, full regression on merge or nightly',
+        'Establishes flaky test quarantine policy with automated re-runs and health tracking',
+      ],
+      expectedKeyConcepts: [
+        'test sharding / parallelization',
+        'test quarantine',
+        'smoke vs regression gate',
+        'test telemetry / artifacts',
+      ],
+      commonMisconceptions: [
+        'Running the entire monolithic test suite sequentially on every commit',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Sound pipeline design balancing fast feedback with thorough validation.',
+        depth: 'Details artifact collection (screenshots, traces, network logs) on failure.',
+        clarity: 'Systematic pipeline stage breakdown.',
+        relevance: 'Directly addresses large-scale test automation governance.',
+      },
+    },
+  },
+
+  // ==========================================
+  // UI Design
+  // ==========================================
+  {
+    id: 'iq-uidesign-001',
+    version: 1,
+    targetSkill: 'UI Design',
+    skillKey: 'uidesign',
+    roles: ['ui-ux-designer', 'frontend-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Explain visual hierarchy, typography scales, and WCAG accessibility standards.',
+      prompt:
+        'How do you establish clear visual hierarchy in user interface design using typography scale, contrast, and spatial relationships, and how do you ensure the interface satisfies WCAG 2.1 AA contrast requirements?',
+      context: 'Evaluates core UI design craft, aesthetic principles, and accessibility compliance.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains hierarchy levers: typographic scale, font weight, color saturation, and negative space',
+        'Cites WCAG 2.1 AA minimum contrast ratios (4.5:1 for normal text, 3:1 for large text and UI components)',
+        'Explains non-color indicators for critical states (icons, underlines, text alongside color cues)',
+      ],
+      expectedKeyConcepts: [
+        'visual hierarchy',
+        'WCAG 2.1 AA',
+        'contrast ratio (4.5:1)',
+        'typographic scale',
+        'color independence',
+      ],
+      commonMisconceptions: [
+        'Relying solely on color to convey errors, success, or status',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate recall of accessibility contrast ratios and hierarchy principles.',
+        depth: 'Explains touch targets (min 44x44px) and focus indicator visibility.',
+        clarity: 'Structured explanation combining aesthetics with accessibility.',
+        relevance: 'Focused on UI design fundamentals.',
+      },
+    },
+  },
+  {
+    id: 'iq-uidesign-002',
+    version: 1,
+    targetSkill: 'UI Design',
+    skillKey: 'uidesign',
+    roles: ['ui-ux-designer', 'frontend-developer'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Architect a cross-platform design token system for a multi-brand product suite.',
+      prompt:
+        'How would you structure a scalable design token architecture (global, alias/semantic, and component tokens) supporting light/dark themes and multiple product brands, and how do you ensure seamless handoff to frontend engineers?',
+      context: 'Evaluates scalable design systems, token hierarchy, and engineering collaboration.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines token tiers: Global (raw values), Semantic/Alias (purpose-driven e.g. surface-primary), and Component tokens',
+        'Explains theme switching mechanics (light/dark) via semantic token value re-mapping',
+        'Describes automated export pipelines (e.g. Style Dictionary) translating tokens to CSS variables/JSON',
+      ],
+      expectedKeyConcepts: [
+        'design tokens',
+        'token tiers (global, semantic, component)',
+        'theme mapping',
+        'Style Dictionary',
+        'design handoff',
+      ],
+      commonMisconceptions: [
+        'Hardcoding hex colors directly into component styles rather than semantic tokens',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Precise three-tier token hierarchy definition.',
+        depth: 'Discusses governance, deprecation workflows, and CSS variable mapping.',
+        clarity: 'Clear architectural explanation from Figma to code.',
+        relevance: 'Addresses enterprise design system challenges.',
+      },
+    },
+  },
+
+  // ==========================================
+  // UX Research
+  // ==========================================
+  {
+    id: 'iq-uxres-001',
+    version: 1,
+    targetSkill: 'UX Research',
+    skillKey: 'uxresearch',
+    roles: ['ui-ux-designer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 200,
+    intent: {
+      summary: 'Formulate a mixed-methods UX research plan for a drop-off problem.',
+      prompt:
+        'Suppose analytics show a 45% drop-off at step 2 of a financial registration flow. How would you design a mixed-methods research study (quantitative analytics + qualitative usability testing) to identify the root cause and validate improvements?',
+      context: 'Tests research methodology, bias mitigation, and data synthesis.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Combines quantitative data (funnel drop-off, heatmaps, session recordings) with qualitative user testing',
+        'Designs open-ended, non-leading task scenarios for moderated or unmoderated user sessions',
+        'Synthesizes findings into thematic user friction points and prioritized design hypotheses',
+      ],
+      expectedKeyConcepts: [
+        'mixed-methods research',
+        'non-leading questions',
+        'usability testing protocol',
+        'funnel analytics',
+        'thematic synthesis',
+      ],
+      commonMisconceptions: [
+        'Asking users "Would you use this?" or leading them to the expected path during usability tests',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Appropriate pairing of quantitative signals with qualitative inquiry.',
+        depth: 'Identifies cognitive load, privacy hesitation, or usability blockers in step 2.',
+        clarity: 'Step-by-step research roadmap from discovery to validation.',
+        relevance: 'Directly addresses the registration drop-off scenario.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Figma
+  // ==========================================
+  {
+    id: 'iq-figma-001',
+    version: 1,
+    targetSkill: 'Figma',
+    skillKey: 'figma',
+    roles: ['ui-ux-designer', 'frontend-developer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain Figma Auto Layout and how it maps to CSS Flexbox.',
+      prompt:
+        'How does Auto Layout in Figma work, what are direction, gap, padding, and alignment properties, and how does Auto Layout mirror CSS Flexbox during developer handoff?',
+      context: 'Evaluates Figma technical fluency and developer handoff alignment.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Maps Auto Layout properties directly to Flexbox: direction (flex-direction), gap (gap), padding (padding), align/distribute (align-items, justify-content)',
+        'Explains resizing modes: Fixed, Hug Contents, and Fill Container',
+        'Highlights how responsive components built with Auto Layout reduce design-engineering translation bugs',
+      ],
+      expectedKeyConcepts: [
+        'Auto Layout',
+        'Hug vs Fill vs Fixed',
+        'CSS Flexbox mapping',
+        'developer handoff',
+      ],
+      commonMisconceptions: [
+        'Using manual grouping and absolute positioning instead of Auto Layout for dynamic components',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate mapping of Figma Auto Layout concepts to CSS Flexbox.',
+        depth: 'Explains nested Auto Layouts for complex cards or navigation bars.',
+        clarity: 'Intuitive analogies for resizing behavior.',
+        relevance: 'Focused on modern Figma component construction.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Cloud Computing
+  // ==========================================
+  {
+    id: 'iq-cloud-001',
+    version: 1,
+    targetSkill: 'Cloud Computing',
+    skillKey: 'cloudcomputing',
+    roles: ['cloud-engineer', 'backend-developer', 'devops-engineer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Compare IaaS, PaaS, and Serverless service models and trade-offs.',
+      prompt:
+        'Compare Infrastructure as a Service (IaaS), Platform as a Service (PaaS), and Serverless (FaaS). What are the trade-offs regarding operational overhead, control, cold start latency, and cost predictability?',
+      context: 'Core cloud architecture classification and selection criteria.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines the shared responsibility boundary across IaaS (VMs), PaaS (containers/managed runtime), and FaaS (ephemeral functions)',
+        'Identifies Serverless trade-offs: zero idle cost and auto-scaling vs cold starts, execution time limits, and vendor lock-in',
+        'Provides selection criteria based on traffic patterns, compliance needs, and team operational capacity',
+      ],
+      expectedKeyConcepts: [
+        'IaaS vs PaaS vs FaaS',
+        'shared responsibility model',
+        'cold start latency',
+        'operational overhead',
+      ],
+      commonMisconceptions: [
+        'Believing serverless has no servers or is always cheaper than reserved instances',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate division of responsibilities across cloud tiers.',
+        depth: 'Discusses statefulness and concurrency constraints in serverless.',
+        clarity: 'Clear comparative summary.',
+        relevance: 'Focuses on cloud architecture models.',
+      },
+    },
+  },
+  {
+    id: 'iq-cloud-002',
+    version: 1,
+    targetSkill: 'Cloud Computing',
+    skillKey: 'cloudcomputing',
+    roles: ['cloud-engineer', 'devops-engineer'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Architect a disaster recovery strategy meeting strict RTO and RPO targets.',
+      prompt:
+        'A mission-critical financial application requires a disaster recovery strategy with a Recovery Time Objective (RTO) under 15 minutes and Recovery Point Objective (RPO) under 1 minute. How would you architect this across cloud regions?',
+      context: 'Tests enterprise high availability, cross-region replication, and disaster recovery.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines RTO (acceptable downtime duration) and RPO (acceptable data loss window)',
+        'Proposes active-passive (pilot light/warm standby) or active-active multi-region deployment',
+        'Explains data replication mechanism: continuous asynchronous or synchronous replication meeting < 1 min RPO',
+        'Describes automated DNS / Anycast global routing failover (e.g. Route 53 health check routing)',
+      ],
+      expectedKeyConcepts: [
+        'RTO vs RPO',
+        'multi-region active-passive vs active-active',
+        'cross-region replication lag',
+        'global traffic routing',
+      ],
+      commonMisconceptions: [
+        'Confusing RTO with RPO',
+        'Assuming synchronous replication across global distances has zero latency cost',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate architectural decisions satisfying the 15m RTO / 1m RPO constraints.',
+        depth: 'Discusses split-brain prevention and database write-leader promotion.',
+        clarity: 'Structured failover sequence.',
+        relevance: 'Directly addresses disaster recovery engineering.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Networking
+  // ==========================================
+  {
+    id: 'iq-net-001',
+    version: 1,
+    targetSkill: 'Networking',
+    skillKey: 'networking',
+    roles: ['cloud-engineer', 'devops-engineer', 'backend-developer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Walk through DNS resolution and the networking journey of an HTTP request.',
+      prompt:
+        'Walk through the network path that occurs when a client browser queries https://api.example.com/users: from recursive DNS resolution to TCP three-way handshake and TLS negotiation.',
+      context: 'Fundamental networking evaluation essential for backend, DevOps, and cloud engineers.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Traces DNS hierarchy: browser cache -> OS cache -> recursive resolver -> root -> TLD -> authoritative nameserver',
+        'Explains TCP three-way handshake (SYN, SYN-ACK, ACK)',
+        'Explains TLS handshake establishing encrypted session keys before HTTP application data flows',
+      ],
+      expectedKeyConcepts: [
+        'recursive DNS resolution',
+        'TCP 3-way handshake (SYN, SYN-ACK, ACK)',
+        'TLS handshake',
+        'authoritative nameserver',
+      ],
+      commonMisconceptions: [
+        'Thinking DNS query uses TCP by default (standard DNS queries use UDP port 53)',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Correct chronological order of networking protocols.',
+        depth: 'Mentions DNS record types (A, AAAA, CNAME) and TTL caching.',
+        clarity: 'Clear step-by-step narrative.',
+        relevance: 'Core web networking trajectory.',
+      },
+    },
+  },
+  {
+    id: 'iq-net-002',
+    version: 1,
+    targetSkill: 'Networking',
+    skillKey: 'networking',
+    roles: ['cloud-engineer', 'devops-engineer', 'backend-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.TECHNICAL_DEEP_DIVE,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Explain Layer 4 vs Layer 7 load balancing and reverse proxy architecture.',
+      prompt:
+        'Compare Layer 4 (Transport) and Layer 7 (Application) load balancers. How does each operate, what information do they inspect, and what are the performance vs routing flexibility trade-offs?',
+      context: 'Evaluates network load balancing, reverse proxies, and traffic distribution.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains Layer 4 operates on IP address and TCP/UDP ports without inspecting packet payload',
+        'Explains Layer 7 terminates TCP and inspects HTTP headers, cookies, URL paths, and query parameters',
+        'Compares trade-offs: Layer 4 has higher throughput and lower CPU overhead; Layer 7 enables path-based routing, SSL termination, and sticky sessions',
+      ],
+      expectedKeyConcepts: [
+        'OSI Layer 4 vs Layer 7',
+        'SSL termination',
+        'path-based routing',
+        'TCP termination',
+        'throughput vs inspection',
+      ],
+      commonMisconceptions: [
+        'Believing Layer 4 load balancers can inspect HTTP Authorization headers or cookies',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Clear technical boundary between transport and application layer routing.',
+        depth: 'Discusses connection pooling, TLS offloading, and WebSocket proxying.',
+        clarity: 'Structured feature comparison.',
+        relevance: 'Focused on modern load balancing architectures.',
+      },
+    },
+  },
+
+  // ==========================================
+  // CI/CD
+  // ==========================================
+  {
+    id: 'iq-cicd-001',
+    version: 1,
+    targetSkill: 'CI/CD',
+    skillKey: 'cicd',
+    roles: ['devops-engineer', 'cloud-engineer', 'backend-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Compare Blue-Green and Canary deployment strategies and rollback triggers.',
+      prompt:
+        'Compare Blue-Green deployments with Canary deployments. When would you choose one over the other, and what automated monitoring signals (error rates, latency thresholds) should trigger an automatic rollback?',
+      context: 'Evaluates zero-downtime deployment strategies, telemetry, and automated safety.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines Blue-Green: two identical environments with instantaneous router/traffic cutover and instant rollback',
+        'Defines Canary: gradual incremental routing (e.g. 5% -> 25% -> 100%) to a small subset of real users',
+        'Identifies rollback signals: spike in HTTP 5xx errors, p99 latency degradation, unhandled exceptions in logs',
+        'Addresses database schema backward compatibility during progressive rollouts',
+      ],
+      expectedKeyConcepts: [
+        'Blue-Green vs Canary',
+        'gradual traffic shifting',
+        'automated rollback criteria',
+        'backward-compatible database migrations',
+      ],
+      commonMisconceptions: [
+        'Forgetting that rollback requires database schemas to support both old and new application versions simultaneously',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate distinction between full cutover vs progressive percentage deployment.',
+        depth: 'Discusses database expand-and-contract migration patterns.',
+        clarity: 'Structured decision criteria.',
+        relevance: 'Addresses production deployment reliability.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Mobile Development
+  // ==========================================
+  {
+    id: 'iq-mobile-001',
+    version: 1,
+    targetSkill: 'Mobile Development',
+    skillKey: 'mobiledevelopment',
+    roles: ['mobile-developer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 200,
+    intent: {
+      summary: 'Design an offline-first mobile architecture with data synchronization and conflict resolution.',
+      prompt:
+        'How would you architect an offline-first mobile application where users can create and edit records without internet access, and what strategy would you use to resolve conflicts when the device re-establishes connectivity?',
+      context: 'Evaluates mobile local persistence, network state handling, and sync conflict resolution.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Proposes local persistent storage (e.g. SQLite, Room, Core Data, WatermelonDB) as single source of truth for the UI',
+        'Implements an outbound mutation queue that replays operations upon network reconnection',
+        'Explains conflict resolution strategies: Last-Write-Wins (with vector clocks/timestamps), server-wins, or CRDTs',
+      ],
+      expectedKeyConcepts: [
+        'offline-first',
+        'local persistence as single source of truth',
+        'mutation queue',
+        'conflict resolution (LWW, CRDTs)',
+      ],
+      commonMisconceptions: [
+        'Blocking the user interface with loading spinners whenever network connectivity is lost',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Sound offline-first pattern with local database and queued background sync.',
+        depth: 'Discusses optimistic UI updates and network reachability listeners.',
+        clarity: 'Structured end-to-end sync workflow.',
+        relevance: 'Specifically tailored to mobile platform constraints.',
+      },
+    },
+  },
+  {
+    id: 'iq-mobile-002',
+    version: 1,
+    targetSkill: 'Mobile Development',
+    skillKey: 'mobiledevelopment',
+    roles: ['mobile-developer'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.TECHNICAL_DEEP_DIVE,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Diagnose and remediate memory leaks, retain cycles, and UI thread jank in mobile applications.',
+      prompt:
+        'When profiling a mobile application experiencing frame drops (jank) and out-of-memory crashes during prolonged sessions, what diagnostic tools and memory profiling techniques would you employ to identify retain cycles, heavy view hierarchies, or uncollected native resources?',
+      context: 'Tests deep mobile performance profiling, memory lifecycle, and rendering pipeline optimization.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Identifies profiling tools (e.g. Android Profiler, Memory LeakCanary, Xcode Instruments, Allocations/Leaks instrument)',
+        'Explains retain cycles or memory leaks caused by circular strong references, closures/callbacks holding activity/controller contexts, or un-removed event listeners',
+        'Analyzes rendering jank: exceeding 16ms frame budget (60 FPS) due to heavy main thread computation, complex layout passes, or overdraw',
+      ],
+      expectedKeyConcepts: [
+        'retain cycles / strong reference cycles',
+        '16ms frame budget / 60 FPS',
+        'overdraw and layout hierarchy flattening',
+        'Memory LeakCanary / Xcode Instruments',
+      ],
+      commonMisconceptions: [
+        'Believing garbage-collected runtimes cannot suffer from memory leaks',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate explanation of reference counting / garbage collection leak mechanics on mobile.',
+        depth: 'Mentions main thread UI rendering budget and GPU overdraw inspection.',
+        clarity: 'Presents a structured profiling and remediation strategy.',
+        relevance: 'Focused directly on mobile app performance and stability.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Data Visualisation
+  // ==========================================
+  {
+    id: 'iq-datavis-001',
+    version: 1,
+    targetSkill: 'Data Visualisation',
+    skillKey: 'datavisualisation',
+    roles: ['data-analyst', 'data-scientist'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Select appropriate chart types and avoid misleading visual encodings.',
+      prompt:
+        'How do you choose between a bar chart, line chart, scatter plot, and histogram based on variable types (categorical vs continuous), and what are common misleading practices (such as truncated axes) that distort data?',
+      context: 'Evaluates data communication integrity, chart selection heuristics, and visual perception.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Maps variable types correctly: bar chart for categorical comparisons, line chart for continuous time-series, scatter plot for bivariate correlation, histogram for distributions',
+        'Explains the deception of truncating the y-axis on bar charts (exaggerating small differences)',
+        'Highlights cognitive visual variables: color saturation, position along a common scale, and aspect ratio',
+      ],
+      expectedKeyConcepts: [
+        'categorical vs continuous data',
+        'truncated y-axis deception',
+        'time-series vs distribution',
+        'visual encoding channels',
+      ],
+      commonMisconceptions: [
+        'Using 3D charts or pie charts with more than 5 slices for critical decision-making',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate chart mapping to statistical data types.',
+        depth: 'Explains perceptual accuracy of human eye (position > length > area > angle).',
+        clarity: 'Clear distinction between exploratory and explanatory visuals.',
+        relevance: 'Focused on data visualization best practices.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Excel
+  // ==========================================
+  {
+    id: 'iq-excel-001',
+    version: 1,
+    targetSkill: 'Excel',
+    skillKey: 'excel',
+    roles: ['data-analyst'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain XLOOKUP vs VLOOKUP advantages, Index-Match, and data hygiene.',
+      prompt:
+        'Why is XLOOKUP (or INDEX/MATCH) superior to traditional VLOOKUP in Excel, and how do Pivot Tables facilitate rapid aggregation and multi-dimensional analysis?',
+      context: 'Evaluates practical spreadsheet data analysis proficiency.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains VLOOKUP limitations: requires lookup column to be leftmost, fragile if columns inserted, defaults to approximate match',
+        'Highlights XLOOKUP advantages: looks in any direction, defaults to exact match, handles missing values natively',
+        'Describes Pivot Tables: dynamic grouping, multi-level summarization, calculated fields, and filtering',
+      ],
+      expectedKeyConcepts: [
+        'XLOOKUP vs VLOOKUP',
+        'exact vs approximate match',
+        'leftward lookup',
+        'Pivot Table aggregation',
+      ],
+      commonMisconceptions: [
+        'Assuming VLOOKUP is robust when columns are dynamically inserted or reordered',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate comparison of lookup formulas and syntax safety.',
+        depth: 'Mentions computational performance on large sheets.',
+        clarity: 'Clear real-world business data lookup example.',
+        relevance: 'Directly addresses Excel data analysis.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Machine Learning
+  // ==========================================
+  {
+    id: 'iq-ml-001',
+    version: 1,
+    targetSkill: 'Machine Learning',
+    skillKey: 'machinelearning',
+    roles: ['data-scientist'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Explain the bias-variance trade-off and regularization techniques.',
+      prompt:
+        'Explain the bias-variance trade-off in machine learning. How do high bias (underfitting) and high variance (overfitting) manifest on training vs validation loss curves, and how do L1/L2 regularization help?',
+      context: 'Fundamental machine learning model evaluation and generalization principles.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines bias (error from erroneous assumptions/oversimplification) and variance (sensitivity to small fluctuations in training set)',
+        'Describes loss curves: underfitting shows high training and validation error; overfitting shows low training error but diverging validation error',
+        'Explains regularization: L1 (Lasso) promotes sparsity/feature selection; L2 (Ridge) penalizes large weight magnitudes',
+      ],
+      expectedKeyConcepts: [
+        'bias-variance trade-off',
+        'underfitting vs overfitting',
+        'loss curve divergence',
+        'L1 (Lasso) vs L2 (Ridge) regularization',
+      ],
+      commonMisconceptions: [
+        'Believing lower training loss always indicates a superior production model',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Mathematically sound definition of bias, variance, and irreducible error.',
+        depth: 'Explains k-fold cross-validation as an empirical guardrail.',
+        clarity: 'Structured explanation referencing learning curves.',
+        relevance: 'Core machine learning theory.',
+      },
+    },
+  },
+  {
+    id: 'iq-ml-002',
+    version: 1,
+    targetSkill: 'Machine Learning',
+    skillKey: 'machinelearning',
+    roles: ['data-scientist'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Handle severe class imbalance and select proper evaluation metrics in fraud detection.',
+      prompt:
+        'You are training a model to detect credit card fraud where only 0.1% of transactions are fraudulent. Why is accuracy a misleading metric, and what techniques (sampling, loss weighting, PR-AUC vs ROC-AUC) would you use?',
+      context: 'Evaluates real-world machine learning engineering on imbalanced datasets.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Explains the accuracy paradox: a naive model predicting all negatives achieves 99.9% accuracy but catches zero fraud',
+        'Recommends Precision, Recall, F1-score, and Precision-Recall AUC over ROC-AUC for severe imbalance',
+        'Proposes mitigation techniques: class weighting in loss function, focal loss, or resampling (SMOTE, undersampling)',
+      ],
+      expectedKeyConcepts: [
+        'accuracy paradox',
+        'Precision-Recall AUC vs ROC-AUC',
+        'cost-sensitive learning / class weights',
+        'SMOTE / undersampling',
+      ],
+      commonMisconceptions: [
+        'Relying on ROC-AUC when true negative rate dominates the calculation',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate demonstration of why ROC-AUC can present an overly optimistic picture on imbalanced data.',
+        depth: 'Discusses business cost matrix (cost of false positive vs false negative).',
+        clarity: 'Structured modeling and evaluation roadmap.',
+        relevance: 'Directly addresses the fraud detection scenario.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Statistics
+  // ==========================================
+  {
+    id: 'iq-stats-001',
+    version: 1,
+    targetSkill: 'Statistics',
+    skillKey: 'statistics',
+    roles: ['data-scientist', 'data-analyst'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain hypothesis testing, p-values, and Type I vs Type II errors in A/B testing.',
+      prompt:
+        'In the context of product A/B testing, what is a p-value, what do Type I (false positive) and Type II (false negative) errors represent, and why is sample size determination essential prior to launching a test?',
+      context: 'Core statistical inference and experimentation integrity.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines p-value: the probability of observing results at least as extreme as the observed data, assuming the null hypothesis is true',
+        'Differentiates Type I error (alpha, rejecting true null) vs Type II error (beta, failing to reject false null)',
+        'Explains power analysis: determining minimum detectable effect and sample size to avoid underpowered experiments and premature peaking',
+      ],
+      expectedKeyConcepts: [
+        'null hypothesis',
+        'p-value definition',
+        'Type I vs Type II error',
+        'statistical power (1 - beta)',
+        'peeking problem',
+      ],
+      commonMisconceptions: [
+        'Believing p-value is the probability that the null hypothesis is true',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Rigorous statistical definition of p-values without the common inversion fallacy.',
+        depth: 'Mentions statistical power and minimum detectable effect.',
+        clarity: 'Clear explanation using practical A/B conversion examples.',
+        relevance: 'Focused on applied statistical testing.',
+      },
+    },
+  },
+
+  // ==========================================
+  // TypeScript
+  // ==========================================
+  {
+    id: 'iq-ts-001',
+    version: 1,
+    targetSkill: 'TypeScript',
+    skillKey: 'typescript',
+    roles: ['frontend-developer', 'backend-developer', 'full-stack-developer'],
+    difficulty: 'beginner',
+    type: INTERVIEW_QUESTION_TYPES.CONCEPTUAL,
+    timeLimitSeconds: 150,
+    intent: {
+      summary: 'Explain structural typing, interfaces vs type aliases, and compile-time guarantees.',
+      prompt:
+        'What is structural typing (duck typing) in TypeScript, and what are the practical differences between an interface and a type alias when modeling application domain types?',
+      context: 'Evaluates TypeScript static typing fundamentals and domain modeling.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Defines structural typing: compatibility is determined by shape/properties rather than explicit nominal declaration',
+        'Compares interface vs type alias: interfaces support declaration merging and extends; type aliases support unions, primitives, and tuples',
+        'Emphasizes that TypeScript types are fully erased at compile time and incur zero runtime overhead',
+      ],
+      expectedKeyConcepts: [
+        'structural vs nominal typing',
+        'type erasure',
+        'declaration merging',
+        'union types vs interface extension',
+      ],
+      commonMisconceptions: [
+        'Expecting TypeScript type checks to validate untrusted runtime JSON payloads at execution time',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Accurate distinction between compile-time static analysis and runtime JavaScript.',
+        depth: 'Explains declaration merging in library definitions vs union type flexibility.',
+        clarity: 'Clear code-level examples.',
+        relevance: 'Focused on core TypeScript concepts.',
+      },
+    },
+  },
+
+  // ==========================================
+  // Behavioral Archetypes
+  // ==========================================
+  {
+    id: 'iq-behav-001',
+    version: 1,
+    targetSkill: 'JavaScript',
+    skillKey: 'javascript',
+    roles: ['backend-developer', 'frontend-developer', 'full-stack-developer', 'devops-engineer'],
+    difficulty: 'intermediate',
+    type: INTERVIEW_QUESTION_TYPES.BEHAVIORAL,
+    timeLimitSeconds: 180,
+    intent: {
+      summary: 'Demonstrate constructive technical disagreement and consensus building.',
+      prompt:
+        'Tell me about a time you strongly disagreed with a team member or technical lead regarding an architectural decision, library selection, or code review feedback. How did you present your case, resolve the disagreement, and ensure team alignment?',
+      context: 'Assesses communication clarity, collaborative empathy, and data-driven decision making.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Applies structured communication (e.g. STAR method: Situation, Task, Action, Result)',
+        'Uses objective evidence: prototypes, benchmarks, documentation, or user impact over personal ego',
+        'Demonstrates professional disagree-and-commit maturity once a final decision was reached',
+      ],
+      expectedKeyConcepts: [
+        'data-driven persuasion',
+        'disagree and commit',
+        'blameless communication',
+        'STAR method',
+      ],
+      commonMisconceptions: [
+        'Portraying conflict as a contest to be won rather than a collaborative search for the best outcome',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Demonstrates professional emotional intelligence and constructive collaboration.',
+        depth: 'Explains long-term team impact and retrospective learnings.',
+        clarity: 'Well-structured narrative with clear beginning, climax, and resolution.',
+        relevance: 'Directly addresses technical disagreement in software teams.',
+      },
+    },
+  },
+  {
+    id: 'iq-behav-002',
+    version: 1,
+    targetSkill: 'Linux',
+    skillKey: 'linux',
+    roles: ['devops-engineer', 'cloud-engineer', 'backend-developer', 'full-stack-developer'],
+    difficulty: 'advanced',
+    type: INTERVIEW_QUESTION_TYPES.BEHAVIORAL,
+    timeLimitSeconds: 240,
+    intent: {
+      summary: 'Demonstrate leadership, incident response, and blameless post-mortem under pressure.',
+      prompt:
+        'Describe a situation where a major production outage, data integrity issue, or security alert occurred under your watch. How did you triage the immediate crisis, communicate with stakeholders under pressure, and lead the subsequent blameless post-mortem?',
+      context: 'Evaluates operational resilience, incident management, and continuous learning culture.',
+    },
+    evaluationCriteria: {
+      rubricCriteria: [
+        'Describes clear incident triage: stop the bleeding (rollback/mitigate) before conducting root cause forensics',
+        'Maintains proactive, transparent stakeholder communication channels with regular status cadences',
+        'Leads a blameless post-mortem identifying systemic process and guardrail improvements rather than individual blame',
+      ],
+      expectedKeyConcepts: [
+        'incident command',
+        'mitigation first vs root cause forensics',
+        'blameless post-mortem',
+        'systemic remediation',
+      ],
+      commonMisconceptions: [
+        'Attempting to debug root cause for hours while the production outage is still actively impacting users',
+      ],
+      scoringGuidelines: {
+        accuracy: 'Reflects industry-standard incident command and SRE post-mortem principles.',
+        depth: 'Describes actionable preventive measures implemented after the incident.',
+        clarity: 'Structured crisis narrative with calm, methodical progression.',
+        relevance: 'Directly addresses production incident management.',
+      },
+    },
+  },
 ]);
 
 /** Map of questions indexed by ID for fast constant-time lookup. */
@@ -707,6 +1813,7 @@ export function isSkillSupported(skillName) {
  * @param {object} [options]
  * @param {string} [options.difficulty]
  * @param {string} [options.roleId]
+ * @param {string} [options.type]
  * @returns {Array<object>}
  */
 export function getQuestionsForSkill(skillName, options = {}) {
@@ -715,12 +1822,13 @@ export function getQuestionsForSkill(skillName, options = {}) {
     throw new Error(`Skill "${skillName}" is not a recognized canonical skill.`);
   }
 
-  const { difficulty, roleId } = options;
+  const { difficulty, roleId, type } = options;
 
   return INTERVIEW_QUESTION_BANK.filter((q) => {
     if (q.skillKey !== canonical.key) return false;
     if (difficulty && q.difficulty !== difficulty) return false;
     if (roleId && !q.roles.includes(roleId)) return false;
+    if (type && q.type !== type) return false;
     return true;
   }).map((q) => JSON.parse(JSON.stringify(q)));
 }
@@ -732,6 +1840,7 @@ export function getQuestionsForSkill(skillName, options = {}) {
  * @param {object} [options]
  * @param {string} [options.difficulty]
  * @param {string} [options.skillName]
+ * @param {string} [options.type]
  * @returns {Array<object>}
  */
 export function getQuestionsForRole(roleId, options = {}) {
@@ -740,13 +1849,14 @@ export function getQuestionsForRole(roleId, options = {}) {
     throw new Error(`Role "${roleId}" is not a recognized career role in the catalogue.`);
   }
 
-  const { difficulty, skillName } = options;
+  const { difficulty, skillName, type } = options;
   const canonical = skillName ? canonicalSkill(skillName) : null;
 
   return INTERVIEW_QUESTION_BANK.filter((q) => {
     if (!q.roles.includes(roleId)) return false;
     if (difficulty && q.difficulty !== difficulty) return false;
     if (canonical && q.skillKey !== canonical.key) return false;
+    if (type && q.type !== type) return false;
     return true;
   }).map((q) => JSON.parse(JSON.stringify(q)));
 }
@@ -917,12 +2027,14 @@ export function selectQuestionsForSession({
 
   // Format into session questions schema shape
   return selectedQuestions.map((q, index) => ({
+    id: q.id,
     questionId: q.id,
     order: index + 1,
     type: q.type,
     prompt: q.intent.prompt,
     targetSkill: q.targetSkill,
     difficulty: q.difficulty,
+    timeLimitSeconds: q.timeLimitSeconds ?? 180,
     rubricCriteria: [...q.evaluationCriteria.rubricCriteria],
   }));
 }
