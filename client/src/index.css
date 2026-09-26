@@ -216,6 +216,19 @@
   --color-green-50: #17241d;
   --color-green-200: #2d4638;
   --color-green-700: #86efac;
+  --color-green-800: #86efac;
+
+  --color-amber-50: #2a2016;
+  --color-amber-200: #523b20;
+  --color-amber-800: #fcd34d;
+
+  --color-sky-50: #14232c;
+  --color-sky-200: #1e3e4f;
+  --color-sky-800: #7dd3fc;
+
+  --color-rose-50: #2b181b;
+  --color-rose-200: #57272f;
+  --color-rose-800: #fda4af;
 
   /* Atmosphere, dialled back for charcoal. */
   --nx-glow-a: 0.1;
