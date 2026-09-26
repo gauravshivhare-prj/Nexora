@@ -24,6 +24,7 @@ export function AssessmentRunnerPage() {
   const [attempt, setAttempt] = useState(null);
   const [loadStatus, setLoadStatus] = useState(LOAD_STATUS.LOADING);
   const [loadError, setLoadError] = useState(null);
+  const [isLimitReached, setIsLimitReached] = useState(false);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -31,12 +32,14 @@ export function AssessmentRunnerPage() {
   const [submitError, setSubmitError] = useState(null);
   const [showReview, setShowReview] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
+  const [autoSubmitted, setAutoSubmitted] = useState(false);
 
   const initAttempt = useCallback(
     async (signal) => {
       setLoadStatus(LOAD_STATUS.LOADING);
       setLoadError(null);
       setSubmitError(null);
+      setIsLimitReached(false);
 
       try {
         const [assessmentRes, attemptRes] = await Promise.all([
@@ -57,7 +60,7 @@ export function AssessmentRunnerPage() {
         ) {
           setSubmissionResult({
             attempt: attemptRes.attempt,
-            result: attemptRes.attempt.result,
+            result: attemptRes.attempt.result || attemptRes.attempt,
           });
         }
 
@@ -77,7 +80,11 @@ export function AssessmentRunnerPage() {
         setLoadStatus(LOAD_STATUS.READY);
       } catch (err) {
         if (signal?.aborted) return;
-        setLoadError(toMessage(err, 'Failed to initialize assessment attempt.'));
+        const msg = toMessage(err, 'Failed to initialize assessment attempt.');
+        if (/Maximum number of attempts/i.test(msg)) {
+          setIsLimitReached(true);
+        }
+        setLoadError(msg);
         setLoadStatus(LOAD_STATUS.FAILED);
       }
     },
@@ -90,10 +97,67 @@ export function AssessmentRunnerPage() {
     return () => controller.abort();
   }, [initAttempt]);
 
+  const handleSubmit = useCallback(
+    async (isTimeout = false) => {
+      if (isSubmitting || !attempt || attempt.status === ATTEMPT_STATUS.EVALUATED) return;
+      setIsSubmitting(true);
+      setSubmitError(null);
+      if (isTimeout) {
+        setAutoSubmitted(true);
+      }
+
+      // Format answers array
+      const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
+        questionId,
+        answer,
+      }));
+
+      try {
+        const response = await submitAssessmentAttempt(attempt.attemptId || attempt.id, {
+          answers: formattedAnswers,
+        });
+
+        setSubmissionResult(response);
+        setAttempt(response.attempt);
+      } catch (err) {
+        setSubmitError(toMessage(err, 'Failed to submit assessment answers. Please try again.'));
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [isSubmitting, attempt, answers],
+  );
+
   if (loadStatus === LOAD_STATUS.LOADING) {
     return (
       <PageShell>
         <LoadingState label="Preparing your assessment session…" rows={4} />
+      </PageShell>
+    );
+  }
+
+  if (isLimitReached) {
+    return (
+      <PageShell>
+        <PageHeader backTo="/assessments" backLabel="Assessments" title="Attempt Limit Reached">
+          Maximum attempts limit.
+        </PageHeader>
+        <Card title="Maximum Attempts (5 of 5) Reached">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-ink-muted">
+              You have already reached the maximum allowed attempts (5) for this assessment.
+              Attempt limits ensure evaluation validity and rigor.
+            </p>
+            <div>
+              <Link
+                to="/assessments"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand hover:bg-brand-soft"
+              >
+                Back to Assessments
+              </Link>
+            </div>
+          </div>
+        </Card>
       </PageShell>
     );
   }
@@ -138,30 +202,7 @@ export function AssessmentRunnerPage() {
     }));
   }
 
-  async function handleSubmit() {
-    if (isSubmitting || !attempt) return;
-    setIsSubmitting(true);
-    setSubmitError(null);
 
-    // Format answers array
-    const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
-      questionId,
-      answer,
-    }));
-
-    try {
-      const response = await submitAssessmentAttempt(attempt.attemptId || attempt.id, {
-        answers: formattedAnswers,
-      });
-
-      setSubmissionResult(response);
-      setAttempt(response.attempt);
-    } catch (err) {
-      setSubmitError(toMessage(err, 'Failed to submit assessment answers. Please try again.'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   // If submission completed, show outcome banner / transition
   if (submissionResult) {
@@ -182,6 +223,12 @@ export function AssessmentRunnerPage() {
         <div className="flex flex-col gap-6">
           <Card>
             <div className="flex flex-col items-center py-6 text-center">
+              {autoSubmitted ? (
+                <span className="mb-3 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Time Expired · Auto-Submitted
+                </span>
+              ) : null}
+
               <span
                 className={`inline-flex rounded-full border px-4 py-1 text-sm font-semibold ${
                   isPassed
@@ -233,6 +280,16 @@ export function AssessmentRunnerPage() {
         backTo="/assessments"
         backLabel="Assessment Catalog"
         title={assessment.title}
+        actions={
+          attempt?.startedAt ? (
+            <AssessmentTimer
+              startedAt={attempt.startedAt}
+              timeLimitMinutes={assessment.timeLimitMinutes || assessment.durationMinutes || 20}
+              onTimeout={() => handleSubmit(true)}
+              isSubmitting={isSubmitting}
+            />
+          ) : null
+        }
       >
         <span className="capitalize">{assessment.difficulty}</span> difficulty ·{' '}
         {assessment.timeLimitMinutes || assessment.durationMinutes || 20} min limit · Pass mark:{' '}
@@ -500,7 +557,7 @@ export function AssessmentRunnerPage() {
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={handleSubmit}
+              onClick={() => handleSubmit(false)}
               aria-busy={isSubmitting}
               className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -510,5 +567,60 @@ export function AssessmentRunnerPage() {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function AssessmentTimer({ startedAt, timeLimitMinutes, onTimeout, isSubmitting }) {
+  const [secondsRemaining, setSecondsRemaining] = useState(() => {
+    if (!timeLimitMinutes || !startedAt) return null;
+    const startMs = new Date(startedAt).getTime();
+    const endMs = startMs + timeLimitMinutes * 60 * 1000;
+    return Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (secondsRemaining === null || isSubmitting) return;
+
+    if (secondsRemaining <= 0) {
+      onTimeout();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const startMs = new Date(startedAt).getTime();
+      const endMs = startMs + timeLimitMinutes * 60 * 1000;
+      const left = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+      setSecondsRemaining(left);
+
+      if (left <= 0) {
+        clearInterval(interval);
+        onTimeout();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt, timeLimitMinutes, secondsRemaining, isSubmitting, onTimeout]);
+
+  if (secondsRemaining === null) return null;
+
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  const isUrgent = secondsRemaining < 120;
+
+  return (
+    <div
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold tabular-nums transition-colors duration-200 ${
+        isUrgent
+          ? 'border-red-300 bg-red-50 text-danger-text animate-pulse'
+          : 'border-orange-200 bg-surface text-ink'
+      }`}
+    >
+      <span aria-hidden="true">⏱</span>
+      <span>
+        Time left: {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+      </span>
+      {isUrgent ? <span className="ml-1 text-[10px] font-semibold uppercase">Hurry</span> : null}
+    </div>
   );
 }

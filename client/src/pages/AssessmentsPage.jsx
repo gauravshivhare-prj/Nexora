@@ -86,11 +86,16 @@ export function AssessmentsPage() {
     return matchesDifficulty && matchesQuery;
   });
 
-  // Group latest attempt per assessment
+  // Group latest attempt and count attempts per assessment
   const attemptsByAssessment = {};
+  const attemptCountsByAssessment = {};
   for (const att of attempts) {
-    if (!attemptsByAssessment[att.assessmentId]) {
-      attemptsByAssessment[att.assessmentId] = att;
+    const aId = att.assessmentId || att.assessment?.id || att.assessment?._id;
+    if (aId) {
+      if (!attemptsByAssessment[aId]) {
+        attemptsByAssessment[aId] = att;
+      }
+      attemptCountsByAssessment[aId] = (attemptCountsByAssessment[aId] || 0) + 1;
     }
   }
 
@@ -170,12 +175,15 @@ export function AssessmentsPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {filtered.map((item) => {
-                const latestAttempt = attemptsByAssessment[item.id || item.assessmentId];
+                const aId = item.id || item.assessmentId;
+                const latestAttempt = attemptsByAssessment[aId];
+                const attemptCount = attemptCountsByAssessment[aId] || 0;
                 return (
                   <AssessmentCard
-                    key={item.id || item.assessmentId}
+                    key={aId}
                     assessment={item}
                     latestAttempt={latestAttempt}
+                    attemptCount={attemptCount}
                   />
                 );
               })}
@@ -187,7 +195,7 @@ export function AssessmentsPage() {
   );
 }
 
-function AssessmentCard({ assessment, latestAttempt }) {
+function AssessmentCard({ assessment, latestAttempt, attemptCount = 0 }) {
   const diffPresentation =
     DIFFICULTY_PRESENTATION[assessment.difficulty] ??
     DIFFICULTY_PRESENTATION[DIFFICULTY_LEVELS.BEGINNER];
@@ -195,6 +203,11 @@ function AssessmentCard({ assessment, latestAttempt }) {
   const duration = assessment.timeLimitMinutes || assessment.durationMinutes || 20;
   const questionsCount = assessment.totalQuestions || assessment.questions?.length || 0;
   const passPercent = Math.round((assessment.passMark ?? 0.7) * 100);
+  const assessmentId = assessment.id || assessment.assessmentId;
+
+  const isLimitReached =
+    attemptCount >= 5 ||
+    (latestAttempt?.attemptNumber >= 5 && latestAttempt?.status !== ATTEMPT_STATUS.IN_PROGRESS);
 
   // Attempt status badge
   let statusBadge = (
@@ -206,7 +219,13 @@ function AssessmentCard({ assessment, latestAttempt }) {
   let ctaLabel = 'Start Assessment';
   let ctaPrimary = true;
 
-  if (latestAttempt) {
+  if (isLimitReached) {
+    statusBadge = (
+      <span className="inline-flex shrink-0 items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+        Limit Reached (5/5)
+      </span>
+    );
+  } else if (latestAttempt) {
     if (latestAttempt.status === ATTEMPT_STATUS.IN_PROGRESS) {
       statusBadge = (
         <span
@@ -242,8 +261,6 @@ function AssessmentCard({ assessment, latestAttempt }) {
       ctaPrimary = false;
     }
   }
-
-  const assessmentId = assessment.id || assessment.assessmentId;
 
   return (
     <div className="flex flex-col justify-between rounded-xl border border-orange-100 bg-orange-50/20 p-5 transition-all duration-200 hover:border-orange-200 hover:shadow-sm">
@@ -287,16 +304,30 @@ function AssessmentCard({ assessment, latestAttempt }) {
         </dl>
 
         <div className="mt-4">
-          <Link
-            to={`/assessments/${assessmentId}/run`}
-            className={`flex min-h-[44px] w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-              ctaPrimary
-                ? 'bg-brand text-on-brand hover:bg-brand-soft'
-                : 'border border-orange-200 bg-surface text-ink hover:border-brand hover:text-brand-text'
-            }`}
-          >
-            {ctaLabel}
-          </Link>
+          {isLimitReached ? (
+            <div className="flex flex-col gap-1.5">
+              <Link
+                to={`/assessments/${assessmentId}`}
+                className="flex min-h-[44px] w-full items-center justify-center rounded-xl border border-orange-200 bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
+              >
+                Review Past Attempts
+              </Link>
+              <span className="text-center text-[11px] text-ink-muted">
+                Maximum 5 attempts reached.
+              </span>
+            </div>
+          ) : (
+            <Link
+              to={`/assessments/${assessmentId}/run`}
+              className={`flex min-h-[44px] w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                ctaPrimary
+                  ? 'bg-brand text-on-brand hover:bg-brand-soft'
+                  : 'border border-orange-200 bg-surface text-ink hover:border-brand hover:text-brand-text'
+              }`}
+            >
+              {ctaLabel}
+            </Link>
+          )}
         </div>
       </div>
     </div>

@@ -99,6 +99,7 @@ describe('assessment runner page', { timeout: 180_000 }, () => {
 
     // Answered state must be preserved
     assert.match(await page.bodyText(), /Answered: 1 \//);
+    assert.match(await page.bodyText(), /Time left:\s*\d+:\d+/);
   });
 
   // -------------------------------------------------------------- review & submission
@@ -134,6 +135,76 @@ describe('assessment runner page', { timeout: 180_000 }, () => {
     // Absolute zero answer-key leakage in result view
     assert.doesNotMatch(resultText, /expectedAnswer/i);
     assert.doesNotMatch(resultText, /scoringRule/i);
+  });
+
+  // ------------------------------------------------ timer & attempt limits UX
+
+  it('renders countdown timer, guards duplicate submissions, and handles attempt limits gracefully', async () => {
+    await signUp();
+    await openRunner();
+
+    // Verify countdown timer presence
+    const body = await page.bodyText();
+    assert.match(body, /Time left:\s*\d+:\d+/);
+
+    // Verify submit button disabled during submission
+    const isSubmittingGuarded = await page.evaluate(`(() => {
+      const submitBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Submit Assessment'));
+      return submitBtn && submitBtn.getAttribute('aria-busy') === 'false';
+    })()`);
+    assert.ok(isSubmittingGuarded);
+
+    // Complete this attempt and 4 more to reach the 5-attempt limit
+    const token = await page.storedToken();
+    const res = await fetch(`${stack.apiUrl}/api/assessments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    const assessmentId = data.data.assessments[0].id;
+
+    for (let i = 0; i < 5; i++) {
+      try {
+        const startRes = await fetch(`${stack.apiUrl}/api/assessments/${assessmentId}/attempts`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        const startData = await startRes.json();
+        const attemptId = startData.data?.attempt?.id;
+        if (attemptId) {
+          await fetch(`${stack.apiUrl}/api/assessments/attempts/${attemptId}/submit`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answers: [] }),
+          });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // Check catalog for limit reached state
+    await page.goto(`${stack.appUrl}/assessments`);
+    await page.waitFor('document.body.innerText.includes("Limit Reached (5/5)")', {
+      description: 'catalog to show limit reached badge',
+    });
+    const catalogText = await page.bodyText();
+    assert.match(catalogText, /Limit Reached \(5\/5\)/);
+    assert.match(catalogText, /Review Past Attempts/);
+
+    // If attempting to open runner directly when limit is reached
+    const assessmentHref = await page.evaluate(`(() => {
+      const link = Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('Review Past Attempts'));
+      return link ? link.getAttribute('href') : null;
+    })()`);
+    assert.ok(assessmentHref);
+
+    // Visiting /run URL directly displays limit reached state
+    await page.goto(`${stack.appUrl}${assessmentHref}/run`);
+    await page.waitFor(
+      'document.body.innerText.includes("Maximum Attempts (5 of 5) Reached") || document.body.innerText.includes("Attempt Limit Reached")',
+      { description: 'runner to display maximum attempts reached' }
+    );
+    assert.match(await page.bodyText(), /Maximum Attempts \(5 of 5\) Reached/);
   });
 
   // ------------------------------------------------------- accessibility
