@@ -16,8 +16,8 @@ import {
   LIST_LIMITS,
   SEMESTER_OPTIONS,
 } from '../constants/profileOptions.js';
-import { ApiRequestError } from '../services/apiClient.js';
 import { blankProfile, fetchProfile, saveProfile } from '../services/profile.service.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /profile — the student's own profile.
@@ -74,7 +74,7 @@ export function ProfilePage() {
     } catch (error) {
       if (signal?.aborted) return;
 
-      setLoadError(toMessage(error, 'load'));
+      setLoadError(toMessage(error, 'Something went wrong while loading your profile.'));
       setLoadStatus(LOAD_STATUS.FAILED);
     }
   }, []);
@@ -168,7 +168,7 @@ export function ProfilePage() {
         // offered here — pressing it again would fail identically.
         setRejectionCount((count) => count + 1);
       } else {
-        setSaveError(toMessage(error, 'save'));
+        setSaveError(toMessage(error, 'Something went wrong while saving. Your changes have not been lost — try again.'));
         setIsRetryable(true);
       }
     } finally {
@@ -571,29 +571,4 @@ function scrollBehavior() {
 function countOf(count, noun) {
   if (count === 0) return null;
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-/**
- * Turns a failure into something a student can act on.
- *
- * Mirrors the login page: backend 4xx messages are written for display and
- * shown as-is, anything unexpected gets a generic line rather than risking
- * internals in the UI.
- */
-function toMessage(error, action) {
-  const fallback =
-    action === 'load'
-      ? 'Something went wrong while loading your profile.'
-      : 'Something went wrong while saving. Your changes have not been lost — try again.';
-
-  if (error instanceof ApiRequestError) {
-    if (error.status === null) return error.message; // network / timeout
-    if (error.status >= 500) {
-      return 'Nexora is having trouble right now. Please try again in a moment.';
-    }
-    return error.message;
-  }
-
-  console.error(`Unexpected profile ${action} failure:`, error);
-  return fallback;
 }
