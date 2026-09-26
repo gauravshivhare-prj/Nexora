@@ -101,7 +101,7 @@ export function RoadmapPage() {
             <div>
               <Link
                 to="/career-twin"
-                className="inline-block rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
               >
                 Go to CareerTwin
               </Link>
@@ -208,13 +208,13 @@ export function RoadmapPage() {
         <div className="flex flex-wrap gap-3">
           <Link
             to="/profile"
-            className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
           >
             Add a project to your profile
           </Link>
           <Link
             to={`/careers/${roadmap.goal.roleId}/skill-gap`}
-            className="rounded-xl border border-orange-200 px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
           >
             Back to the skill gap
           </Link>
@@ -238,7 +238,7 @@ function RoadmapStep({ item, position }) {
           >
             {position}.
           </span>
-          <h3 className="text-base font-semibold text-ink">{item.title}</h3>
+          <h3 className="text-base font-semibold text-ink break-words">{item.title}</h3>
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -251,9 +251,9 @@ function RoadmapStep({ item, position }) {
         </div>
       </div>
 
-      <p className="mt-2 text-sm text-ink">{item.objective}</p>
+      <p className="mt-2 text-sm text-ink break-words">{item.objective}</p>
       {item.description ? (
-        <p className="mt-1 text-sm text-ink-muted">{item.description}</p>
+        <p className="mt-1 text-sm text-ink-muted break-words">{item.description}</p>
       ) : null}
 
       <dl className="mt-3 flex flex-col gap-1 text-xs">
@@ -273,7 +273,7 @@ function RoadmapStep({ item, position }) {
         {item.prerequisites?.length > 0 ? (
           <div className="flex flex-wrap gap-x-2">
             <dt className="font-semibold text-ink-muted">Do first</dt>
-            <dd className="text-ink">
+            <dd className="text-ink break-words">
               {item.prerequisites.map((prerequisite) => prerequisite.name).join(', ')}
             </dd>
           </div>
@@ -289,12 +289,12 @@ function RoadmapStep({ item, position }) {
         <p className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
           Closes when
         </p>
-        <p className="mt-1 text-sm text-ink">{item.completion.completesWhen}</p>
+        <p className="mt-1 text-sm text-ink break-words">{item.completion.completesWhen}</p>
 
         {item.verification ? (
           <div className="mt-2 text-sm">
-            <p className="text-ink">{item.verification.description}</p>
-            <p className="mt-0.5 text-xs text-ink-muted">
+            <p className="text-ink break-words">{item.verification.description}</p>
+            <p className="mt-0.5 text-xs text-ink-muted break-words">
               Reaches “{item.verification.reaches}”.
               {item.verification.alternative ? (
                 <>
@@ -334,12 +334,12 @@ function Resources({ resources }) {
       <ul className="mt-1.5 flex flex-col gap-1.5">
         {resources.map((resource, index) => (
           <li key={index} className="text-sm">
-            <span className="text-ink">{resource.title}</span>
+            <span className="text-ink break-words">{resource.title}</span>
             <span className="ml-1.5 text-xs text-ink-muted">({resource.type})</span>
 
             {resource.searchHint ? (
               <span className="mt-0.5 block text-xs text-ink-muted">
-                Try searching: <code className="text-ink">{resource.searchHint}</code>
+                Try searching: <code className="text-ink break-all">{resource.searchHint}</code>
               </span>
             ) : null}
           </li>
