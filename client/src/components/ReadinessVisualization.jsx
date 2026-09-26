@@ -235,22 +235,36 @@ export function ReadinessVisualization({ readiness, role }) {
       )}
 
       {/* Role Navigation Action Links */}
-      {role ? (
-        <div className="flex flex-wrap gap-2.5 pt-1">
-          <Link
-            to={`/careers/${role.roleId}/skill-gap`}
-            className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-on-brand hover:bg-brand-soft"
-          >
-            Inspect Skill Gap Evidence
-          </Link>
-          <Link
-            to={`/careers/${role.roleId}/roadmap`}
-            className="inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
-          >
-            View Targeted Roadmap
-          </Link>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-2.5 pt-1">
+        {role ? (
+          <>
+            <Link
+              to={`/careers/${role.roleId}/skill-gap`}
+              className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-on-brand hover:bg-brand-soft"
+            >
+              Inspect Skill Gap Evidence
+            </Link>
+            <Link
+              to={`/careers/${role.roleId}/roadmap`}
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              View Targeted Roadmap
+            </Link>
+          </>
+        ) : null}
+        <Link
+          to="/assessments"
+          className="inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+        >
+          Verify Skills in Assessments
+        </Link>
+        <Link
+          to="/opportunities"
+          className="inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+        >
+          Check Opportunities
+        </Link>
+      </div>
     </div>
   );
 }

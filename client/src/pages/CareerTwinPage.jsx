@@ -180,6 +180,27 @@ export function CareerTwinPage() {
         <Context twin={twin} />
 
         <Narrative narrative={twin.narrative} />
+
+        <div className="flex flex-wrap gap-3 pt-2">
+          <Link
+            to="/careers"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
+          >
+            Explore Matched Career Roles →
+          </Link>
+          <Link
+            to="/assessments"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Verify Skills in Assessments →
+          </Link>
+          <Link
+            to="/opportunities"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Check Matched Opportunities →
+          </Link>
+        </div>
       </div>
     </PageShell>
   );

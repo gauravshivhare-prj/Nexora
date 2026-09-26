@@ -213,6 +213,18 @@ export function RoadmapPage() {
             Add a project to your profile
           </Link>
           <Link
+            to="/assessments"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Take an assessment
+          </Link>
+          <Link
+            to="/interviews"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Practice interview
+          </Link>
+          <Link
             to={`/careers/${roadmap.goal.roleId}/skill-gap`}
             className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
           >

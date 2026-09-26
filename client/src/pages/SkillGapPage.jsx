@@ -183,6 +183,18 @@ export function SkillGapPage() {
           >
             Turn this into a roadmap
           </Link>
+          <Link
+            to="/assessments"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Take skill assessments
+          </Link>
+          <Link
+            to="/careers"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text"
+          >
+            Back to roles
+          </Link>
         </div>
       </div>
     </PageShell>

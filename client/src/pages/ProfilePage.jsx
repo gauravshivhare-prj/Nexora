@@ -471,7 +471,7 @@ export function ProfilePage() {
           short enough relative to the viewport that a pinned bar would only
           be spending space the content wants.
         */}
-        <div className="sticky bottom-0 -mx-1 rounded-t-2xl border-t border-orange-100 bg-canvas/95 px-1 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
+        <div className="flex flex-wrap items-center justify-between gap-3 sticky bottom-0 -mx-1 rounded-t-2xl border-t border-orange-100 bg-canvas/95 px-1 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
           <button
             type="submit"
             disabled={isSaving}
@@ -480,6 +480,21 @@ export function ProfilePage() {
           >
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/resume"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Upload Resumes →
+            </Link>
+            <Link
+              to="/career-twin"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Build CareerTwin →
+            </Link>
+          </div>
         </div>
       </form>
     </PageShell>

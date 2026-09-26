@@ -898,6 +898,27 @@ export function InterviewSessionPage() {
                 ))}
               </div>
             </Card>
+
+            <div className="flex flex-wrap gap-3 pt-3">
+              <Link
+                to="/opportunities"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand hover:bg-brand-soft"
+              >
+                Explore Matched Opportunities →
+              </Link>
+              <Link
+                to="/career-twin"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink hover:border-brand"
+              >
+                View CareerTwin Evidence →
+              </Link>
+              <Link
+                to="/interviews"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink hover:border-brand"
+              >
+                Back to Interviews
+              </Link>
+            </div>
           </div>
         )}
       </div>

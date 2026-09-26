@@ -386,6 +386,33 @@ export function AssessmentRunnerPage() {
               </div>
             </Card>
           ) : null}
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Link
+              to="/career-twin"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-on-brand hover:bg-brand-soft"
+            >
+              Rebuild CareerTwin with Evidence →
+            </Link>
+            <Link
+              to="/opportunities"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Check Matched Opportunities →
+            </Link>
+            <Link
+              to="/interviews"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Practice AI Interview →
+            </Link>
+            <Link
+              to="/assessments"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-5 py-3 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Back to Catalog
+            </Link>
+          </div>
         </div>
       </PageShell>
     );
