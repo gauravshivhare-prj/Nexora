@@ -480,6 +480,11 @@ export function scoreQuestion(question, studentAnswer) {
         break;
       }
       const selected = String(studentAnswer).trim();
+      if (selected === '') {
+        status = QUESTION_ANSWER_STATUS.SKIPPED;
+        scoringRule = 'skipped_empty_single_choice';
+        break;
+      }
       const validOption =
         !Array.isArray(question.options) || question.options.some((o) => o.id === selected);
       if (!validOption) {
@@ -543,7 +548,8 @@ export function scoreQuestion(question, studentAnswer) {
         }
 
         const totalExpected = expectedSet.size;
-        const partial = (correctSelected - incorrectSelected) / totalExpected;
+        const partial =
+          totalExpected > 0 ? (correctSelected - incorrectSelected) / totalExpected : 0;
         ratio = Math.max(0, Math.min(1, partial));
 
         if (ratio === 1) {
@@ -581,8 +587,8 @@ export function scoreQuestion(question, studentAnswer) {
       }
 
       const { expectedOutput, trimWhitespace, caseSensitive } = question.expectedAnswer;
-      let rawStudent = String(studentAnswer).replace(/\r\n/g, '\n');
-      let rawExpected = String(expectedOutput).replace(/\r\n/g, '\n');
+      let rawStudent = String(studentAnswer).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      let rawExpected = String(expectedOutput).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
       if (trimWhitespace) {
         rawStudent = rawStudent.trim();
@@ -614,12 +620,12 @@ export function scoreQuestion(question, studentAnswer) {
       }
 
       const { acceptedAnswers, caseSensitive, trimWhitespace } = question.expectedAnswer;
-      let cleanedStudent = String(studentAnswer);
+      let cleanedStudent = String(studentAnswer).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       if (trimWhitespace) cleanedStudent = cleanedStudent.trim();
       if (!caseSensitive) cleanedStudent = cleanedStudent.toLowerCase();
 
       const matched = acceptedAnswers.some((ans) => {
-        let cleanedAns = String(ans);
+        let cleanedAns = String(ans).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         if (trimWhitespace) cleanedAns = cleanedAns.trim();
         if (!caseSensitive) cleanedAns = cleanedAns.toLowerCase();
         return cleanedStudent === cleanedAns;
@@ -637,6 +643,11 @@ export function scoreQuestion(question, studentAnswer) {
         parsed = studentAnswer;
       } else if (typeof studentAnswer === 'string') {
         const lower = studentAnswer.trim().toLowerCase();
+        if (lower === '') {
+          status = QUESTION_ANSWER_STATUS.SKIPPED;
+          scoringRule = 'skipped_empty_boolean';
+          break;
+        }
         if (lower === 'true') parsed = true;
         if (lower === 'false') parsed = false;
       }

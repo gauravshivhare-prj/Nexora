@@ -15,6 +15,8 @@ const questionResultSchema = new mongoose.Schema(
     prompt: { type: String, required: true },
     weight: { type: Number, required: true },
     studentAnswer: { type: mongoose.Schema.Types.Mixed, default: null },
+    status: { type: String, default: null },
+    scoringRule: { type: String, default: null },
     isCorrect: { type: Boolean, required: true },
     ratio: { type: Number, required: true, min: 0, max: 1 },
     earnedPoints: { type: Number, required: true, min: 0 },
@@ -190,6 +192,7 @@ export function toPublicAssessmentAttempt(doc) {
     questionResults: (raw.questionResults ?? []).map((qr) => ({
       questionId: qr.questionId,
       status: qr.status ?? (qr.isCorrect ? 'correct' : 'incorrect'),
+      scoringRule: qr.scoringRule ?? null,
       prompt: qr.prompt,
       weight: qr.weight,
       studentAnswer: qr.studentAnswer,
