@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ErrorState, PageShell } from '../components/PageShell.jsx';
 import { FormAlert } from '../components/FormAlert.jsx';
 import { FormField } from '../components/FormField.jsx';
 import { FormSelect } from '../components/FormSelect.jsx';
@@ -189,28 +190,18 @@ export function ProfilePage() {
 
   if (loadStatus === LOAD_STATUS.FAILED) {
     return (
-      <PageFrame>
-        <div
-          role="alert"
-          className="animate-rise rounded-2xl border border-red-200 bg-surface p-6 text-center sm:p-8"
-        >
-          <p className="text-base font-semibold text-ink">Your profile could not be loaded</p>
-          <p className="mt-2 text-sm text-ink-muted">{loadError}</p>
-
-          <button
-            type="button"
-            onClick={() => load()}
-            className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
-          >
-            Try again
-          </button>
-        </div>
-      </PageFrame>
+      <PageShell>
+        <ErrorState
+          title="Your profile could not be loaded"
+          message={loadError}
+          onRetry={() => load()}
+        />
+      </PageShell>
     );
   }
 
   return (
-    <PageFrame>
+    <PageShell>
       <header className="animate-rise mb-6">
         <Link
           to="/app"
@@ -490,14 +481,7 @@ export function ProfilePage() {
           </button>
         </div>
       </form>
-    </PageFrame>
-  );
-}
-
-/** Shared page width and padding, so every state lines up with the others. */
-function PageFrame({ children }) {
-  return (
-    <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-6 sm:py-14">{children}</main>
+    </PageShell>
   );
 }
 
@@ -509,7 +493,7 @@ function PageFrame({ children }) {
  */
 function ProfileSkeleton() {
   return (
-    <PageFrame>
+    <PageShell>
       <div aria-busy="true" className="flex flex-col gap-5">
         <p role="status" className="sr-only">
           Loading your profile…
@@ -527,7 +511,7 @@ function ProfileSkeleton() {
           </div>
         ))}
       </div>
-    </PageFrame>
+    </PageShell>
   );
 }
 
