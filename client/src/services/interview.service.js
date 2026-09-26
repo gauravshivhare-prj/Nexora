@@ -126,3 +126,68 @@ export async function startInterviewSession(sessionId, { signal } = {}) {
 
   return { session: toInterviewSession(data.session) };
 }
+
+/**
+ * POST /api/interviews/sessions/:sessionId/questions/:questionId/answers
+ * Submits candidate's answer for evaluation.
+ *
+ * @param {string} sessionId
+ * @param {string} questionId
+ * @param {{ answerText: string, durationSeconds?: number }} payload
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<{ session: object, evaluatedQuestion: object, warnings?: string[] }>}
+ */
+export async function submitInterviewQuestionAnswer(sessionId, questionId, payload, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+  if (!questionId) throw new Error('questionId is required.');
+  if (!payload || typeof payload.answerText !== 'string') {
+    throw new Error('Candidate answer text is required.');
+  }
+
+  const body = await post(
+    `/api/interviews/sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/answers`,
+    payload,
+    { signal },
+  );
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
+  }
+
+  return {
+    session: toInterviewSession(data.session),
+    evaluatedQuestion: data.evaluatedQuestion ?? null,
+    warnings: Array.isArray(data.warnings) ? data.warnings : [],
+  };
+}
+
+/**
+ * POST /api/interviews/sessions/:sessionId/complete
+ * Completes the interview session, computing overall score and evidence.
+ *
+ * @param {string} sessionId
+ * @param {object} [payload]
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<{ session: object, overallScore: number|null, eligibleForVerified: boolean, evidenceResults?: object[], evidenceChecks?: object[] }>}
+ */
+export async function completeInterviewSession(sessionId, payload = {}, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+
+  const body = await post(
+    `/api/interviews/sessions/${encodeURIComponent(sessionId)}/complete`,
+    payload,
+    { signal },
+  );
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
+  }
+
+  return {
+    session: toInterviewSession(data.session),
+    overallScore: typeof data.overallScore === 'number' ? data.overallScore : (data.session.overallScore ?? null),
+    eligibleForVerified: Boolean(data.eligibleForVerified),
+    evidenceResults: Array.isArray(data.evidenceResults) ? data.evidenceResults : [],
+    evidenceChecks: Array.isArray(data.evidenceChecks) ? data.evidenceChecks : [],
+  };
+}

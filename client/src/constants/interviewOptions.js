@@ -98,3 +98,9 @@ export const INTERVIEW_ROLES = Object.freeze([
     skills: ['Linux', 'Docker', 'Git', 'CI/CD'],
   },
 ]);
+
+export const INTERVIEW_LIMITS = Object.freeze({
+  studentAnswer: { min: 10, max: 5000 },
+  questionPrompt: { min: 10, max: 2000 },
+  maxTimePerQuestionSeconds: 600,
+});

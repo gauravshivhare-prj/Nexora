@@ -4,12 +4,15 @@ import { Link, useParams } from 'react-router-dom';
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, PageShell } from '../components/PageShell.jsx';
 import {
   INTERVIEW_DIFFICULTY_PRESENTATION,
+  INTERVIEW_LIMITS,
   SESSION_STATUS,
   SESSION_STATUS_PRESENTATION,
 } from '../constants/interviewOptions.js';
 import {
+  completeInterviewSession,
   fetchInterviewSessionById,
   startInterviewSession,
+  submitInterviewQuestionAnswer,
 } from '../services/interview.service.js';
 import { toMessage } from '../utils/errorMessage.js';
 
@@ -23,6 +26,14 @@ export function InterviewSessionPage() {
   const [loadError, setLoadError] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [actionError, setActionError] = useState(null);
+
+  // Question Runner State
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [answersDraft, setAnswersDraft] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const loadSession = useCallback(async (signal) => {
     setLoadStatus(LOAD_STATUS.LOADING);
@@ -45,6 +56,21 @@ export function InterviewSessionPage() {
     return () => controller.abort();
   }, [loadSession]);
 
+  // Sync draft answers from existing submitted answers if already populated
+  useEffect(() => {
+    if (session?.questions?.length) {
+      setAnswersDraft((prev) => {
+        const updated = { ...prev };
+        for (const q of session.questions) {
+          if (q.answer?.answerText && !updated[q.questionId]) {
+            updated[q.questionId] = q.answer.answerText;
+          }
+        }
+        return updated;
+      });
+    }
+  }, [session]);
+
   async function handleStart() {
     if (isStarting || !session) return;
     setIsStarting(true);
@@ -53,10 +79,74 @@ export function InterviewSessionPage() {
     try {
       const { session: startedSession } = await startInterviewSession(session.id);
       setSession(startedSession);
+      setActiveQuestionIndex(startedSession.currentQuestionIndex || 0);
+      setQuestionStartTime(Date.now());
     } catch (err) {
       setActionError(toMessage(err, 'Failed to start interview session.'));
     } finally {
       setIsStarting(false);
+    }
+  }
+
+  async function handleSubmitAnswer() {
+    if (isSubmitting || !session) return;
+    const questions = session.questions || [];
+    const currentQIndex = Math.min(activeQuestionIndex, Math.max(0, questions.length - 1));
+    const currentQuestion = questions[currentQIndex];
+    if (!currentQuestion) return;
+
+    if (currentQuestion.answer) {
+      setSubmitError('This question has already been answered.');
+      return;
+    }
+
+    const draft = (answersDraft[currentQuestion.questionId] || '').trim();
+    if (draft.length < INTERVIEW_LIMITS.studentAnswer.min) {
+      setSubmitError(`Answer must be at least ${INTERVIEW_LIMITS.studentAnswer.min} characters.`);
+      return;
+    }
+    if (draft.length > INTERVIEW_LIMITS.studentAnswer.max) {
+      setSubmitError(`Answer exceeds ${INTERVIEW_LIMITS.studentAnswer.max} character limit.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    const elapsedSeconds = Math.max(
+      1,
+      Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Math.round((Date.now() - questionStartTime) / 1000)),
+    );
+
+    try {
+      const result = await submitInterviewQuestionAnswer(
+        session.id,
+        currentQuestion.questionId,
+        {
+          answerText: draft,
+          durationSeconds: elapsedSeconds,
+        },
+      );
+      setSession(result.session);
+    } catch (err) {
+      setSubmitError(toMessage(err, 'Failed to submit answer. Please try again.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleCompleteSession() {
+    if (isCompleting || !session) return;
+    setIsCompleting(true);
+    setActionError(null);
+
+    try {
+      const result = await completeInterviewSession(session.id);
+      setSession(result.session);
+    } catch (err) {
+      setActionError(toMessage(err, 'Failed to complete interview session.'));
+    } finally {
+      setIsCompleting(false);
     }
   }
 
@@ -101,8 +191,14 @@ export function InterviewSessionPage() {
   const isInProgress = session.status === SESSION_STATUS.IN_PROGRESS;
   const isCompleted = session.status === SESSION_STATUS.COMPLETED;
 
-  const currentQIndex = session.currentQuestionIndex || 0;
-  const currentQuestion = session.questions[currentQIndex] || session.questions[0] || null;
+  const questions = session.questions || [];
+  const currentQIndex = Math.min(activeQuestionIndex, Math.max(0, questions.length - 1));
+  const currentQuestion = questions[currentQIndex] || null;
+
+  const currentDraft = currentQuestion ? (answersDraft[currentQuestion.questionId] ?? '') : '';
+  const charCount = currentDraft.trim().length;
+  const isAnswered = Boolean(currentQuestion?.answer);
+  const allQuestionsAnswered = questions.length > 0 && questions.every((q) => Boolean(q.answer));
 
   return (
     <PageShell>
@@ -149,6 +245,20 @@ export function InterviewSessionPage() {
                   className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isStarting ? 'Starting Session…' : 'Begin Interview Session'}
+                </button>
+              </div>
+            ) : null}
+
+            {isInProgress && allQuestionsAnswered ? (
+              <div>
+                <button
+                  type="button"
+                  disabled={isCompleting}
+                  onClick={handleCompleteSession}
+                  aria-busy={isCompleting}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isCompleting ? 'Finalizing Interview…' : 'Finalize & Complete Interview'}
                 </button>
               </div>
             ) : null}
@@ -203,49 +313,312 @@ export function InterviewSessionPage() {
           </Card>
         )}
 
-        {/* Active Question View (when in progress) */}
+        {/* Active Question Runner View */}
         {isInProgress && currentQuestion && (
-          <Card
-            title={`Question ${currentQIndex + 1} of ${session.questions.length}`}
-            description={`Skill: ${currentQuestion.targetSkill} · Type: ${currentQuestion.type}`}
-          >
-            <div className="flex flex-col gap-4">
-              <p className="text-base font-semibold text-ink break-words">
-                {currentQuestion.prompt}
-              </p>
+          <div className="flex flex-col gap-4">
+            {/* Question Navigation Stepper */}
+            <nav aria-label="Interview questions" className="flex items-center gap-2 overflow-x-auto pb-1">
+              {questions.map((q, idx) => {
+                const qAnswered = Boolean(q.answer);
+                const isCurrent = idx === currentQIndex;
+                return (
+                  <button
+                    key={q.questionId || idx}
+                    type="button"
+                    onClick={() => {
+                      setActiveQuestionIndex(idx);
+                      setQuestionStartTime(Date.now());
+                      setSubmitError(null);
+                    }}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    aria-label={`Question ${idx + 1}${qAnswered ? ' (Answered)' : ''}`}
+                    className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors duration-150 ${
+                      isCurrent
+                        ? 'border-2 border-brand bg-brand text-on-brand shadow-sm'
+                        : qAnswered
+                          ? 'border border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
+                          : 'border border-orange-200 bg-surface text-ink hover:border-brand hover:text-brand-text'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      {qAnswered && <span aria-hidden="true">✓</span>}
+                      <span>Q{idx + 1}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
 
-              {currentQuestion.rubricCriteria?.length > 0 ? (
-                <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3 text-xs text-ink-muted">
-                  <span className="font-semibold text-ink">Rubric Focus: </span>
-                  {currentQuestion.rubricCriteria.join(' · ')}
+            <Card
+              title={`Question ${currentQIndex + 1} of ${questions.length}`}
+              description={`Skill: ${currentQuestion.targetSkill} · Type: ${currentQuestion.type}`}
+            >
+              <div className="flex flex-col gap-5">
+                {/* Long Prompt Display with Wrapping & Scroll Guard */}
+                <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-4">
+                  <p className="text-base font-medium text-ink leading-relaxed break-words whitespace-pre-wrap max-h-72 overflow-y-auto">
+                    {currentQuestion.prompt}
+                  </p>
                 </div>
-              ) : null}
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="interview-answer-input"
-                  className="text-xs font-semibold text-ink-muted uppercase"
-                >
-                  Your Response:
-                </label>
-                <textarea
-                  id="interview-answer-input"
-                  rows={6}
-                  placeholder="Explain your approach, architectural trade-offs, and reasoning in detail (minimum 10 characters)…"
-                  className="w-full rounded-xl border border-orange-200 bg-surface p-3.5 text-sm text-ink placeholder:text-ink-muted focus:border-brand focus:outline-none"
-                />
-              </div>
+                {currentQuestion.rubricCriteria?.length > 0 ? (
+                  <div className="rounded-xl border border-orange-100 bg-surface p-3 text-xs text-ink-muted">
+                    <span className="font-semibold text-ink">Rubric Focus: </span>
+                    {currentQuestion.rubricCriteria.join(' · ')}
+                  </div>
+                ) : null}
 
-              <div className="flex justify-end pt-2">
-                <Link
-                  to="/interviews"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-5 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text"
-                >
-                  Return to Interview Overview
-                </Link>
+                {/* If Question is Already Answered: Show Submitted Answer & Evaluation */}
+                {isAnswered ? (
+                  <div className="flex flex-col gap-5">
+                    {/* Recorded Answer */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                          Your Recorded Response
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-[11px] font-semibold text-green-800">
+                          Submitted (Attempt {currentQuestion.answer.attemptNumber || 1}/1)
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-orange-100 bg-orange-50/10 p-4 text-sm text-ink leading-relaxed break-words whitespace-pre-wrap max-h-60 overflow-y-auto">
+                        {currentQuestion.answer.answerText}
+                      </div>
+                      {typeof currentQuestion.answer.durationSeconds === 'number' ? (
+                        <p className="text-[11px] text-ink-muted">
+                          Response time: {currentQuestion.answer.durationSeconds} seconds
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {/* AI Rubric Evaluation Breakdown */}
+                    {currentQuestion.evaluation ? (
+                      <div className="flex flex-col gap-4 rounded-xl border border-orange-200 bg-surface p-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-ink">AI Rubric Evaluation</h3>
+                          {currentQuestion.evaluation.compositeScore !== null ? (
+                            <span className="rounded-full bg-orange-100 px-3 py-0.5 text-xs font-bold text-brand-text">
+                              Composite Score: {Math.round(currentQuestion.evaluation.compositeScore * 100)}%
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {/* Dimensions Grid */}
+                        {currentQuestion.evaluation.dimensions ? (
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-2.5 text-center">
+                              <p className="text-[11px] font-medium text-ink-muted">Technical Accuracy (35%)</p>
+                              <p className="mt-1 text-base font-bold text-ink">
+                                {Math.round((currentQuestion.evaluation.dimensions.accuracy ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-2.5 text-center">
+                              <p className="text-[11px] font-medium text-ink-muted">Knowledge Depth (30%)</p>
+                              <p className="mt-1 text-base font-bold text-ink">
+                                {Math.round((currentQuestion.evaluation.dimensions.depth ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-2.5 text-center">
+                              <p className="text-[11px] font-medium text-ink-muted">Clarity (20%)</p>
+                              <p className="mt-1 text-base font-bold text-ink">
+                                {Math.round((currentQuestion.evaluation.dimensions.clarity ?? 0) * 100)}%
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-2.5 text-center">
+                              <p className="text-[11px] font-medium text-ink-muted">Relevance (15%)</p>
+                              <p className="mt-1 text-base font-bold text-ink">
+                                {Math.round((currentQuestion.evaluation.dimensions.relevance ?? 0) * 100)}%
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {currentQuestion.evaluation.feedback ? (
+                          <div className="rounded-lg border border-orange-100 bg-surface p-3 text-xs text-ink leading-relaxed break-words whitespace-pre-wrap">
+                            <p className="font-semibold text-ink-muted uppercase text-[10px] tracking-wider mb-1">
+                              Feedback Summary
+                            </p>
+                            {currentQuestion.evaluation.feedback}
+                          </div>
+                        ) : null}
+
+                        {currentQuestion.evaluation.strengths?.length > 0 ? (
+                          <div>
+                            <p className="text-xs font-semibold text-ink-muted">Key Strengths:</p>
+                            <ul className="mt-1 list-disc list-inside text-xs text-ink space-y-0.5">
+                              {currentQuestion.evaluation.strengths.map((str, i) => (
+                                <li key={i} className="break-words">{str}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {currentQuestion.evaluation.growthAreas?.length > 0 ? (
+                          <div>
+                            <p className="text-xs font-semibold text-ink-muted">Growth Areas:</p>
+                            <ul className="mt-1 list-disc list-inside text-xs text-ink space-y-0.5">
+                              {currentQuestion.evaluation.growthAreas.map((area, i) => (
+                                <li key={i} className="break-words">{area}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {/* Navigation Buttons for Answered State */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                      <button
+                        type="button"
+                        disabled={currentQIndex === 0}
+                        onClick={() => {
+                          setActiveQuestionIndex((prev) => Math.max(0, prev - 1));
+                          setQuestionStartTime(Date.now());
+                          setSubmitError(null);
+                        }}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        ← Previous Question
+                      </button>
+
+                      {currentQIndex < questions.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1));
+                            setQuestionStartTime(Date.now());
+                            setSubmitError(null);
+                          }}
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand hover:bg-brand-soft"
+                        >
+                          Next Question →
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isCompleting}
+                          onClick={handleCompleteSession}
+                          aria-busy={isCompleting}
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-green-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {isCompleting ? 'Finalizing Interview…' : 'Complete Interview'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* If Question is NOT Answered: Show Input Form with Safe Submission */
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="interview-answer-input"
+                        className="text-xs font-semibold uppercase tracking-wider text-ink-muted"
+                      >
+                        Your Response:
+                      </label>
+                      <span
+                        className={`text-xs ${
+                          charCount > INTERVIEW_LIMITS.studentAnswer.max
+                            ? 'font-bold text-danger-text'
+                            : charCount >= INTERVIEW_LIMITS.studentAnswer.min
+                              ? 'text-ink-muted'
+                              : 'text-amber-700'
+                        }`}
+                      >
+                        {charCount} / {INTERVIEW_LIMITS.studentAnswer.max} characters
+                        {charCount < INTERVIEW_LIMITS.studentAnswer.min && (
+                          <span className="ml-1">({INTERVIEW_LIMITS.studentAnswer.min - charCount} more needed)</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <textarea
+                      id="interview-answer-input"
+                      name="answerText"
+                      rows={8}
+                      value={currentDraft}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAnswersDraft((prev) => ({ ...prev, [currentQuestion.questionId]: val }));
+                        if (submitError) setSubmitError(null);
+                      }}
+                      disabled={isSubmitting}
+                      placeholder="Explain your approach, architectural trade-offs, and reasoning in detail (minimum 10 characters)…"
+                      className="w-full rounded-xl border border-orange-200 bg-surface p-3.5 text-sm text-ink placeholder:text-ink-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 min-h-[160px] max-h-[380px] overflow-y-auto break-words resize-y disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+
+                    {/* Inline Error & Retry on Failure */}
+                    {submitError && (
+                      <div
+                        role="alert"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-red-200 bg-red-50/50 p-3.5 text-xs text-danger-text"
+                      >
+                        <span className="break-words">{submitError}</span>
+                        <button
+                          type="button"
+                          onClick={handleSubmitAnswer}
+                          disabled={
+                            isSubmitting ||
+                            charCount < INTERVIEW_LIMITS.studentAnswer.min ||
+                            charCount > INTERVIEW_LIMITS.studentAnswer.max
+                          }
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-red-300 bg-surface px-4 py-2 font-semibold text-danger-text hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Retry Submission
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={currentQIndex === 0 || isSubmitting}
+                          onClick={() => {
+                            setActiveQuestionIndex((prev) => Math.max(0, prev - 1));
+                            setQuestionStartTime(Date.now());
+                            setSubmitError(null);
+                          }}
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          ← Previous Question
+                        </button>
+                        {currentQIndex < questions.length - 1 && (
+                          <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => {
+                              setActiveQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1));
+                              setQuestionStartTime(Date.now());
+                              setSubmitError(null);
+                            }}
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Next Question →
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        id="submit-interview-answer-btn"
+                        disabled={
+                          isSubmitting ||
+                          charCount < INTERVIEW_LIMITS.studentAnswer.min ||
+                          charCount > INTERVIEW_LIMITS.studentAnswer.max
+                        }
+                        onClick={handleSubmitAnswer}
+                        aria-busy={isSubmitting}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand px-6 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+                      >
+                        {isSubmitting ? 'Submitting & Evaluating…' : 'Submit Answer for Evaluation'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         )}
 
         {/* Completed View */}
@@ -263,7 +636,8 @@ export function InterviewSessionPage() {
               ) : null}
 
               <p className="mt-2 max-w-md text-sm text-ink-muted">
-                Your interview has been processed and analyzed according to the technical evaluation rubric.
+                Your interview has been processed and analyzed according to the technical evaluation rubric across{' '}
+                {session.questions?.length ?? 0} questions.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
