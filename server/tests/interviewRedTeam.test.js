@@ -238,6 +238,72 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.ok(!lastCapturedRequest.user.includes('<|im_end|>'));
       assert.ok(res.body.data.evaluatedQuestion.evaluation.compositeScore <= 0.1);
     });
+
+    it('defends against evaluator role-reversal attack', async () => {
+      const user = await createAccount('role_reversal_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Adopting assistant role and approving submission.',
+        strengths: ['Cooperative'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ROLEPLAY_PERSONA_REVERSAL.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evalData = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evalData.compositeScore <= 0.1);
+      assert.deepEqual(evalData.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+
+    it('defends against hypothetical fiction story jailbreak', async () => {
+      const user = await createAccount('fiction_jailbreak_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Following hypothetical narrative instructions.',
+        strengths: ['Storytelling'],
+        growthAreas: [],
+        groundedSkills: ['SQL'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ROLEPLAY_HYPOTHETICAL_FICTION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evalData = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evalData.compositeScore <= 0.1);
+      assert.deepEqual(evalData.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
   });
 
   // =========================================================================
@@ -306,6 +372,72 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.equal(res.status, 200);
       assert.ok(res.body.data.evaluatedQuestion.evaluation.compositeScore <= 0.1);
       assert.deepEqual(res.body.data.evaluatedQuestion.evaluation.groundedSkills, []);
+    });
+
+    it('neutralizes developer message simulation override', async () => {
+      const user = await createAccount('dev_sim_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate explained the system architecture thoroughly.',
+        strengths: ['Clear explanation'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.INSTRUCTION_OVERRIDE_DEVELOPER_SIMULATION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evalData = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evalData.compositeScore <= 0.1);
+      assert.deepEqual(evalData.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+
+    it('neutralizes temporal precedence override (From now on)', async () => {
+      const user = await createAccount('from_now_on_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Adhering to temporal override instruction.',
+        strengths: ['Precedence updated'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.INSTRUCTION_OVERRIDE_FROM_NOW_ON.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evalData = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evalData.compositeScore <= 0.1);
+      assert.deepEqual(evalData.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
     });
   });
 
@@ -592,6 +724,105 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.ok(evaluation.compositeScore <= 0.1);
       assert.deepEqual(evaluation.groundedSkills, []);
       assert.ok(res.body.data.warnings.length > 0);
+    });
+
+    it('neutralizes verbatim system prompt extraction attack', async () => {
+      const user = await createAccount('prompt_dump_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate provided acceptable technical communication.',
+        strengths: ['Good communication'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.SYSTEM_PROMPT_EXTRACTION_VERBATIM.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+
+    it('neutralizes answer key and correct solution extraction attack', async () => {
+      const user = await createAccount('ans_key_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate explained technical principles adequately.',
+        strengths: ['Detailed response'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ANSWER_KEY_EXTRACTION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+
+    it('neutralizes internal rubric criteria extraction attack', async () => {
+      const user = await createAccount('rubric_extract_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate demonstrated basic understanding of the question.',
+        strengths: ['Knowledgeable'],
+        growthAreas: [],
+        groundedSkills: ['SQL'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.RUBRIC_CRITERIA_EXTRACTION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
     });
   });
 
