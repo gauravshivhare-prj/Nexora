@@ -93,7 +93,7 @@ export function AppNav() {
             onClick={handleLogout}
             disabled={isLoggingOut}
             aria-busy={isLoggingOut}
-            className="rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:text-ink-muted"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:text-ink-muted"
           >
             {isLoggingOut ? 'Signing out…' : 'Log out'}
           </button>
@@ -103,7 +103,7 @@ export function AppNav() {
             onClick={() => setIsOpen((open) => !open)}
             aria-expanded={isOpen}
             aria-controls="app-nav-panel"
-            className="rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text sm:hidden"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text sm:hidden"
           >
             Menu
           </button>
@@ -154,7 +154,7 @@ function NavItem({ destination, block = false }) {
       end={destination.end}
       className={({ isActive }) =>
         [
-          block ? 'block' : 'inline-block',
+          block ? 'flex w-full min-h-[44px] items-center' : 'inline-flex min-h-[44px] items-center',
           'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
           isActive
             ? 'bg-orange-100 font-semibold text-brand-text'

@@ -352,7 +352,7 @@ function AddResumeCard({ isFull, onAdded }) {
                 onClick={submitFile}
                 disabled={isSaving || !file}
                 aria-busy={isSaving}
-                className="w-full rounded-xl border border-brand px-5 py-3 text-sm font-semibold text-brand transition-colors duration-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-ink-muted disabled:text-ink-muted sm:w-auto sm:px-8"
+                className="w-full rounded-xl border border-brand px-5 py-3 text-sm font-semibold text-brand-text transition-colors duration-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-ink-muted disabled:text-ink-muted sm:w-auto sm:px-8"
               >
                 {isSaving ? 'Uploading…' : 'Upload resume'}
               </button>
