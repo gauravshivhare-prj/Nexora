@@ -24,6 +24,7 @@ const DESTINATIONS = [
   { to: '/assessments', label: 'Assessments' },
   { to: '/interviews', label: 'Interviews' },
   { to: '/careers', label: 'Careers' },
+  { to: '/opportunities', label: 'Opportunities' },
 ];
 
 export function AppNav() {

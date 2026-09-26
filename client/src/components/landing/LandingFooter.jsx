@@ -69,7 +69,7 @@ export function LandingFooter() {
 
       <div className="mx-auto mt-10 w-full max-w-6xl border-t border-orange-100 pt-6">
         <p className="text-xs text-ink-muted">
-          Assessments, AI interviews and opportunity matching are in development. Every stage of
+          Assessments, AI interviews, career readiness and opportunity matching are fully integrated in Nexora. Every stage of
           the loop on this page is labelled with whether it is available today.
         </p>
       </div>

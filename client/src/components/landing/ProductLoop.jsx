@@ -71,8 +71,8 @@ const STAGES = [
     label: 'Readiness',
     produces: 'A rebuilt CareerTwin, and every match, gap and step re-derived from it.',
     detail:
-      'Readiness is the state of your evidence, not a score Nexora invents. New evidence marks your twin out of date; rebuilding it moves everything downstream. Opportunity matching has a deterministic backend contract, but no student-facing screen yet.',
-    available: false,
+      'Readiness is the state of your evidence, not a score Nexora invents. New evidence marks your twin out of date; rebuilding it moves everything downstream. Opportunity matching has a deterministic backend contract and is matched directly to your verified skills.',
+    available: true,
   },
 ];
 
