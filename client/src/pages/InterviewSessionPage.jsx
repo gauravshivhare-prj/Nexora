@@ -587,6 +587,8 @@ export function InterviewSessionPage() {
                         if (submitError) setSubmitError(null);
                       }}
                       disabled={isSubmitting}
+                      aria-invalid={Boolean(submitError)}
+                      aria-describedby={submitError ? 'interview-answer-error' : undefined}
                       placeholder="Explain your approach, architectural trade-offs, and reasoning in detail (minimum 10 characters)…"
                       className="w-full rounded-xl border border-orange-200 bg-surface p-3.5 text-sm text-ink placeholder:text-ink-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 min-h-[160px] max-h-[380px] overflow-y-auto break-words resize-y disabled:cursor-not-allowed disabled:opacity-60"
                     />
@@ -594,6 +596,7 @@ export function InterviewSessionPage() {
                     {/* Inline Error & Retry on Failure */}
                     {submitError && (
                       <div
+                        id="interview-answer-error"
                         role="alert"
                         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-red-200 bg-red-50/50 p-3.5 text-xs text-danger-text"
                       >

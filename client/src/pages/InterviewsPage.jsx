@@ -145,16 +145,22 @@ export function InterviewsPage() {
 
             {/* Target Role Selector */}
             <div className="flex flex-col gap-2">
-              <label htmlFor="target-role-select" className="text-xs font-semibold text-ink-muted uppercase">
+              <span id="target-role-label" className="text-xs font-semibold text-ink-muted uppercase">
                 Target Role:
-              </label>
-              <div className="grid gap-2 sm:grid-cols-3">
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="target-role-label"
+                className="grid gap-2 sm:grid-cols-3"
+              >
                 {INTERVIEW_ROLES.map((role) => {
                   const isSelected = selectedRole === role.id;
                   return (
                     <button
                       key={role.id}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       onClick={() => handleRoleChange(role.id)}
                       className={`flex min-h-[44px] flex-col items-start justify-center rounded-xl border p-3.5 text-left transition-colors duration-200 ${
                         isSelected
@@ -175,18 +181,23 @@ export function InterviewsPage() {
             {/* Target Skills Toggle Chips */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-ink-muted uppercase">
+                <span id="focal-skills-label" className="text-xs font-semibold text-ink-muted uppercase">
                   Focal Skills ({selectedSkills.length} selected):
                 </span>
                 <span className="text-[11px] text-ink-muted">Select 1 to 5 skills</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div
+                role="group"
+                aria-labelledby="focal-skills-label"
+                className="flex flex-wrap gap-2"
+              >
                 {activeRoleObj.skills.map((skill) => {
                   const isChecked = selectedSkills.includes(skill);
                   return (
                     <button
                       key={skill}
                       type="button"
+                      aria-pressed={isChecked}
                       onClick={() => handleSkillToggle(skill)}
                       className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors duration-200 ${
                         isChecked
@@ -204,10 +215,14 @@ export function InterviewsPage() {
 
             {/* Difficulty Tier */}
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-ink-muted uppercase">
+              <span id="difficulty-tier-label" className="text-xs font-semibold text-ink-muted uppercase">
                 Difficulty Tier:
               </span>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div
+                role="radiogroup"
+                aria-labelledby="difficulty-tier-label"
+                className="grid gap-2 sm:grid-cols-3"
+              >
                 {INTERVIEW_DIFFICULTY_ORDER.map((diff) => {
                   const pres = INTERVIEW_DIFFICULTY_PRESENTATION[diff];
                   const isSelected = selectedDifficulty === diff;
@@ -215,6 +230,8 @@ export function InterviewsPage() {
                     <button
                       key={diff}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       onClick={() => setSelectedDifficulty(diff)}
                       className={`flex min-h-[44px] flex-col items-start justify-center rounded-xl border p-3.5 text-left transition-colors duration-200 ${
                         isSelected
@@ -232,16 +249,22 @@ export function InterviewsPage() {
 
             {/* Question Count Selection */}
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-ink-muted uppercase">
+              <span id="question-count-label" className="text-xs font-semibold text-ink-muted uppercase">
                 Number of Questions:
               </span>
-              <div className="flex flex-wrap gap-2">
+              <div
+                role="radiogroup"
+                aria-labelledby="question-count-label"
+                className="flex flex-wrap gap-2"
+              >
                 {[3, 5, 7].map((num) => {
                   const isSelected = questionCount === num;
                   return (
                     <button
                       key={num}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       onClick={() => setQuestionCount(num)}
                       className={`inline-flex min-h-[44px] min-w-[64px] items-center justify-center rounded-xl border px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
                         isSelected

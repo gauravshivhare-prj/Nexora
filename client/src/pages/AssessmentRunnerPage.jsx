@@ -580,7 +580,11 @@ export function AssessmentRunnerPage() {
 
                 {/* 3. Boolean (True / False) */}
                 {currentQuestion.type === QUESTION_TYPES.BOOLEAN && (
-                  <div className="flex gap-4">
+                  <div
+                    role="radiogroup"
+                    aria-label="True or False"
+                    className="flex gap-4"
+                  >
                     {[
                       { label: 'True', val: true },
                       { label: 'False', val: false },
@@ -590,6 +594,8 @@ export function AssessmentRunnerPage() {
                         <button
                           key={item.label}
                           type="button"
+                          role="radio"
+                          aria-checked={isSelected}
                           onClick={() => handleAnswerChange(item.val)}
                           className={`flex min-h-[44px] flex-1 items-center justify-center rounded-xl border py-3 text-sm font-semibold transition-colors duration-200 ${
                             isSelected
