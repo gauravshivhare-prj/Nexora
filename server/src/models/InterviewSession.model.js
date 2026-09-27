@@ -14,6 +14,7 @@ import {
   isTerminalSessionStatus,
 } from '../domain/interview/interviewContract.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
+import { sanitizeEvaluatorFeedback } from '../domain/interview/interviewFeedbackSafety.js';
 
 /**
  * Subdocument options disabling synthetic _id for nested value objects.
@@ -449,43 +450,59 @@ export function toPublicInterviewQuestion(question) {
       }
     : null;
 
-  const evaluation = raw.evaluation
-    ? {
-        dimensions: raw.evaluation.dimensions
-          ? {
-              accuracy:
-                typeof raw.evaluation.dimensions.accuracy === 'number'
-                  ? raw.evaluation.dimensions.accuracy
-                  : null,
-              depth:
-                typeof raw.evaluation.dimensions.depth === 'number'
-                  ? raw.evaluation.dimensions.depth
-                  : null,
-              clarity:
-                typeof raw.evaluation.dimensions.clarity === 'number'
-                  ? raw.evaluation.dimensions.clarity
-                  : null,
-              relevance:
-                typeof raw.evaluation.dimensions.relevance === 'number'
-                  ? raw.evaluation.dimensions.relevance
-                  : null,
-            }
-          : null,
-        compositeScore:
-          typeof raw.evaluation.compositeScore === 'number'
-            ? raw.evaluation.compositeScore
-            : (typeof raw.evaluation.score === 'number' ? raw.evaluation.score : null),
-        feedback: raw.evaluation.feedback ?? null,
-        strengths: Array.isArray(raw.evaluation.strengths) ? [...raw.evaluation.strengths] : [],
-        growthAreas: Array.isArray(raw.evaluation.growthAreas)
-          ? [...raw.evaluation.growthAreas]
-          : [],
-        groundedSkills: Array.isArray(raw.evaluation.groundedSkills)
-          ? [...raw.evaluation.groundedSkills]
-          : [],
-        evaluatedAt: raw.evaluation.evaluatedAt ? new Date(raw.evaluation.evaluatedAt) : null,
-      }
-    : null;
+  let evaluation = null;
+  if (raw.evaluation) {
+    let safeFeedback = raw.evaluation.feedback ?? null;
+    let safeStrengths = Array.isArray(raw.evaluation.strengths) ? [...raw.evaluation.strengths] : [];
+    let safeGrowthAreas = Array.isArray(raw.evaluation.growthAreas)
+      ? [...raw.evaluation.growthAreas]
+      : [];
+
+    if (safeFeedback || safeStrengths.length > 0 || safeGrowthAreas.length > 0) {
+      const sanitized = sanitizeEvaluatorFeedback({
+        feedback: safeFeedback,
+        strengths: safeStrengths,
+        growthAreas: safeGrowthAreas,
+      });
+      safeFeedback = sanitized.feedback || null;
+      safeStrengths = sanitized.strengths;
+      safeGrowthAreas = sanitized.growthAreas;
+    }
+
+    evaluation = {
+      dimensions: raw.evaluation.dimensions
+        ? {
+            accuracy:
+              typeof raw.evaluation.dimensions.accuracy === 'number'
+                ? raw.evaluation.dimensions.accuracy
+                : null,
+            depth:
+              typeof raw.evaluation.dimensions.depth === 'number'
+                ? raw.evaluation.dimensions.depth
+                : null,
+            clarity:
+              typeof raw.evaluation.dimensions.clarity === 'number'
+                ? raw.evaluation.dimensions.clarity
+                : null,
+            relevance:
+              typeof raw.evaluation.dimensions.relevance === 'number'
+                ? raw.evaluation.dimensions.relevance
+                : null,
+          }
+        : null,
+      compositeScore:
+        typeof raw.evaluation.compositeScore === 'number'
+          ? raw.evaluation.compositeScore
+          : (typeof raw.evaluation.score === 'number' ? raw.evaluation.score : null),
+      feedback: safeFeedback,
+      strengths: safeStrengths,
+      growthAreas: safeGrowthAreas,
+      groundedSkills: Array.isArray(raw.evaluation.groundedSkills)
+        ? [...raw.evaluation.groundedSkills]
+        : [],
+      evaluatedAt: raw.evaluation.evaluatedAt ? new Date(raw.evaluation.evaluatedAt) : null,
+    };
+  }
 
   return {
     id: qId,

@@ -15,6 +15,10 @@ import {
   groundAnswerEvaluation,
 } from '../domain/interview/interviewAnswerGrounding.js';
 import { validateAiEvaluationJson } from '../domain/interview/interviewEvaluationSchema.js';
+import {
+  redactProviderErrors,
+  redactSensitiveSecrets,
+} from '../domain/interview/interviewFeedbackSafety.js';
 import { buildInterviewResult } from '../domain/evidence/skillEvidenceCheck.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
 
@@ -91,8 +95,17 @@ export async function evaluateQuestionAnswer({
         ERROR_CODES.AI_PROVIDER_FAILED,
       );
     }
-    // Re-throw operational ApiErrors (e.g. 503 AI_PROVIDER_FAILED)
-    throw error;
+    // Redact secrets and provider error traces from operational ApiErrors
+    if (error instanceof ApiError) {
+      error.message = redactProviderErrors(redactSensitiveSecrets(error.message).text).text;
+      throw error;
+    }
+    // Generic unexpected exceptions: never expose internal stack or message to caller
+    logger.error(`AI evaluation unexpected failure: ${error?.name || 'Error'}`);
+    throw ApiError.serviceUnavailable(
+      'The AI evaluation service encountered an error. Please try again in a moment.',
+      ERROR_CODES.AI_PROVIDER_FAILED,
+    );
   }
 
   // Check if signal aborted during processing
@@ -108,13 +121,15 @@ export async function evaluateQuestionAnswer({
 
   const latencyMs = Date.now() - startTime;
 
-  // Step 3: Validate AI response against strict JSON schema
-  const validated = validateAiEvaluationJson(completion.text, { strict: false });
+  // Step 3: Validate AI response against schema (bounding feedback and lists)
+  const validated = validateAiEvaluationJson(completion.text, { strict: false, boundFeedback: true });
   if (!validated.isValid) {
     logger.warn(`AI evaluation schema rejected output from ${provider.name}: ${validated.errors.join(' ')}`);
+    const rawFirstError = validated.errors[0] || 'Invalid evaluation format.';
+    const safeError = redactProviderErrors(redactSensitiveSecrets(rawFirstError).text).text;
     throw new ApiError(
       502,
-      `The AI service returned an unusable evaluation response. ${validated.errors[0]}`,
+      `The AI service returned an unusable evaluation response. ${safeError}`,
       ERROR_CODES.AI_OUTPUT_INVALID,
     );
   }

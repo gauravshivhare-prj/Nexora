@@ -3,6 +3,7 @@ import {
   calculateCompositeQuestionScore,
 } from './interviewContract.js';
 import { hasInjectionContent } from './interviewEvaluationSchema.js';
+import { sanitizeEvaluatorFeedback } from './interviewFeedbackSafety.js';
 
 /**
  * System prompt for interview answer evaluation.
@@ -273,7 +274,18 @@ export function groundAnswerEvaluation(evaluation, { question, candidateAnswer }
     }
   }
 
-  // Check 4: Deterministically recalculate composite score
+  // Check 4: Feedback safety pipeline (redacts secrets, provider errors, unsupported claims, bounds length)
+  const safety = sanitizeEvaluatorFeedback({
+    feedback: grounded.feedback,
+    strengths: grounded.strengths,
+    growthAreas: grounded.growthAreas,
+  });
+  grounded.feedback = safety.feedback;
+  grounded.strengths = safety.strengths;
+  grounded.growthAreas = safety.growthAreas;
+  warnings.push(...safety.warnings);
+
+  // Check 5: Deterministically recalculate composite score
   grounded.compositeScore = calculateCompositeQuestionScore(grounded.dimensions);
   grounded.score = grounded.compositeScore;
 

@@ -5,6 +5,10 @@ import {
   RUBRIC_DIMENSION_KEYS,
   calculateCompositeQuestionScore,
 } from './interviewContract.js';
+import {
+  boundFeedbackList,
+  boundFeedbackSummary,
+} from './interviewFeedbackSafety.js';
 
 /**
  * Forbidden security-sensitive fields that an untrusted AI model (or an attacker
@@ -141,7 +145,7 @@ export function hasInjectionContent(text) {
  * @returns {{ isValid: boolean, data: object|null, errors: string[], warnings: string[] }}
  */
 export function validateAiEvaluationJson(rawInput, options = {}) {
-  const { strict = true } = options;
+  const { strict = true, boundFeedback = !strict } = options;
   const errors = [];
   const warnings = [];
 
@@ -241,7 +245,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
 
       if (num < 0 || num > 1) {
         errors.push(
-          `Dimension "${dimKey}" value (${rawVal}) is out of range. Must be between 0.0 and 1.0.`,
+          `Dimension "${dimKey}" value (${num}) is out of range. Must be between 0.0 and 1.0.`,
         );
         continue;
       }
@@ -265,9 +269,14 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
     if (trimmed.length < 10) {
       errors.push('Feedback summary is too short (minimum 10 characters).');
     } else if (trimmed.length > INTERVIEW_LIMITS.feedbackSummary.max) {
-      errors.push(
-        `Feedback summary exceeds maximum length of ${INTERVIEW_LIMITS.feedbackSummary.max} characters.`,
-      );
+      if (strict && !boundFeedback) {
+        errors.push(
+          `Feedback summary exceeds maximum length of ${INTERVIEW_LIMITS.feedbackSummary.max} characters.`,
+        );
+      } else {
+        warnings.push('Feedback summary was bounded to maximum allowed length.');
+        validFeedback = boundFeedbackSummary(trimmed);
+      }
     } else if (hasInjectionContent(trimmed)) {
       errors.push('Feedback summary contains potentially unsafe or injection-like content.');
     } else {
@@ -280,19 +289,24 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   if (raw.strengths !== undefined && raw.strengths !== null) {
     if (!Array.isArray(raw.strengths)) {
       errors.push('Strengths must be an array of strings.');
-    } else if (raw.strengths.length > 5) {
+    } else if (strict && !boundFeedback && raw.strengths.length > 5) {
       errors.push('Strengths list cannot exceed 5 items.');
     } else {
-      for (let i = 0; i < raw.strengths.length; i += 1) {
-        const item = raw.strengths[i];
+      let rawList = raw.strengths;
+      if (rawList.length > 5) {
+        warnings.push('Strengths list was bounded to maximum 5 items.');
+        rawList = boundFeedbackList(rawList, { maxItems: 5, maxItemLength: 250 });
+      }
+      for (let i = 0; i < rawList.length; i += 1) {
+        const item = rawList[i];
         if (typeof item !== 'string' || item.trim().length === 0) {
           errors.push(`Strength at index ${i} must be a non-empty string.`);
-        } else if (item.trim().length > 250) {
+        } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Strength at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
           errors.push(`Strength at index ${i} contains injection-like content.`);
         } else {
-          validStrengths.push(item.trim());
+          validStrengths.push(boundFeedback ? boundFeedbackSummary(item.trim(), 250, 1) : item.trim());
         }
       }
     }
@@ -303,19 +317,24 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   if (raw.growthAreas !== undefined && raw.growthAreas !== null) {
     if (!Array.isArray(raw.growthAreas)) {
       errors.push('Growth areas must be an array of strings.');
-    } else if (raw.growthAreas.length > 5) {
+    } else if (strict && !boundFeedback && raw.growthAreas.length > 5) {
       errors.push('Growth areas list cannot exceed 5 items.');
     } else {
-      for (let i = 0; i < raw.growthAreas.length; i += 1) {
-        const item = raw.growthAreas[i];
+      let rawList = raw.growthAreas;
+      if (rawList.length > 5) {
+        warnings.push('Growth areas list was bounded to maximum 5 items.');
+        rawList = boundFeedbackList(rawList, { maxItems: 5, maxItemLength: 250 });
+      }
+      for (let i = 0; i < rawList.length; i += 1) {
+        const item = rawList[i];
         if (typeof item !== 'string' || item.trim().length === 0) {
           errors.push(`Growth area at index ${i} must be a non-empty string.`);
-        } else if (item.trim().length > 250) {
+        } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Growth area at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
           errors.push(`Growth area at index ${i} contains injection-like content.`);
         } else {
-          validGrowthAreas.push(item.trim());
+          validGrowthAreas.push(boundFeedback ? boundFeedbackSummary(item.trim(), 250, 1) : item.trim());
         }
       }
     }
