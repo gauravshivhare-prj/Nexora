@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import {
+  ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession,
+  isSessionActive,
+  isSessionExpired,
+  canStartSession,
+  canAnswerSession,
+  canCompleteSession,
+  canAbandonSession,
+  isSessionPassed,
   EVALUATOR_TYPES,
   EVALUATOR_TYPE_LABELS,
   INTERVIEW_CONTRACT_VERSION,
@@ -9,6 +18,12 @@ import {
   INTERVIEW_DIFFICULTY_LEVELS,
   INTERVIEW_DIFFICULTY_ORDER,
   INTERVIEW_DIFFICULTY_PRESENTATION,
+  INTERVIEW_ERROR_CODES,
+  INTERVIEW_ERROR_PRESENTATION,
+  resolveInterviewError,
+  INTERVIEW_EVIDENCE_STATUS,
+  INTERVIEW_EVIDENCE_STATUS_PRESENTATION,
+  resolveInterviewEvidenceStatus,
   INTERVIEW_LIMITS,
   INTERVIEW_PASS_MARK,
   INTERVIEW_QUESTION_TYPES,
@@ -29,6 +44,8 @@ import {
   startInterviewSession,
   submitInterviewAnswer,
   toInterviewEvaluation,
+  toInterviewEvidenceCheck,
+  toInterviewEvidenceResult,
   toInterviewQuestion,
   toInterviewSession,
   TERMINAL_SESSION_STATUSES,
@@ -36,9 +53,12 @@ import {
 } from '../src/services/interview.service.js';
 
 import {
+  ALLOWED_SESSION_TRANSITIONS as SERVER_ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession as serverCanTransitionSession,
   EVALUATOR_TYPES as SERVER_EVALUATOR_TYPES,
   INTERVIEW_CONTRACT_VERSION as SERVER_CONTRACT_VERSION,
   INTERVIEW_DIFFICULTY as SERVER_INTERVIEW_DIFFICULTY,
+  INTERVIEW_ERROR_CODES as SERVER_INTERVIEW_ERROR_CODES,
   INTERVIEW_LIMITS as SERVER_INTERVIEW_LIMITS,
   INTERVIEW_PASS_MARK as SERVER_INTERVIEW_PASS_MARK,
   INTERVIEW_QUESTION_TYPES as SERVER_INTERVIEW_QUESTION_TYPES,
@@ -49,7 +69,7 @@ import {
   isTerminalSessionStatus as serverIsTerminalSessionStatus,
 } from '../../server/src/domain/interview/interviewContract.js';
 
-describe('R01 — Interview Frontend Contract & Parity Suite', () => {
+describe('R01/R19 — Interview Frontend Contract & Parity Suite', () => {
   describe('1. Constant & Policy Parity with Backend Domain', () => {
     it('contract version and pass mark match server values', () => {
       assert.equal(INTERVIEW_CONTRACT_VERSION, SERVER_CONTRACT_VERSION, 'Contract version mismatch');
@@ -491,6 +511,314 @@ describe('R01 — Interview Frontend Contract & Parity Suite', () => {
 
       assert.ok(lastRequest.url.endsWith('/api/interviews/sessions/sess_abandon_test/abandon'));
       assert.equal(result.session.status, 'abandoned');
+    });
+  });
+
+  describe('4. State Transitions and UI Guard Predicates', () => {
+    it('allowed session transitions match backend matrix exactly', () => {
+      assert.deepEqual(
+        ALLOWED_SESSION_TRANSITIONS,
+        SERVER_ALLOWED_SESSION_TRANSITIONS,
+        'ALLOWED_SESSION_TRANSITIONS drifted between client and server',
+      );
+
+      for (const [from, allowedList] of Object.entries(ALLOWED_SESSION_TRANSITIONS)) {
+        for (const to of Object.values(SESSION_STATUS)) {
+          const clientAllowed = canTransitionSession(from, to);
+          const serverAllowed = serverCanTransitionSession(from, to);
+          assert.equal(
+            clientAllowed,
+            serverAllowed,
+            `Transition parity failed from ${from} to ${to}: client=${clientAllowed}, server=${serverAllowed}`,
+          );
+        }
+      }
+    });
+
+    it('canTransitionSession permits valid progression and rejects invalid regressions', () => {
+      // Valid transitions
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.ABANDONED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.FAILED), true);
+
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.COMPLETED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.ABANDONED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.FAILED), true);
+
+      // Terminal states cannot transition to anything
+      for (const terminal of TERMINAL_SESSION_STATUSES) {
+        for (const target of Object.values(SESSION_STATUS)) {
+          assert.equal(
+            canTransitionSession(terminal, target),
+            false,
+            `Terminal state ${terminal} must not transition to ${target}`,
+          );
+        }
+      }
+
+      // Edge inputs
+      assert.equal(canTransitionSession(null, SESSION_STATUS.IN_PROGRESS), false);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, null), false);
+      assert.equal(canTransitionSession('invalid_status', SESSION_STATUS.IN_PROGRESS), false);
+    });
+
+    it('isSessionActive and isSessionExpired correctly evaluate status and deadlines', () => {
+      const futureDate = new Date(Date.now() + 60000).toISOString();
+      const pastDate = new Date(Date.now() - 60000).toISOString();
+
+      const activeSession = { status: SESSION_STATUS.IN_PROGRESS, expiresAt: futureDate };
+      assert.equal(isSessionActive(activeSession), true);
+      assert.equal(isSessionExpired(activeSession), false);
+
+      const expiredSession = { status: SESSION_STATUS.IN_PROGRESS, expiresAt: pastDate };
+      assert.equal(isSessionActive(expiredSession), false);
+      assert.equal(isSessionExpired(expiredSession), true);
+
+      const timedOutSession = { status: SESSION_STATUS.TIMED_OUT, expiresAt: futureDate };
+      assert.equal(isSessionActive(timedOutSession), false);
+      assert.equal(isSessionExpired(timedOutSession), true);
+
+      const completedSession = { status: SESSION_STATUS.COMPLETED, expiresAt: futureDate };
+      assert.equal(isSessionActive(completedSession), false);
+      assert.equal(isSessionExpired(completedSession), false);
+
+      assert.equal(isSessionActive(null), false);
+      assert.equal(isSessionExpired(null), false);
+    });
+
+    it('UI state guard helpers accurately gate start, answer, complete, and abandon', () => {
+      const initializedSession = { status: SESSION_STATUS.INITIALIZED };
+      assert.equal(canStartSession(initializedSession), true);
+      assert.equal(canAnswerSession(initializedSession), false);
+      assert.equal(canCompleteSession(initializedSession), false);
+      assert.equal(canAbandonSession(initializedSession), true);
+
+      const activeSession = {
+        status: SESSION_STATUS.IN_PROGRESS,
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        attemptCount: 2,
+        maxAttemptsTotal: 10,
+        attemptLimitPerQuestion: 1,
+        questions: [
+          { questionId: 'q1', answer: { attemptNumber: 1 } },
+          { questionId: 'q2', answer: null },
+        ],
+      };
+      assert.equal(canStartSession(activeSession), false);
+      assert.equal(canCompleteSession(activeSession), true);
+      assert.equal(canAbandonSession(activeSession), true);
+
+      // Question attempt limits
+      assert.equal(canAnswerSession(activeSession, 'q2'), true);
+      assert.equal(canAnswerSession(activeSession, 'q1'), false, 'Question 1 already reached attemptLimitPerQuestion=1');
+
+      // Total attempt limit reached
+      const maxedSession = { ...activeSession, attemptCount: 10, maxAttemptsTotal: 10 };
+      assert.equal(canAnswerSession(maxedSession, 'q2'), false);
+
+      // Terminal sessions cannot be abandoned or completed
+      const doneSession = {
+        status: SESSION_STATUS.COMPLETED,
+        overallScore: 0.85,
+      };
+      assert.equal(canStartSession(doneSession), false);
+      assert.equal(canCompleteSession(doneSession), false);
+      assert.equal(canAbandonSession(doneSession), false);
+      assert.equal(isSessionPassed(doneSession), true);
+
+      const failedPassingCheck = {
+        status: SESSION_STATUS.COMPLETED,
+        overallScore: 0.70,
+      };
+      assert.equal(isSessionPassed(failedPassingCheck), false);
+    });
+  });
+
+  describe('5. Canonical Error Semantics and UI Presentation Resolution', () => {
+    it('canonical error codes match server contract constants', () => {
+      assert.deepEqual(
+        INTERVIEW_ERROR_CODES,
+        SERVER_INTERVIEW_ERROR_CODES,
+        'INTERVIEW_ERROR_CODES drifted between client and server',
+      );
+
+      for (const [codeKey, codeVal] of Object.entries(INTERVIEW_ERROR_CODES)) {
+        assert.equal(codeKey, codeVal, `Error code enum key ${codeKey} must match value ${codeVal}`);
+        const presentation = INTERVIEW_ERROR_PRESENTATION[codeVal];
+        assert.ok(presentation, `Missing UI presentation for canonical error code ${codeVal}`);
+        assert.ok(presentation.title, `Missing title for error code ${codeVal}`);
+        assert.ok(presentation.message, `Missing message for error code ${codeVal}`);
+        assert.ok(presentation.userAction, `Missing userAction for error code ${codeVal}`);
+        assert.equal(typeof presentation.retryable, 'boolean', `Missing boolean retryable for ${codeVal}`);
+      }
+    });
+
+    it('resolveInterviewError resolves known error codes with friendly presentation', () => {
+      const err = {
+        errorCode: INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+        message: 'Custom expired message',
+        status: 400,
+      };
+
+      const resolved = resolveInterviewError(err);
+      assert.equal(resolved.code, INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+      assert.equal(resolved.title, 'Session Expired');
+      assert.equal(resolved.message, 'Custom expired message');
+      assert.equal(resolved.retryable, false);
+      assert.equal(resolved.status, 400);
+      assert.ok(resolved.userAction.length > 0);
+    });
+
+    it('resolveInterviewError handles retryable errors appropriately', () => {
+      const retryableError = {
+        errorCode: INTERVIEW_ERROR_CODES.AI_PROVIDER_FAILED,
+        status: 502,
+      };
+
+      const resolved = resolveInterviewError(retryableError);
+      assert.equal(resolved.code, INTERVIEW_ERROR_CODES.AI_PROVIDER_FAILED);
+      assert.equal(resolved.title, 'Service Interruption');
+      assert.equal(resolved.retryable, true);
+      assert.equal(resolved.status, 502);
+    });
+
+    it('resolveInterviewError gracefully falls back on unknown or generic exceptions', () => {
+      const genericError = new Error('Database connection reset');
+      const resolved = resolveInterviewError(genericError);
+
+      assert.equal(resolved.code, 'UNKNOWN_ERROR');
+      assert.equal(resolved.title, 'Unexpected Error');
+      assert.equal(resolved.message, 'Database connection reset');
+      assert.equal(resolved.retryable, true);
+      assert.equal(resolved.status, 500);
+
+      const nullResolved = resolveInterviewError(null);
+      assert.equal(nullResolved.code, 'UNKNOWN_ERROR');
+      assert.equal(nullResolved.status, 500);
+    });
+  });
+
+  describe('6. Institutional Evidence Status and Presentation Mapping', () => {
+    it('advisory supported status resolved for passing AI interview', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.82,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.ADVISORY_SUPPORTED);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, true);
+      assert.equal(result.isPassing, true);
+      assert.ok(result.label.includes('Advisory Supported'));
+      assert.ok(result.badgeClass.includes('amber'));
+    });
+
+    it('institutionally verified status resolved for passing human examiner interview', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.88,
+        evaluatorType: EVALUATOR_TYPES.HUMAN,
+        eligibleForVerified: true,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.VERIFIED);
+      assert.equal(result.isVerified, true);
+      assert.equal(result.isSupported, true);
+      assert.equal(result.isPassing, true);
+      assert.ok(result.label.includes('Institutionally Verified'));
+      assert.ok(result.badgeClass.includes('emerald'));
+    });
+
+    it('unverified below pass status resolved for failing evaluation', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.65,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.UNVERIFIED_BELOW_PASS);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, false);
+      assert.equal(result.isPassing, false);
+      assert.ok(result.badgeClass.includes('rose'));
+    });
+
+    it('pending status resolved for incomplete or in-progress session', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: null,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.IN_PROGRESS,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.PENDING);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, false);
+      assert.equal(result.isPassing, false);
+      assert.ok(result.label.includes('Pending'));
+    });
+  });
+
+  describe('7. Evidence DTO Normalizers and Contract Safety', () => {
+    it('toInterviewEvidenceCheck normalizes check DTO and provides safe defaults', () => {
+      const rawCheck = {
+        _id: 'chk_6ab6ba1aa278c6e17a603509',
+        kind: 'interview',
+        skillKey: 'nodejs',
+        skillName: 'Node.js',
+        score: 0.85,
+        passMark: 0.75,
+        outcome: 'uncertain',
+        eligibleForVerified: false,
+        evaluatedBy: 'ai',
+        reference: 'sess_123',
+        completedAt: '2026-09-25T18:00:00.000Z',
+      };
+
+      const normalized = toInterviewEvidenceCheck(rawCheck);
+      assert.equal(normalized.id, 'chk_6ab6ba1aa278c6e17a603509');
+      assert.equal(normalized.kind, 'interview');
+      assert.equal(normalized.skillKey, 'nodejs');
+      assert.equal(normalized.skillName, 'Node.js');
+      assert.equal(normalized.score, 0.85);
+      assert.equal(normalized.passMark, 0.75);
+      assert.equal(normalized.outcome, 'uncertain');
+      assert.equal(normalized.eligibleForVerified, false);
+      assert.equal(normalized.evaluatedBy, 'ai');
+      assert.equal(normalized.reference, 'sess_123');
+    });
+
+    it('toInterviewEvidenceResult normalizes evidence result objects', () => {
+      const rawResult = {
+        skillKey: 'react',
+        skillName: 'React',
+        score: 0.90,
+        passMark: 0.75,
+        outcome: 'uncertain',
+        eligibleForVerified: false,
+        evidenceStrength: 'supported',
+        evaluatedBy: 'ai',
+        kind: 'interview',
+      };
+
+      const normalized = toInterviewEvidenceResult(rawResult);
+      assert.equal(normalized.skillKey, 'react');
+      assert.equal(normalized.skillName, 'React');
+      assert.equal(normalized.score, 0.90);
+      assert.equal(normalized.evidenceStrength, 'supported');
+      assert.equal(normalized.eligibleForVerified, false);
+    });
+
+    it('evidence normalizers throw on non-object inputs', () => {
+      assert.throws(() => toInterviewEvidenceCheck(null), /Invalid interview evidence check data/);
+      assert.throws(() => toInterviewEvidenceCheck([1, 2]), /Invalid interview evidence check data/);
+      assert.throws(() => toInterviewEvidenceResult(undefined), /Invalid interview evidence result data/);
+      assert.throws(() => toInterviewEvidenceResult('invalid'), /Invalid interview evidence result data/);
     });
   });
 });

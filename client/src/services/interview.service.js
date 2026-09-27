@@ -1,5 +1,14 @@
 import { post, request } from './apiClient.js';
 import {
+  ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession,
+  isSessionActive,
+  isSessionExpired,
+  canStartSession,
+  canAnswerSession,
+  canCompleteSession,
+  canAbandonSession,
+  isSessionPassed,
   EVALUATOR_TYPES,
   EVALUATOR_TYPE_LABELS,
   INTERVIEW_CONTRACT_VERSION,
@@ -7,6 +16,12 @@ import {
   INTERVIEW_DIFFICULTY_LEVELS,
   INTERVIEW_DIFFICULTY_ORDER,
   INTERVIEW_DIFFICULTY_PRESENTATION,
+  INTERVIEW_ERROR_CODES,
+  INTERVIEW_ERROR_PRESENTATION,
+  resolveInterviewError,
+  INTERVIEW_EVIDENCE_STATUS,
+  INTERVIEW_EVIDENCE_STATUS_PRESENTATION,
+  resolveInterviewEvidenceStatus,
   INTERVIEW_LIMITS,
   INTERVIEW_PASS_MARK,
   INTERVIEW_QUESTION_TYPES,
@@ -20,8 +35,17 @@ import {
   isTerminalSessionStatus,
 } from '../constants/interviewOptions.js';
 
-// Re-export constants for easy access by UI consumers
+// Re-export constants and state/error/evidence helpers for easy access by UI consumers
 export {
+  ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession,
+  isSessionActive,
+  isSessionExpired,
+  canStartSession,
+  canAnswerSession,
+  canCompleteSession,
+  canAbandonSession,
+  isSessionPassed,
   EVALUATOR_TYPES,
   EVALUATOR_TYPE_LABELS,
   INTERVIEW_CONTRACT_VERSION,
@@ -29,6 +53,12 @@ export {
   INTERVIEW_DIFFICULTY_LEVELS,
   INTERVIEW_DIFFICULTY_ORDER,
   INTERVIEW_DIFFICULTY_PRESENTATION,
+  INTERVIEW_ERROR_CODES,
+  INTERVIEW_ERROR_PRESENTATION,
+  resolveInterviewError,
+  INTERVIEW_EVIDENCE_STATUS,
+  INTERVIEW_EVIDENCE_STATUS_PRESENTATION,
+  resolveInterviewEvidenceStatus,
   INTERVIEW_LIMITS,
   INTERVIEW_PASS_MARK,
   INTERVIEW_QUESTION_TYPES,
@@ -162,6 +192,56 @@ export function toInterviewEvaluation(raw) {
     growthAreas: Array.isArray(raw.growthAreas) ? [...raw.growthAreas] : [],
     groundedSkills: Array.isArray(raw.groundedSkills) ? [...raw.groundedSkills] : [],
     evaluatedAt: raw.evaluatedAt ?? null,
+  };
+}
+
+/**
+ * Normalizes an evidence check record associated with a completed session.
+ *
+ * @param {object} raw
+ * @returns {object} Clean evidence check DTO
+ */
+export function toInterviewEvidenceCheck(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid interview evidence check data: expected an object.');
+  }
+
+  return {
+    id: String(raw.id || raw._id || ''),
+    kind: raw.kind ?? 'interview',
+    skillKey: raw.skillKey ?? '',
+    skillName: raw.skillName ?? '',
+    score: typeof raw.score === 'number' ? raw.score : 0,
+    passMark: typeof raw.passMark === 'number' ? raw.passMark : INTERVIEW_PASS_MARK,
+    outcome: raw.outcome ?? 'uncertain',
+    eligibleForVerified: Boolean(raw.eligibleForVerified),
+    evaluatedBy: raw.evaluatedBy ?? 'ai',
+    reference: String(raw.reference ?? ''),
+    completedAt: raw.completedAt ?? null,
+  };
+}
+
+/**
+ * Normalizes an evidence result returned upon session completion.
+ *
+ * @param {object} raw
+ * @returns {object} Clean evidence result DTO
+ */
+export function toInterviewEvidenceResult(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Invalid interview evidence result data: expected an object.');
+  }
+
+  return {
+    skillKey: raw.skillKey ?? raw.skill ?? '',
+    skillName: raw.skillName ?? raw.skill ?? '',
+    score: typeof raw.score === 'number' ? raw.score : 0,
+    passMark: typeof raw.passMark === 'number' ? raw.passMark : INTERVIEW_PASS_MARK,
+    outcome: raw.outcome ?? 'uncertain',
+    eligibleForVerified: Boolean(raw.eligibleForVerified),
+    evidenceStrength: raw.evidenceStrength ?? (raw.eligibleForVerified ? 'verified' : 'supported'),
+    evaluatedBy: raw.evaluatedBy ?? 'ai',
+    kind: raw.kind ?? 'interview',
   };
 }
 
@@ -319,8 +399,8 @@ export async function completeInterviewSession(sessionId, payload = {}, { signal
     session: toInterviewSession(data.session),
     overallScore: typeof data.overallScore === 'number' ? data.overallScore : (data.session?.overallScore ?? null),
     eligibleForVerified: Boolean(data.eligibleForVerified),
-    evidenceResults: Array.isArray(data.evidenceResults) ? data.evidenceResults : [],
-    evidenceChecks: Array.isArray(data.evidenceChecks) ? data.evidenceChecks : [],
+    evidenceResults: Array.isArray(data.evidenceResults) ? data.evidenceResults.map(toInterviewEvidenceResult) : [],
+    evidenceChecks: Array.isArray(data.evidenceChecks) ? data.evidenceChecks.map(toInterviewEvidenceCheck) : [],
   };
 }
 
