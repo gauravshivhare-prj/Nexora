@@ -7,6 +7,7 @@ import {
   isPlainObject,
 } from '../../utils/fieldTypes.js';
 import { isForbiddenOrPrototypeKey } from '../interview/interviewContract.js';
+import { hasInjectionContent } from '../interview/interviewEvaluationSchema.js';
 
 /**
  * Schema validation for AI-parsed resume data.
@@ -138,6 +139,11 @@ function readSkills(raw, errors, warnings) {
     const { value, error } = checkString(rawName, { max: PARSED_LIMITS.skills.maxLength });
     if (error) {
       warnings.push(`Dropped skills[${index}]: ${error.toLowerCase()}.`);
+      continue;
+    }
+
+    if (hasInjectionContent(value)) {
+      warnings.push(`Dropped skills[${index}]: contains injection or malicious content.`);
       continue;
     }
 
@@ -275,6 +281,11 @@ function text(raw, path, max, warnings) {
     return null;
   }
 
+  if (hasInjectionContent(value)) {
+    warnings.push(`Dropped ${path}: contains injection or malicious content.`);
+    return null;
+  }
+
   return value;
 }
 
@@ -297,7 +308,13 @@ function strings(raw, path, limit, warnings) {
     return [];
   }
 
-  return value;
+  return value.filter((item, index) => {
+    if (hasInjectionContent(item)) {
+      warnings.push(`Dropped ${path}[${index}]: contains injection or malicious content.`);
+      return false;
+    }
+    return true;
+  });
 }
 
 /** An optional four-digit year. Accepts a numeric string, as models emit both. */

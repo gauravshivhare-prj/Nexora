@@ -3,6 +3,7 @@ import {
   calculateCompositeQuestionScore,
 } from './interviewContract.js';
 import { hasInjectionContent } from './interviewEvaluationSchema.js';
+import { sanitizePromptInput } from '../../utils/promptSanitizer.js';
 
 /**
  * System prompt for interview answer evaluation.
@@ -55,48 +56,11 @@ CRITICAL SECURITY, SYSTEM BOUNDARY, AND GROUNDING RULES:
 /**
  * Sanitizes candidate answer text before embedding it within prompt XML delimiters.
  *
- * Guarantees that:
- * 1. Control characters, null bytes, and non-printable bytes are stripped.
- * 2. Invisible zero-width and bidirectional text override characters are removed.
- * 3. CDATA blocks and LLM chat/instruction tokens are neutralized.
- * 4. All XML-like tags (<...> or </...>) are safely escaped into HTML entities (&lt;...&gt;).
- *
  * @param {string} text Raw candidate answer text
  * @returns {string} Sanitized string safe to embed within XML tags
  */
 export function escapeCandidateAnswerForPrompt(text) {
-  if (typeof text !== 'string') return '';
-
-  return (
-    text
-      // 1. Strip null bytes, non-printable control characters (preserving newline, cr, tab)
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      // 2. Strip Unicode zero-width and bidirectional formatting characters
-      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
-      // 3. Normalize fullwidth angle brackets and fullwidth vertical bar
-      .replace(/\uFF1C/g, '<')
-      .replace(/\uFF1E/g, '>')
-      .replace(/\uFF5C/g, '|')
-      // 4. Neutralize CDATA open and close
-      .replace(/<!\[CDATA\[/gi, '&lt;![CDATA[')
-      .replace(/\]\]>/g, ']]&gt;')
-      // 5. Neutralize XML comments
-      .replace(/<!--/g, '&lt;!--')
-      .replace(/-->/g, '--&gt;')
-      // 6. Neutralize LLM special template and chat tokens
-      .replace(/<\|\s*im_(start|end)\s*\|>/gi, '&lt;|im_$1|&gt;')
-      .replace(/<\|\s*(startoftext|endoftext)\s*\|>/gi, '&lt;|$1|&gt;')
-      .replace(/<\|\s*(system|user|assistant|fim_prefix|fim_suffix|fim_middle)\s*\|>/gi, '&lt;|$1|&gt;')
-      .replace(/\[\s*(\/?)\s*INST\s*\]/gi, '&#91;$1INST&#93;')
-      .replace(/<<\s*(\/?)\s*SYS\s*>>/gi, '&lt;&lt;$1SYS&gt;&gt;')
-      .replace(/<\s*(\/?)\s*turn_(start|end)\s*>/gi, '&lt;$1turn_$2&gt;')
-      .replace(/<\s*(\/?)\s*s\s*>/gi, '&lt;$1s&gt;')
-      // 7. Neutralize Anthropic turn delimiters at line beginnings
-      .replace(/(^|\n)\s*Human\s*:\s*/gi, '$1&#91;Human&#93;: ')
-      .replace(/(^|\n)\s*Assistant\s*:\s*/gi, '$1&#91;Assistant&#93;: ')
-      // 8. Escape all XML-like tags (including tags with whitespace around opening/closing slashes)
-      .replace(/<(\s*\/?\s*[\w!|?_~.:-]+[^>]*)>/g, '&lt;$1&gt;')
-  );
+  return sanitizePromptInput(text);
 }
 
 /**
