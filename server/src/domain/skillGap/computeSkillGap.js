@@ -72,6 +72,13 @@ const PRIORITY = [
   { importance: GAP_IMPORTANCE.PREFERRED, status: GAP_STATUS.SUPPORTED },
 ];
 
+/** Strength rank credit to resolve duplicates and prioritize evidence. */
+const STRENGTH_CREDIT = {
+  [EVIDENCE_STRENGTH.CLAIMED]: 1,
+  [EVIDENCE_STRENGTH.SUPPORTED]: 2,
+  [EVIDENCE_STRENGTH.VERIFIED]: 3,
+};
+
 /**
  * Compares a CareerTwin against one role.
  *
@@ -81,18 +88,38 @@ const PRIORITY = [
  *   would change it.
  */
 export function computeSkillGap(twin, role) {
-  const held = new Map((twin.skills ?? []).map((skill) => [skill.key, skill]));
+  const safeTwin = twin && typeof twin === 'object' ? twin : {};
+  const held = indexSkills(safeTwin.skills ?? []);
 
-  const skills = [
-    ...role.requiredSkills.map((name) => assess(name, GAP_IMPORTANCE.REQUIRED, held, role)),
-    ...role.preferredSkills.map((name) => assess(name, GAP_IMPORTANCE.PREFERRED, held, role)),
-  ].sort(byPriority);
+  const requiredSkills = Array.isArray(role?.requiredSkills) ? role.requiredSkills : [];
+  const preferredSkills = Array.isArray(role?.preferredSkills) ? role.preferredSkills : [];
+
+  const seenRoleKeys = new Set();
+  const assessedSkills = [];
+
+  for (const name of requiredSkills) {
+    if (!name || typeof name !== 'string') continue;
+    const key = skillKey(name);
+    if (!key || seenRoleKeys.has(key)) continue;
+    seenRoleKeys.add(key);
+    assessedSkills.push(assess(name, GAP_IMPORTANCE.REQUIRED, held, role));
+  }
+
+  for (const name of preferredSkills) {
+    if (!name || typeof name !== 'string') continue;
+    const key = skillKey(name);
+    if (!key || seenRoleKeys.has(key)) continue;
+    seenRoleKeys.add(key);
+    assessedSkills.push(assess(name, GAP_IMPORTANCE.PREFERRED, held, role));
+  }
+
+  assessedSkills.sort(byPriority);
 
   return {
-    roleId: role.id,
-    roleTitle: role.title,
-    skills,
-    summary: summarise(skills),
+    roleId: role?.id ?? null,
+    roleTitle: role?.title ?? '',
+    skills: assessedSkills,
+    summary: summarise(assessedSkills),
     /**
      * Skills the student has that the role does not ask for.
      *
@@ -100,8 +127,36 @@ export function computeSkillGap(twin, role) {
      * is not a flaw in their backend profile — it is a hint that another
      * role may fit better, and that is the reader's call to make.
      */
-    additionalSkills: extraSkills(twin, role),
+    additionalSkills: extraSkills(safeTwin, role),
   };
+}
+
+/** The student's skills, keyed for lookup with duplicate resolution retaining highest strength. */
+function indexSkills(skills) {
+  const map = new Map();
+  for (const skill of skills ?? []) {
+    if (!skill || typeof skill !== 'object') continue;
+    const key = skill.key || (skill.name ? skillKey(skill.name) : '');
+    if (!key) continue;
+
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, skill);
+    } else {
+      const existingCredit = STRENGTH_CREDIT[existing.strength] ?? 0;
+      const newCredit = STRENGTH_CREDIT[skill.strength] ?? 0;
+      if (newCredit > existingCredit) {
+        map.set(key, skill);
+      } else if (
+        newCredit === existingCredit &&
+        Array.isArray(skill.evidence) &&
+        (!Array.isArray(existing.evidence) || skill.evidence.length > existing.evidence.length)
+      ) {
+        map.set(key, skill);
+      }
+    }
+  }
+  return map;
 }
 
 /** Works out where one of the role's skills stands for this student. */
@@ -117,7 +172,7 @@ function assess(requiredName, importance, held, role) {
       importance,
       status: GAP_STATUS.MISSING,
       evidence: [],
-      reason: `${role.title} asks for ${name}, and Nexora has not seen it anywhere in your profile or resumes.`,
+      reason: `${role?.title ?? 'This role'} asks for ${name}, and Nexora has not seen it anywhere in your profile or resumes.`,
       suggestedEvidence: suggestionsFor(name, GAP_STATUS.MISSING),
     };
   }
@@ -130,9 +185,9 @@ function assess(requiredName, importance, held, role) {
     importance,
     status,
     /** Your spelling, which may differ from the catalogue's. */
-    yourSkill: skill.name,
+    yourSkill: skill.name ?? name,
     selfDeclaredLevel: skill.selfDeclaredLevel ?? null,
-    evidence: skill.evidence ?? [],
+    evidence: Array.isArray(skill.evidence) ? skill.evidence.filter(Boolean) : [],
     reason: reasonFor(skill, status, name),
     suggestedEvidence: suggestionsFor(name, status),
   };
@@ -216,7 +271,10 @@ function byPriority(left, right) {
   const byRank = (leftRank === -1 ? 99 : leftRank) - (rightRank === -1 ? 99 : rightRank);
   if (byRank !== 0) return byRank;
 
-  return left.name.localeCompare(right.name);
+  return (
+    left.name.localeCompare(right.name, 'en') ||
+    (left.key ?? '').localeCompare(right.key ?? '', 'en')
+  );
 }
 
 /**
@@ -250,13 +308,29 @@ function summarise(skills) {
   };
 }
 
-/** The student's skills that this role does not name. */
+/** The student's skills that this role does not name, deduplicated with highest strength preserved. */
 function extraSkills(twin, role) {
   const roleKeys = new Set(
-    [...role.requiredSkills, ...role.preferredSkills].map((name) => skillKey(name)),
+    [...(role?.requiredSkills ?? []), ...(role?.preferredSkills ?? [])].map((name) => skillKey(name)),
   );
 
-  return (twin.skills ?? [])
-    .filter((skill) => !roleKeys.has(skill.key))
-    .map((skill) => ({ name: skill.name, strength: skill.strength }));
+  const seen = new Map();
+  for (const skill of twin?.skills ?? []) {
+    if (!skill || typeof skill !== 'object') continue;
+    const key = skill.key || (skill.name ? skillKey(skill.name) : '');
+    if (!key || roleKeys.has(key)) continue;
+
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, { name: skill.name ?? key, strength: skill.strength });
+    } else {
+      const existingCredit = STRENGTH_CREDIT[existing.strength] ?? 0;
+      const newCredit = STRENGTH_CREDIT[skill.strength] ?? 0;
+      if (newCredit > existingCredit) {
+        seen.set(key, { name: skill.name ?? key, strength: skill.strength });
+      }
+    }
+  }
+
+  return [...seen.values()];
 }
