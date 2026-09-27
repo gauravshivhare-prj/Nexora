@@ -36,9 +36,9 @@ import { skillDisplayName, skillKey } from '../skills/skillKey.js';
  * @param {import('./roleCatalogue.js').CareerRole} role
  * @returns {object} Score, band, and the full reasoning behind both.
  */
-export function scoreRoleMatch(twin, role) {
+export function scoreRoleMatch(twin, role, precomputedHeld = null) {
   const safeTwin = twin && typeof twin === 'object' ? twin : {};
-  const held = indexSkills(safeTwin.skills ?? []);
+  const held = precomputedHeld ?? indexSkills(safeTwin.skills ?? []);
 
   const requiredSkills = Array.isArray(role?.requiredSkills) ? role.requiredSkills : [];
   const preferredSkills = Array.isArray(role?.preferredSkills) ? role.preferredSkills : [];
@@ -55,10 +55,12 @@ export function scoreRoleMatch(twin, role) {
   };
 
   const score = Math.round(
-    Object.entries(dimensions).reduce(
-      (total, [name, value]) => total + value * DIMENSION_WEIGHTS[name],
-      0,
-    ) * 100,
+    (dimensions.requiredSkills * DIMENSION_WEIGHTS.requiredSkills +
+      dimensions.preferredSkills * DIMENSION_WEIGHTS.preferredSkills +
+      dimensions.evidenceStrength * DIMENSION_WEIGHTS.evidenceStrength +
+      dimensions.interestAlignment * DIMENSION_WEIGHTS.interestAlignment +
+      dimensions.backgroundAlignment * DIMENSION_WEIGHTS.backgroundAlignment) *
+      100,
   );
 
   const band = bandFor(score);
@@ -106,7 +108,9 @@ export function scoreRoleMatch(twin, role) {
  * @returns {{ matches: object[], catalogue: object }}
  */
 export function rankRoles(twin, { limit = 5, includeBelowThreshold = false } = {}) {
-  const scored = CAREER_ROLES.map((role) => scoreRoleMatch(twin, role))
+  const safeTwin = twin && typeof twin === 'object' ? twin : {};
+  const held = indexSkills(safeTwin.skills ?? []);
+  const scored = CAREER_ROLES.map((role) => scoreRoleMatch(safeTwin, role, held))
     .filter((match) => includeBelowThreshold || match.score >= MINIMUM_RECOMMENDABLE_SCORE)
     // Ties broken deterministically by title, then roleId so ordering is rock-solid across runs and environments.
     .sort(
@@ -217,22 +221,32 @@ function evidenceScore(matches) {
  * few points at most.
  */
 function interestScore(twin, role) {
-  const roleWords = normalise(role?.title);
+  const roleTitleWords = normalise(role?.title);
+  const meaningfulRoleWords = new Set(roleTitleWords.filter((w) => !GENERIC_TITLE_WORDS.has(w)));
 
   const statedTarget = (twin?.targetRoles ?? []).some(
-    (target) => target && target.origin === 'student' && sharesWord(normalise(target.title), roleWords),
+    (target) =>
+      target &&
+      target.origin === 'student' &&
+      sharesWord(normalise(target.title), meaningfulRoleWords),
   );
   if (statedTarget) return 1;
 
   const interests = twin?.interests ?? [];
-  const matchesInterest = interests.some(
-    (interest) =>
-      interest &&
-      (sharesWord(normalise(interest), roleWords) ||
-        [...(role?.requiredSkills ?? []), ...(role?.preferredSkills ?? [])].some(
-          (skill) => skillKey(skill) === skillKey(interest),
-        )),
+  if (interests.length === 0) return 0;
+
+  const roleSkillKeys = new Set(
+    [...(role?.requiredSkills ?? []), ...(role?.preferredSkills ?? [])]
+      .map(skillKey)
+      .filter(Boolean),
   );
+
+  const matchesInterest = interests.some((interest) => {
+    if (!interest) return false;
+    if (sharesWord(normalise(interest), meaningfulRoleWords)) return true;
+    const key = skillKey(interest);
+    return Boolean(key && roleSkillKeys.has(key));
+  });
 
   return matchesInterest ? 0.5 : 0;
 }
@@ -394,7 +408,6 @@ const GENERIC_TITLE_WORDS = new Set([
   'applications',
 ]);
 
-function sharesWord(left, right) {
-  const meaningful = new Set(right.filter((word) => !GENERIC_TITLE_WORDS.has(word)));
-  return left.some((word) => meaningful.has(word));
+function sharesWord(leftWords, meaningfulSet) {
+  return leftWords.some((word) => meaningfulSet.has(word));
 }

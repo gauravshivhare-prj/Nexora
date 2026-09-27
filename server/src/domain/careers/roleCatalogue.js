@@ -192,9 +192,21 @@ export const CAREER_ROLES = [
   },
 ];
 
+const ROLES_BY_ID = new Map(CAREER_ROLES.map((role) => [role.id, role]));
+
+const CATALOGUE_SKILL_NAMES = Object.freeze([
+  ...new Set(
+    CAREER_ROLES.flatMap((role) => [
+      ...role.requiredSkills,
+      ...role.preferredSkills,
+      ...role.relatedTechnologies,
+    ]),
+  ),
+]);
+
 /** Looks one role up by id. */
 export function findRole(roleId) {
-  return CAREER_ROLES.find((role) => role.id === roleId) ?? null;
+  return ROLES_BY_ID.get(roleId) ?? null;
 }
 
 /**
@@ -204,13 +216,5 @@ export function findRole(roleId) {
  * summary is checked against.
  */
 export function catalogueSkillNames() {
-  return [
-    ...new Set(
-      CAREER_ROLES.flatMap((role) => [
-        ...role.requiredSkills,
-        ...role.preferredSkills,
-        ...role.relatedTechnologies,
-      ]),
-    ),
-  ];
+  return [...CATALOGUE_SKILL_NAMES];
 }

@@ -207,6 +207,13 @@ const CANONICAL_KEYS = new Map(
   [...new Set([...ALIASES.values(), ...TAXONOMY_NAMES])].map((name) => [normalise(name), name]),
 );
 
+/** Pre-normalised alias values to avoid redundant regex normalisation on lookup hits. */
+const ALIAS_KEYS = new Map(
+  [...ALIASES.entries()].map(([variant, canonicalName]) => [variant, normalise(canonicalName)]),
+);
+
+const KNOWN_SKILL_NAMES = Object.freeze([...new Set(CANONICAL_KEYS.values())]);
+
 /**
  * Strips everything that is spelling rather than meaning.
  *
@@ -232,8 +239,7 @@ export function skillKey(name) {
   const normalised = normalise(name);
   if (normalised === '') return '';
 
-  const alias = ALIASES.get(normalised);
-  return alias ? normalise(alias) : normalised;
+  return ALIAS_KEYS.get(normalised) ?? normalised;
 }
 
 /**
@@ -290,7 +296,7 @@ export function isSameSkill(left, right) {
  * @returns {string[]}
  */
 export function knownSkillNames() {
-  return [...new Set(CANONICAL_KEYS.values())];
+  return [...KNOWN_SKILL_NAMES];
 }
 
 /**

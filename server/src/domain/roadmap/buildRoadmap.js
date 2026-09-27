@@ -264,28 +264,56 @@ const FOUNDATIONS = new Map([
   ['machinelearning', ['Python', 'Statistics']],
 ]);
 
+/** Precomputed foundations with keys to avoid repeated skillKey lookups per item. */
+const FOUNDATIONS_WITH_KEYS = new Map(
+  [...FOUNDATIONS.entries()].map(([k, names]) => [
+    k,
+    names.map((name) => ({ key: skillKey(name), name })),
+  ]),
+);
+
 /**
- * Checks whether keyA directly or transitively depends on keyB.
+ * Precompute all direct and transitive dependencies as Sets of skillKeys
+ * so dependsOn(keyA, keyB) becomes an O(1) set membership check during sorting.
  */
-function dependsOn(keyA, keyB, visited = new Set()) {
-  if (!keyA || !keyB || visited.has(keyA)) return false;
-  visited.add(keyA);
+const TRANSITIVE_DEPENDENCIES = new Map();
 
-  const direct = FOUNDATIONS.get(keyA);
-  if (!direct) return false;
+function computeTransitiveDependencies(key, visited = new Set()) {
+  if (visited.has(key)) return new Set();
+  visited.add(key);
 
-  for (const name of direct) {
-    const k = skillKey(name);
-    if (k === keyB || dependsOn(k, keyB, visited)) {
-      return true;
+  const directNames = FOUNDATIONS.get(key) || [];
+  const allDeps = new Set();
+
+  for (const name of directNames) {
+    const depKey = skillKey(name);
+    if (!depKey) continue;
+    allDeps.add(depKey);
+    const subDeps = computeTransitiveDependencies(depKey, new Set(visited));
+    for (const sub of subDeps) {
+      allDeps.add(sub);
     }
   }
-  return false;
+
+  return allDeps;
+}
+
+for (const key of FOUNDATIONS.keys()) {
+  TRANSITIVE_DEPENDENCIES.set(key, computeTransitiveDependencies(key));
+}
+
+/**
+ * Checks whether keyA directly or transitively depends on keyB in O(1) time.
+ */
+function dependsOn(keyA, keyB) {
+  if (!keyA || !keyB) return false;
+  const deps = TRANSITIVE_DEPENDENCIES.get(keyA);
+  return deps ? deps.has(keyB) : false;
 }
 
 function prerequisitesFor(gapSkill, gap) {
   const key = gapSkill.key || skillKey(gapSkill.name);
-  const foundations = FOUNDATIONS.get(key);
+  const foundations = FOUNDATIONS_WITH_KEYS.get(key);
   if (!foundations) return [];
 
   // Only list a prerequisite the student does not already have, and only
@@ -297,7 +325,6 @@ function prerequisitesFor(gapSkill, gap) {
   );
 
   return foundations
-    .map((name) => ({ key: skillKey(name), name }))
     .filter((prerequisite) => planned.has(prerequisite.key))
     .map((prerequisite) => ({ ...prerequisite, itemId: `${gap?.roleId ?? ''}:${prerequisite.key}` }));
 }

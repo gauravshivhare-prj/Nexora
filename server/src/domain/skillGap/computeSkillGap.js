@@ -72,6 +72,10 @@ const PRIORITY = [
   { importance: GAP_IMPORTANCE.PREFERRED, status: GAP_STATUS.SUPPORTED },
 ];
 
+const PRIORITY_RANK = new Map(
+  PRIORITY.map((entry, index) => [`${entry.importance}:${entry.status}`, index]),
+);
+
 /** Strength rank credit to resolve duplicates and prioritize evidence. */
 const STRENGTH_CREDIT = {
   [EVIDENCE_STRENGTH.CLAIMED]: 1,
@@ -258,15 +262,8 @@ function suggestionsFor(name, status) {
 }
 
 function byPriority(left, right) {
-  const rank = (skill) =>
-    PRIORITY.findIndex(
-      (entry) => entry.importance === skill.importance && entry.status === skill.status,
-    );
-
-  // Verified skills fall outside PRIORITY and sort last, which is right:
-  // there is nothing to do about them.
-  const leftRank = rank(left);
-  const rightRank = rank(right);
+  const leftRank = PRIORITY_RANK.get(`${left.importance}:${left.status}`) ?? -1;
+  const rightRank = PRIORITY_RANK.get(`${right.importance}:${right.status}`) ?? -1;
 
   const byRank = (leftRank === -1 ? 99 : leftRank) - (rightRank === -1 ? 99 : rightRank);
   if (byRank !== 0) return byRank;
