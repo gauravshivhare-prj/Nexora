@@ -53,4 +53,10 @@ export const FORBIDDEN_CLIENT_VERIFICATION_FIELDS = Object.freeze([
   'answerKey',
   'completedAt',
   'durationSeconds',
+  'isPractice',
+  'evidencePolicy',
+  'allowBeginnerVerified',
+  'requiresStrongerProof',
+  'evidenceStrength',
+  'evidenceStatus',
 ]);

@@ -28,6 +28,7 @@ export class SkillEvidenceInputError extends Error {
  * The caller supplies the authenticated owner separately. A result can only
  * become CareerTwin evidence when this module marks it eligible; clients
  * cannot submit `verified` or an evidence strength directly.
+ * Beginner tier, practice mode, and advisory AI assessments cannot produce verified evidence.
  */
 export function buildAssessmentResult({
   skill,
@@ -35,6 +36,10 @@ export function buildAssessmentResult({
   assessmentId,
   completedAt = new Date(),
   passMark = ASSESSMENT_PASS_MARK,
+  difficulty = null,
+  isPractice = false,
+  evaluatedBy = 'assessment-engine',
+  eligibleForVerified = null,
 }) {
   const canonical = requireCanonicalSkill(skill);
   validateScore(score);
@@ -42,7 +47,17 @@ export function buildAssessmentResult({
   validateDate(completedAt, 'completedAt');
   validatePassMark(passMark);
 
-  const outcome = score >= passMark ? CHECK_OUTCOMES.PASS : CHECK_OUTCOMES.FAIL;
+  const passed = score >= passMark;
+  const outcome = passed ? CHECK_OUTCOMES.PASS : CHECK_OUTCOMES.FAIL;
+
+  // Invariant: AI evaluation, practice mode, beginner tier, and failing outcomes can never produce verified evidence.
+  const isAi = evaluatedBy === 'ai';
+  const isEligible =
+    isAi || isPractice || difficulty === 'beginner' || outcome !== CHECK_OUTCOMES.PASS
+      ? false
+      : typeof eligibleForVerified === 'boolean'
+        ? eligibleForVerified
+        : passed;
 
   return result({
     kind: CHECK_KINDS.ASSESSMENT,
@@ -52,7 +67,8 @@ export function buildAssessmentResult({
     outcome,
     reference: assessmentId,
     completedAt,
-    evaluatedBy: 'assessment-engine',
+    evaluatedBy,
+    eligibleForVerified: isEligible,
   });
 }
 
@@ -96,8 +112,24 @@ export function buildInterviewResult({
   });
 }
 
-function result({ kind, canonical, score, passMark, outcome, reference, completedAt, evaluatedBy }) {
-  const eligibleForVerified = outcome === CHECK_OUTCOMES.PASS;
+function result({
+  kind,
+  canonical,
+  score,
+  passMark,
+  outcome,
+  reference,
+  completedAt,
+  evaluatedBy,
+  eligibleForVerified = null,
+}) {
+  const isAi = evaluatedBy === 'ai';
+  const isEligible =
+    isAi || outcome !== CHECK_OUTCOMES.PASS
+      ? false
+      : eligibleForVerified !== null
+        ? Boolean(eligibleForVerified)
+        : outcome === CHECK_OUTCOMES.PASS;
 
   return {
     kind,
@@ -106,11 +138,11 @@ function result({ kind, canonical, score, passMark, outcome, reference, complete
     score,
     passMark,
     outcome,
-    eligibleForVerified,
+    eligibleForVerified: isEligible,
     evaluatedBy,
     reference,
     completedAt: new Date(completedAt),
-    evidence: eligibleForVerified
+    evidence: isEligible
       ? makeEvidence({
           source: kind,
           detail: `${kind === CHECK_KINDS.ASSESSMENT ? 'Passed assessment' : 'Passed interview'} for ${canonical.name} with score ${score}.`,

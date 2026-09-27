@@ -1,5 +1,6 @@
 import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from '../models/SkillEvidenceCheck.model.js';
 import {
+  CHECK_OUTCOMES,
   SkillEvidenceInputError,
   buildAssessmentResult,
   buildInterviewResult,
@@ -35,7 +36,12 @@ export async function listEvidenceChecks(userId) {
 }
 
 export async function loadVerifiedEvidence(userId) {
-  const checks = await SkillEvidenceCheck.find({ user: userId, eligibleForVerified: true }).sort({
+  const checks = await SkillEvidenceCheck.find({
+    user: userId,
+    eligibleForVerified: true,
+    evaluatedBy: { $ne: 'ai' },
+    outcome: CHECK_OUTCOMES.PASS,
+  }).sort({
     completedAt: -1,
   });
 

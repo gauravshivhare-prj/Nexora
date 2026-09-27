@@ -4,6 +4,8 @@ import {
   toPublicAssessmentAttempt,
 } from '../models/AssessmentAttempt.model.js';
 import {
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_VALUES,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL_VALUES,
   evaluateAssessmentSubmission,
@@ -38,12 +40,14 @@ export async function seedAssessmentCatalog() {
         skillName: item.skillName,
         secondarySkillKeys: item.secondarySkillKeys ?? [],
         difficulty: item.difficulty,
+        group: item.group ?? null,
         title: item.title,
         description: item.description,
         passMark: item.passMark,
         timeLimitMinutes: item.timeLimitMinutes,
+        isPractice: item.isPractice === true,
         questions: item.questions,
-        isActive: true,
+        isActive: item.isActive !== false,
       });
     }
   }
@@ -52,7 +56,7 @@ export async function seedAssessmentCatalog() {
 /**
  * Lists all active, sanitized assessments available for students.
  */
-export async function listAssessments({ skill, difficulty } = {}) {
+export async function listAssessments({ skill, difficulty, group } = {}) {
   const query = { isActive: true };
 
   if (skill !== undefined && skill !== null) {
@@ -79,11 +83,41 @@ export async function listAssessments({ skill, difficulty } = {}) {
     query.difficulty = difficulty.trim().toLowerCase();
   }
 
+  if (group !== undefined && group !== null) {
+    if (typeof group !== 'string' || !ASSESSMENT_GROUP_VALUES.includes(group.trim().toLowerCase())) {
+      throw ApiError.badRequest(
+        `Invalid group filter. Allowed values: ${ASSESSMENT_GROUP_VALUES.join(', ')}.`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+    query.group = group.trim().toLowerCase();
+  }
+
   let assessments = await Assessment.find(query).sort({ title: 1 }).lean();
 
   // If DB is empty, fallback to canonical catalog
-  if (assessments.length === 0 && (!query.skillKey && !query.$or)) {
-    return ASSESSMENT_CATALOG.map(toPublicAssessment);
+  if (assessments.length === 0) {
+    const totalDocs = await Assessment.countDocuments();
+    if (totalDocs === 0) {
+      let catalog = getAssessmentCatalog({ activeOnly: true });
+      if (skill !== undefined && skill !== null) {
+        const canonical = canonicalSkill(skill.trim());
+        catalog = catalog.filter(
+          (asm) =>
+            asm.skillKey === canonical.key ||
+            (asm.secondarySkillKeys && asm.secondarySkillKeys.includes(canonical.key)),
+        );
+      }
+      if (query.difficulty) {
+        catalog = catalog.filter((asm) => asm.difficulty === query.difficulty);
+      }
+      if (query.group) {
+        catalog = catalog.filter(
+          (asm) => (asm.group || ASSESSMENT_GROUPS.ENGINEERING) === query.group,
+        );
+      }
+      return catalog.map(toPublicAssessment);
+    }
   }
 
   return assessments.map(toPublicAssessment);
@@ -95,13 +129,16 @@ export async function listAssessments({ skill, difficulty } = {}) {
 export async function getAssessment(assessmentId) {
   validateAssessmentIdParam(assessmentId);
 
-  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true }).lean();
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim() }).lean();
   if (doc) {
+    if (doc.isActive === false) {
+      throw ApiError.notFound(`Assessment "${assessmentId}" not found.`, ERROR_CODES.NOT_FOUND);
+    }
     return toPublicAssessment(doc);
   }
 
   // Check canonical catalog fallback
-  const catalogItem = getCatalogAssessmentById(assessmentId);
+  const catalogItem = getCatalogAssessmentById(assessmentId, { activeOnly: true });
   if (catalogItem) {
     return toPublicAssessment(catalogItem);
   }
@@ -141,12 +178,14 @@ export async function createAssessment(input) {
       skillName: validated.skillName,
       secondarySkillKeys: validated.secondarySkillKeys,
       difficulty: validated.difficulty,
+      group: validated.group ?? null,
       title: validated.title,
       description: validated.description,
       passMark: validated.passMark,
       timeLimitMinutes: validated.timeLimitMinutes,
+      isPractice: validated.isPractice === true,
       questions: validated.questions,
-      isActive: true,
+      isActive: input.isActive !== false,
     });
 
     return toAdminAssessment(created);
@@ -264,6 +303,7 @@ export async function startAssessmentAttempt(userId, input) {
       skillKey: fullAssessment.skillKey,
       skillName: fullAssessment.skillName,
       difficulty: fullAssessment.difficulty,
+      isPractice: Boolean(fullAssessment.isPractice),
       passMark: fullAssessment.passMark,
       status: ATTEMPT_STATUS.IN_PROGRESS,
       startedAt: new Date(),
@@ -353,6 +393,7 @@ export async function submitAssessmentAttempt(userId, payload) {
       assessmentId: fullAssessment.id,
       studentId: String(userId),
       startedAt: attempt.startedAt,
+      isPractice: Boolean(fullAssessment.isPractice || attempt.isPractice),
       answers,
     },
     evaluatedAt: evalDate,
@@ -399,6 +440,10 @@ export async function submitAssessmentAttempt(userId, payload) {
       score: evalResult.score,
       assessmentId: fullAssessment.id,
       passMark: fullAssessment.passMark,
+      difficulty: fullAssessment.difficulty,
+      isPractice: Boolean(fullAssessment.isPractice),
+      evaluatedBy: fullAssessment.evaluatedBy ?? 'assessment-engine',
+      eligibleForVerified: evalResult.evidenceResult?.eligibleForVerified,
       completedAt: evalDate,
     });
     evidenceCheckId = evidenceDoc?.id ?? null;
@@ -411,8 +456,11 @@ export async function submitAssessmentAttempt(userId, payload) {
     }
   }
 
+  const publicAttempt = toPublicAssessmentAttempt(updatedAttempt);
+
   return {
-    attempt: toPublicAssessmentAttempt(updatedAttempt),
+    attempt: publicAttempt,
+    result: publicAttempt,
     evidenceResult: evalResult.evidenceResult,
     evidenceStatus: evalResult.evidenceStatus,
   };
@@ -486,7 +534,7 @@ export async function getLatestAssessmentResult(userId, assessmentId) {
 function validateAssessmentIdParam(id) {
   if (
     typeof id !== 'string' ||
-    id.trim().length === 0 ||
+    id.trim().length < ASSESSMENT_LIMITS.id.min ||
     id.trim().length > ASSESSMENT_LIMITS.id.max ||
     !/^[a-z0-9_-]+$/i.test(id.trim())
   ) {
@@ -495,12 +543,15 @@ function validateAssessmentIdParam(id) {
 }
 
 async function loadFullAssessment(assessmentId) {
-  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim(), isActive: true }).lean();
+  const doc = await Assessment.findOne({ assessmentId: assessmentId.trim() }).lean();
   if (doc) {
+    if (doc.isActive === false) {
+      throw ApiError.badRequest(`Assessment "${assessmentId}" is currently unavailable.`, ERROR_CODES.BAD_REQUEST);
+    }
     return toAdminAssessment(doc);
   }
 
-  const catalogItem = getCatalogAssessmentById(assessmentId);
+  const catalogItem = getCatalogAssessmentById(assessmentId, { activeOnly: true });
   if (catalogItem) {
     return catalogItem;
   }

@@ -14,7 +14,7 @@ Every opportunity record has this shape:
 
 ```js
 {
-  id: 'curated-internal:backend-apprenticeship',
+  id: 'curated_internal:backend-apprenticeship',
   title: 'Backend apprenticeship',
   summary: 'A practice opportunity for building server-side applications.',
   source: {
@@ -23,10 +23,10 @@ Every opportunity record has this shape:
     asOf: '2026-09-23',
   },
   eligibility: [
-    { type: 'verified_skills', skills: ['javascript', 'node.js'] },
+    { type: 'verified_skills', skills: ['JavaScript', 'Node.js'] },
     { type: 'target_role', roleIds: ['backend-developer'] },
   ],
-  requiredSkills: ['javascript', 'node.js'],
+  requiredSkills: ['JavaScript', 'Node.js'],
   targetRoleIds: ['backend-developer'],
 }
 ```

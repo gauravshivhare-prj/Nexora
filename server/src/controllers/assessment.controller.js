@@ -18,9 +18,9 @@ import { ERROR_CODES } from '../constants/errorCodes.js';
  * Supports optional ?skill= and ?difficulty= query filters.
  */
 export const listAssessmentsHandler = asyncHandler(async (req, res) => {
-  const { skill, difficulty } = req.query;
+  const { skill, difficulty, group } = req.query;
 
-  const assessments = await listAssessments({ skill, difficulty });
+  const assessments = await listAssessments({ skill, difficulty, group });
 
   res.status(200).json({
     success: true,
@@ -116,7 +116,7 @@ export const submitAttemptHandler = asyncHandler(async (req, res) => {
     message: 'Assessment attempt submitted and evaluated',
     data: {
       attempt: result.attempt,
-      result: assessmentResult,
+      result: result.result ?? assessmentResult,
       evidenceResult: result.evidenceResult,
       evidenceStatus: result.evidenceStatus,
       verification: result.evidenceResult,

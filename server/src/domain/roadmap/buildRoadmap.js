@@ -99,7 +99,19 @@ const PRIORITY_ORDER = [PRIORITY.CRITICAL, PRIORITY.HIGH, PRIORITY.MEDIUM, PRIOR
  * @param {{ maxItems?: number }} [options]
  * @returns {object}
  */
+/**
+ * Builds a roadmap from a computed skill gap.
+ *
+ * @param {object} gap Output of computeSkillGap.
+ * @param {{ maxItems?: number }} [options]
+ * @returns {object}
+ */
 export function buildRoadmap(gap, { maxItems = 10 } = {}) {
+  const safeGap = gap && typeof gap === 'object' ? gap : {};
+  const roleId = safeGap.roleId ?? null;
+  const roleTitle = safeGap.roleTitle ?? '';
+  const gapSkills = Array.isArray(safeGap.skills) ? safeGap.skills.filter(Boolean) : [];
+
   /**
    * A skill belongs on the plan only if there is something the student can
    * actually do about it today.
@@ -114,21 +126,24 @@ export function buildRoadmap(gap, { maxItems = 10 } = {}) {
    * assessments ship, those skills rejoin the plan automatically instead of
    * waiting for someone to remember this line.
    */
-  const actionable = gap.skills.filter((skill) =>
-    skill.suggestedEvidence.some((suggestion) => suggestion.available),
+  const actionable = gapSkills.filter((skill) =>
+    Array.isArray(skill.suggestedEvidence) &&
+    skill.suggestedEvidence.some((suggestion) => suggestion && suggestion.available),
   );
 
+  const limit = typeof maxItems === 'number' && maxItems >= 0 ? maxItems : 10;
+
   const items = actionable
-    .map((skill) => buildItem(skill, gap))
+    .map((skill) => buildItem(skill, safeGap))
     .sort(byPriorityThenName)
-    .slice(0, maxItems)
+    .slice(0, limit)
     .map((item, index) => ({ ...item, order: index + 1 }));
 
   return {
     goal: {
-      roleId: gap.roleId,
-      roleTitle: gap.roleTitle,
-      description: `Become a credible candidate for ${gap.roleTitle}.`,
+      roleId,
+      roleTitle,
+      description: roleTitle ? `Become a credible candidate for ${roleTitle}.` : 'No role specified.',
     },
     items,
     summary: {
@@ -162,14 +177,18 @@ export function buildRoadmap(gap, { maxItems = 10 } = {}) {
 function buildItem(gapSkill, gap) {
   const priority = priorityFor(gapSkill);
   const isMissing = gapSkill.status === GAP_STATUS.MISSING;
+  const key = gapSkill.key || skillKey(gapSkill.name);
+  const name = gapSkill.name || skillDisplayName(key);
+  const roleId = gap?.roleId ?? '';
+  const roleTitle = gap?.roleTitle ?? '';
 
   return {
     /** Stable within a role, so a client can track completion against it. */
-    id: `${gap.roleId}:${gapSkill.key}`,
+    id: `${roleId}:${key}`,
 
-    skill: { key: gapSkill.key, name: gapSkill.name },
+    skill: { key, name },
 
-    title: isMissing ? `Learn ${gapSkill.name}` : `Demonstrate ${gapSkill.name}`,
+    title: isMissing ? `Learn ${name}` : `Demonstrate ${name}`,
 
     /**
      * What "done" means, stated in terms of the evidence status it reaches
@@ -177,17 +196,17 @@ function buildItem(gapSkill, gap) {
      * line; "have a project Nexora can see" does.
      */
     objective: isMissing
-      ? `Learn enough ${gapSkill.name} to build something with it, and add that project to your profile.`
-      : `Turn your ${gapSkill.name} claim into something Nexora can see — a project that uses it, or a certification covering it.`,
+      ? `Learn enough ${name} to build something with it, and add that project to your profile.`
+      : `Turn your ${name} claim into something Nexora can see — a project that uses it, or a certification covering it.`,
 
-    description: gapSkill.reason,
+    description: gapSkill.reason ?? '',
 
     priority,
     estimatedEffort: effortFor(gapSkill),
 
     /** Why this is on the plan at all, traced back to the role. */
     because: {
-      roleTitle: gap.roleTitle,
+      roleTitle,
       importance: gapSkill.importance,
       currentStatus: gapSkill.status,
     },
@@ -201,9 +220,9 @@ function buildItem(gapSkill, gap) {
      */
     prerequisites: prerequisitesFor(gapSkill, gap),
 
-    resources: resourcesFor(gapSkill.name),
+    resources: resourcesFor(name),
 
-    verification: verificationFor(gapSkill.name),
+    verification: verificationFor(name),
 
     /**
      * Completion is not stored here.
@@ -217,7 +236,7 @@ function buildItem(gapSkill, gap) {
     completion: {
       status: gapSkill.status,
       isComplete: false,
-      completesWhen: `This item closes when ${gapSkill.name} reaches "supported" — see verification.`,
+      completesWhen: `This item closes when ${name} reaches "supported" — see verification.`,
     },
   };
 }
@@ -245,35 +264,85 @@ const FOUNDATIONS = new Map([
   ['machinelearning', ['Python', 'Statistics']],
 ]);
 
+/** Precomputed foundations with keys to avoid repeated skillKey lookups per item. */
+const FOUNDATIONS_WITH_KEYS = new Map(
+  [...FOUNDATIONS.entries()].map(([k, names]) => [
+    k,
+    names.map((name) => ({ key: skillKey(name), name })),
+  ]),
+);
+
+/**
+ * Precompute all direct and transitive dependencies as Sets of skillKeys
+ * so dependsOn(keyA, keyB) becomes an O(1) set membership check during sorting.
+ */
+const TRANSITIVE_DEPENDENCIES = new Map();
+
+function computeTransitiveDependencies(key, visited = new Set()) {
+  if (visited.has(key)) return new Set();
+  visited.add(key);
+
+  const directNames = FOUNDATIONS.get(key) || [];
+  const allDeps = new Set();
+
+  for (const name of directNames) {
+    const depKey = skillKey(name);
+    if (!depKey) continue;
+    allDeps.add(depKey);
+    const subDeps = computeTransitiveDependencies(depKey, new Set(visited));
+    for (const sub of subDeps) {
+      allDeps.add(sub);
+    }
+  }
+
+  return allDeps;
+}
+
+for (const key of FOUNDATIONS.keys()) {
+  TRANSITIVE_DEPENDENCIES.set(key, computeTransitiveDependencies(key));
+}
+
+/**
+ * Checks whether keyA directly or transitively depends on keyB in O(1) time.
+ */
+function dependsOn(keyA, keyB) {
+  if (!keyA || !keyB) return false;
+  const deps = TRANSITIVE_DEPENDENCIES.get(keyA);
+  return deps ? deps.has(keyB) : false;
+}
+
 function prerequisitesFor(gapSkill, gap) {
-  const foundations = FOUNDATIONS.get(gapSkill.key);
+  const key = gapSkill.key || skillKey(gapSkill.name);
+  const foundations = FOUNDATIONS_WITH_KEYS.get(key);
   if (!foundations) return [];
 
   // Only list a prerequisite the student does not already have, and only
   // one that is itself on this roadmap — otherwise it is a dead reference.
   const planned = new Set(
-    gap.skills
-      .filter((skill) => skill.status === GAP_STATUS.MISSING || skill.status === GAP_STATUS.CLAIMED)
-      .map((skill) => skill.key),
+    (gap?.skills ?? [])
+      .filter((skill) => skill && (skill.status === GAP_STATUS.MISSING || skill.status === GAP_STATUS.CLAIMED))
+      .map((skill) => skill.key || skillKey(skill.name)),
   );
 
   return foundations
-    .map((name) => ({ key: skillKey(name), name }))
     .filter((prerequisite) => planned.has(prerequisite.key))
-    .map((prerequisite) => ({ ...prerequisite, itemId: `${gap.roleId}:${prerequisite.key}` }));
+    .map((prerequisite) => ({ ...prerequisite, itemId: `${gap?.roleId ?? ''}:${prerequisite.key}` }));
 }
 
 function byPriorityThenName(left, right) {
+  // Prerequisite dependency ordering:
+  // A foundation/prerequisite must ALWAYS precede its dependent on the plan.
+  const leftNeedsRight = dependsOn(left.skill.key, right.skill.key);
+  const rightNeedsLeft = dependsOn(right.skill.key, left.skill.key);
+  if (leftNeedsRight) return 1;
+  if (rightNeedsLeft) return -1;
+
   const byPriority =
     PRIORITY_ORDER.indexOf(left.priority) - PRIORITY_ORDER.indexOf(right.priority);
   if (byPriority !== 0) return byPriority;
 
-  // A prerequisite should come before the thing that needs it, where both
-  // sit at the same priority.
-  const leftNeedsRight = left.prerequisites.some((pre) => pre.key === right.skill.key);
-  const rightNeedsLeft = right.prerequisites.some((pre) => pre.key === left.skill.key);
-  if (leftNeedsRight) return 1;
-  if (rightNeedsLeft) return -1;
-
-  return left.skill.name.localeCompare(right.skill.name);
+  return (
+    left.skill.name.localeCompare(right.skill.name, 'en') ||
+    (left.skill.key ?? '').localeCompare(right.skill.key ?? '', 'en')
+  );
 }

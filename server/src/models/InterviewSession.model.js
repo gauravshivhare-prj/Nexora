@@ -59,6 +59,7 @@ const evaluationSchema = new mongoose.Schema(
       relevance: { type: Number, min: 0, max: 1, default: null },
     },
     compositeScore: { type: Number, min: 0, max: 1, default: null },
+    score: { type: Number, min: 0, max: 1, default: null },
     feedback: {
       type: String,
       maxlength: [INTERVIEW_LIMITS.feedbackSummary.max, 'Feedback exceeds maximum character limit'],
@@ -451,7 +452,8 @@ export function toPublicInterviewSession(session) {
       evaluation: q.evaluation
         ? {
             dimensions: q.evaluation.dimensions ? { ...q.evaluation.dimensions } : null,
-            compositeScore: q.evaluation.compositeScore,
+            compositeScore: q.evaluation.compositeScore ?? q.evaluation.score ?? null,
+            score: q.evaluation.score ?? q.evaluation.compositeScore ?? null,
             feedback: q.evaluation.feedback,
             strengths: q.evaluation.strengths ?? [],
             growthAreas: q.evaluation.growthAreas ?? [],

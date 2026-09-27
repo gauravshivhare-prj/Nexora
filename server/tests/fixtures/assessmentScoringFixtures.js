@@ -200,3 +200,29 @@ export const beginnerHighScorerSubmissionFixture = Object.freeze({
     q_beg_3: 'npm',
   },
 });
+
+/**
+ * Practice assessment for verifying evidence policy separation.
+ * Even a 100% score on this assessment should NOT grant verified evidence or trigger CareerTwin staleness.
+ */
+export const practiceTestAssessment = Object.freeze({
+  id: 'asm_scoring_practice_fixture',
+  version: 1,
+  skillKey: 'Node.js',
+  difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
+  isPractice: true,
+  title: 'Node.js Practice Assessment',
+  description: 'Practice assessment testing intermediate Node.js without verified outcome.',
+  passMark: 0.7,
+  timeLimitMinutes: 20,
+  questions: scoringTestAssessment.questions,
+});
+
+/**
+ * 7. Practice High Scorer: 100% correct on practice assessment.
+ */
+export const practiceHighScorerSubmissionFixture = Object.freeze({
+  studentId: 'student_practice_high',
+  assessmentId: 'asm_scoring_practice_fixture',
+  answers: correctSubmissionFixture.answers,
+});

@@ -11,6 +11,13 @@ import {
   uniqueSkills,
 } from '../src/domain/skills/skillKey.js';
 
+import {
+  ALIAS_REGRESSION_FIXTURES,
+  DISTINCT_SKILL_PAIRS,
+  INVALID_SKILL_INPUTS,
+} from './fixtures/skillTaxonomyFixtures.js';
+import { CAREER_ROLES } from '../src/domain/careers/roleCatalogue.js';
+
 /**
  * Canonical skill identity.
  *
@@ -26,6 +33,7 @@ describe('skillKey', () => {
     assert.ok(knownSkillNames().includes('Docker'));
     assert.deepEqual(canonicalSkill('NODE JS'), { key: 'nodejs', name: 'Node.js' });
   });
+
   it('ignores case, punctuation and spacing', () => {
     const key = skillKey('Node.js');
 
@@ -49,26 +57,64 @@ describe('skillKey', () => {
   });
 
   it('keeps genuinely different skills apart', () => {
-    // Every pair here is a near-miss that a looser rule would merge, and each
-    // merge would erase a real gap.
-    const distinct = [
-      ['React', 'React Native'],
-      ['SQL', 'PostgreSQL'],
-      ['Java', 'JavaScript'],
-      ['Machine Learning', 'Deep Learning'],
-      ['AWS', 'Azure'],
-      ['Git', 'GitHub'],
-      ['Docker', 'Docker Compose'],
-    ];
-
-    for (const [left, right] of distinct) {
+    for (const [left, right] of DISTINCT_SKILL_PAIRS) {
       assert.notEqual(skillKey(left), skillKey(right), `"${left}" and "${right}" merged`);
+      assert.ok(!isSameSkill(left, right), `isSameSkill wrongly true for "${left}" and "${right}"`);
     }
   });
 
   it('returns an empty key for a name with no usable content', () => {
-    for (const value of ['', '   ', '---', null, undefined]) {
+    for (const value of INVALID_SKILL_INPUTS) {
       assert.equal(skillKey(value), '');
+      assert.equal(canonicalSkill(value), null);
+    }
+  });
+
+  it('resolves all alias regression fixtures to correct key and canonical name', () => {
+    for (const fixture of ALIAS_REGRESSION_FIXTURES) {
+      const key = skillKey(fixture.input);
+      assert.equal(
+        key,
+        fixture.expectedKey,
+        `Expected skillKey("${fixture.input}") to be "${fixture.expectedKey}", got "${key}"`,
+      );
+
+      const resolved = canonicalSkill(fixture.input);
+      assert.ok(
+        resolved !== null,
+        `Expected canonicalSkill("${fixture.input}") to resolve, but got null`,
+      );
+      assert.equal(
+        resolved.key,
+        fixture.expectedKey,
+        `canonicalSkill("${fixture.input}").key expected "${fixture.expectedKey}", got "${resolved.key}"`,
+      );
+      assert.equal(
+        resolved.name,
+        fixture.expectedName,
+        `canonicalSkill("${fixture.input}").name expected "${fixture.expectedName}", got "${resolved.name}"`,
+      );
+
+      const displayName = skillDisplayName(fixture.input);
+      assert.equal(
+        displayName,
+        fixture.expectedName,
+        `skillDisplayName("${fixture.input}") expected "${fixture.expectedName}", got "${displayName}"`,
+      );
+    }
+  });
+
+  it('guarantees 100% of skills in role catalogue resolve to known canonical skills', () => {
+    for (const role of CAREER_ROLES) {
+      const allRoleSkills = [...role.requiredSkills, ...role.preferredSkills];
+      for (const skill of allRoleSkills) {
+        const canonical = canonicalSkill(skill);
+        assert.ok(
+          canonical !== null,
+          `Role "${role.title}" specifies skill "${skill}" which does not resolve to canonical skill`,
+        );
+        assert.equal(canonical.name, skill, `Canonical name mismatch for "${skill}"`);
+      }
     }
   });
 });

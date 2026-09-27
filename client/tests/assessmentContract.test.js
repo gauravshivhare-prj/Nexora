@@ -118,6 +118,7 @@ describe('A11 — Assessment Frontend Contract & Parity Suite', () => {
       assert.equal(normalized.title, 'React Core & Hooks Architecture');
       assert.equal(normalized.canonicalSkill, 'React');
       assert.equal(normalized.difficulty, 'intermediate');
+      assert.equal(normalized.isPractice, false);
       assert.equal(normalized.durationMinutes, 20);
       assert.equal(normalized.passMark, 0.7);
       assert.equal(normalized.totalQuestions, 1);
@@ -160,6 +161,7 @@ describe('A11 — Assessment Frontend Contract & Parity Suite', () => {
       assert.equal(normalized.assessmentId, 'asm_node_intermediate');
       assert.equal(normalized.status, 'in_progress');
       assert.equal(normalized.attemptNumber, 1);
+      assert.equal(normalized.isPractice, false);
       assert.equal(normalized.timeLimitMinutes, 25);
       assert.equal(normalized.result, null);
     });

@@ -1,5 +1,9 @@
 import { post, request } from './apiClient.js';
 import {
+  ASSESSMENT_GROUP,
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_LABELS,
+  ASSESSMENT_GROUP_VALUES,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   DIFFICULTY_ORDER,
@@ -12,6 +16,10 @@ import {
 
 // Re-export constants for easy access by UI consumers
 export {
+  ASSESSMENT_GROUP,
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_GROUP_LABELS,
+  ASSESSMENT_GROUP_VALUES,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   DIFFICULTY_ORDER,
@@ -41,18 +49,21 @@ export function toAssessment(raw) {
     slug: raw.slug || assessmentId,
     title: raw.title ?? '',
     description: raw.description ?? '',
-    canonicalSkill: raw.canonicalSkill ?? '',
+    canonicalSkill: raw.canonicalSkill ?? raw.skillName ?? raw.skillKey ?? '',
     difficulty: raw.difficulty ?? DIFFICULTY_LEVEL.BEGINNER,
+    group: raw.group ?? null,
+    isPractice: raw.isPractice === true,
     version: raw.version ?? 1,
-    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : 0,
+    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : (raw.timeLimitMinutes ?? 0),
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     totalQuestions: typeof raw.totalQuestions === 'number' ? raw.totalQuestions : (raw.questions?.length ?? 0),
     questions: Array.isArray(raw.questions)
       ? raw.questions.map((q) => ({
-          questionId: q.questionId ?? '',
+          questionId: q.questionId || q.id || '',
           prompt: q.prompt ?? '',
           type: q.type ?? QUESTION_TYPE.SINGLE_CHOICE,
           weight: typeof q.weight === 'number' ? q.weight : 1,
+          codeSnippet: q.codeSnippet ?? null,
           options: Array.isArray(q.options)
             ? q.options.map((opt) => ({
                 id: opt.id ?? '',
@@ -81,15 +92,16 @@ export function toAssessmentAttempt(raw) {
     id: attemptId,
     assessmentId: raw.assessmentId ?? '',
     attemptNumber: typeof raw.attemptNumber === 'number' ? raw.attemptNumber : 1,
+    isPractice: raw.isPractice === true,
     status: raw.status ?? ATTEMPT_STATUS.IN_PROGRESS,
     startedAt: raw.startedAt ?? null,
     expiresAt: raw.expiresAt ?? null,
-    submittedAt: raw.submittedAt ?? null,
-    timeSpentSeconds: typeof raw.timeSpentSeconds === 'number' ? raw.timeSpentSeconds : null,
+    submittedAt: raw.submittedAt ?? raw.completedAt ?? null,
+    timeSpentSeconds: typeof raw.timeSpentSeconds === 'number' ? raw.timeSpentSeconds : (raw.durationSeconds ?? null),
     timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : null,
     answers: Array.isArray(raw.answers) ? raw.answers : [],
-    result: raw.result ? toAssessmentResult(raw.result) : null,
-    evidenceCheck: raw.evidenceCheck ?? null,
+    result: raw.result ? toAssessmentResult(raw.result) : (raw.status === ATTEMPT_STATUS.EVALUATED ? toAssessmentResult(raw) : null),
+    evidenceCheck: raw.evidenceCheck ?? raw.evidenceCheckId ?? null,
   };
 }
 

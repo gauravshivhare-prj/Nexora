@@ -15,6 +15,8 @@ const questionResultSchema = new mongoose.Schema(
     prompt: { type: String, required: true },
     weight: { type: Number, required: true },
     studentAnswer: { type: mongoose.Schema.Types.Mixed, default: null },
+    status: { type: String, default: null },
+    scoringRule: { type: String, default: null },
     isCorrect: { type: Boolean, required: true },
     ratio: { type: Number, required: true, min: 0, max: 1 },
     earnedPoints: { type: Number, required: true, min: 0 },
@@ -64,6 +66,11 @@ const assessmentAttemptSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: DIFFICULTY_LEVEL_VALUES,
+    },
+    isPractice: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     status: {
       type: String,
@@ -165,9 +172,12 @@ assessmentAttemptSchema.index({ user: 1, assessmentId: 1, status: 1, attemptNumb
 export function toPublicAssessmentAttempt(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
+  const id = String(raw._id ?? raw.id);
+  const evidenceCheckRef = raw.evidenceCheck ? String(raw.evidenceCheck) : null;
 
   const questionBreakdown = (raw.questionResults ?? []).map((qr) => ({
     questionId: qr.questionId,
+    status: qr.status ?? (qr.isCorrect ? 'correct' : 'incorrect'),
     prompt: qr.prompt,
     weight: qr.weight,
     studentAnswer: qr.studentAnswer,
@@ -202,14 +212,16 @@ export function toPublicAssessmentAttempt(doc) {
     : null;
 
   return {
-    id: String(raw._id ?? raw.id),
-    attemptId: String(raw._id ?? raw.id),
+    id,
+    attemptId: id,
     assessmentId: raw.assessmentId,
     attemptNumber: raw.attemptNumber,
     version: raw.version,
     skillKey: raw.skillKey,
     skillName: raw.skillName,
+    canonicalSkill: raw.skillName ?? raw.skillKey,
     difficulty: raw.difficulty,
+    isPractice: raw.isPractice === true,
     status: raw.status,
     score: raw.score,
     passMark: raw.passMark,
@@ -221,10 +233,12 @@ export function toPublicAssessmentAttempt(doc) {
     correctQuestionsCount: raw.correctQuestionsCount,
     questionResults: questionBreakdown,
     result,
-    evidenceCheckId: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
+    evidenceCheckId: evidenceCheckRef,
+    evidenceCheck: evidenceCheckRef,
     startedAt: raw.startedAt,
     completedAt: raw.completedAt,
     durationSeconds: raw.durationSeconds,
+    timeSpentSeconds: raw.durationSeconds,
   };
 }
 

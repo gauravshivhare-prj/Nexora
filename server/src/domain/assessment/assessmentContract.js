@@ -27,6 +27,17 @@ export const DIFFICULTY_LEVELS = Object.freeze({
 export const DIFFICULTY_LEVEL_VALUES = Object.freeze(Object.values(DIFFICULTY_LEVELS));
 
 /**
+ * Canonical assessment domain groups aligning with engineering and role tracks.
+ */
+export const ASSESSMENT_GROUPS = Object.freeze({
+  ENGINEERING: 'engineering',
+  DATA: 'data',
+  INFRASTRUCTURE: 'infrastructure',
+});
+
+export const ASSESSMENT_GROUP_VALUES = Object.freeze(Object.values(ASSESSMENT_GROUPS));
+
+/**
  * Supported deterministic question types.
  */
 export const QUESTION_TYPES = Object.freeze({
@@ -105,8 +116,15 @@ export function validateAssessmentDefinition(def) {
   }
 
   // ID validation
-  if (typeof def.id !== 'string' || !/^[a-z0-9_-]+$/i.test(def.id.trim())) {
-    throw new Error('Assessment ID must be a non-empty alphanumeric slug (letters, numbers, hyphens, underscores).');
+  if (
+    typeof def.id !== 'string' ||
+    def.id.trim().length < 3 ||
+    def.id.trim().length > 64 ||
+    !/^[a-z0-9_-]+$/i.test(def.id.trim())
+  ) {
+    throw new Error(
+      'Assessment ID must be a non-empty alphanumeric slug between 3 and 64 characters (letters, numbers, hyphens, underscores).',
+    );
   }
   const id = def.id.trim();
 
@@ -142,6 +160,21 @@ export function validateAssessmentDefinition(def) {
   // Difficulty validation
   if (!DIFFICULTY_LEVEL_VALUES.includes(def.difficulty)) {
     throw new Error(`Invalid difficulty "${def.difficulty}". Must be one of: ${DIFFICULTY_LEVEL_VALUES.join(', ')}.`);
+  }
+
+  // Group validation (optional, must match ASSESSMENT_GROUP_VALUES if provided)
+  let group = null;
+  if (def.group !== undefined && def.group !== null) {
+    if (typeof def.group !== 'string' || def.group.trim().length === 0) {
+      throw new Error('Assessment group must be a non-empty string if provided.');
+    }
+    const normalizedGroup = def.group.trim().toLowerCase();
+    if (!ASSESSMENT_GROUP_VALUES.includes(normalizedGroup)) {
+      throw new Error(
+        `Invalid assessment group: "${def.group}". Allowed values: ${ASSESSMENT_GROUP_VALUES.join(', ')}.`,
+      );
+    }
+    group = normalizedGroup;
   }
 
   // Title & description validation
@@ -184,11 +217,14 @@ export function validateAssessmentDefinition(def) {
     skillName: canonical.name,
     secondarySkillKeys: secondarySkills.map((s) => s.key),
     difficulty: def.difficulty,
+    group,
     title: def.title.trim(),
     description: def.description.trim(),
     passMark,
     timeLimitMinutes,
     isPractice: Boolean(def.isPractice),
+    isActive: def.isActive !== false,
+    evaluatedBy: def.evaluatedBy ?? 'assessment-engine',
     evidencePolicy: def.evidencePolicy ?? null,
     questions: validatedQuestions,
   };
@@ -452,6 +488,11 @@ export function scoreQuestion(question, studentAnswer) {
         break;
       }
       const selected = String(studentAnswer).trim();
+      if (selected === '') {
+        status = QUESTION_ANSWER_STATUS.SKIPPED;
+        scoringRule = 'skipped_empty_single_choice';
+        break;
+      }
       const validOption =
         !Array.isArray(question.options) || question.options.some((o) => o.id === selected);
       if (!validOption) {
@@ -515,7 +556,8 @@ export function scoreQuestion(question, studentAnswer) {
         }
 
         const totalExpected = expectedSet.size;
-        const partial = (correctSelected - incorrectSelected) / totalExpected;
+        const partial =
+          totalExpected > 0 ? (correctSelected - incorrectSelected) / totalExpected : 0;
         ratio = Math.max(0, Math.min(1, partial));
 
         if (ratio === 1) {
@@ -553,12 +595,12 @@ export function scoreQuestion(question, studentAnswer) {
       }
 
       const { expectedOutput, trimWhitespace, caseSensitive } = question.expectedAnswer;
-      let rawStudent = String(studentAnswer);
-      let rawExpected = String(expectedOutput);
+      let rawStudent = String(studentAnswer).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      let rawExpected = String(expectedOutput).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
       if (trimWhitespace) {
-        rawStudent = rawStudent.replace(/\r\n/g, '\n').trim();
-        rawExpected = rawExpected.replace(/\r\n/g, '\n').trim();
+        rawStudent = rawStudent.trim();
+        rawExpected = rawExpected.trim();
       }
 
       if (!caseSensitive) {
@@ -586,12 +628,12 @@ export function scoreQuestion(question, studentAnswer) {
       }
 
       const { acceptedAnswers, caseSensitive, trimWhitespace } = question.expectedAnswer;
-      let cleanedStudent = String(studentAnswer);
+      let cleanedStudent = String(studentAnswer).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       if (trimWhitespace) cleanedStudent = cleanedStudent.trim();
       if (!caseSensitive) cleanedStudent = cleanedStudent.toLowerCase();
 
       const matched = acceptedAnswers.some((ans) => {
-        let cleanedAns = String(ans);
+        let cleanedAns = String(ans).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         if (trimWhitespace) cleanedAns = cleanedAns.trim();
         if (!caseSensitive) cleanedAns = cleanedAns.toLowerCase();
         return cleanedStudent === cleanedAns;
@@ -609,6 +651,11 @@ export function scoreQuestion(question, studentAnswer) {
         parsed = studentAnswer;
       } else if (typeof studentAnswer === 'string') {
         const lower = studentAnswer.trim().toLowerCase();
+        if (lower === '') {
+          status = QUESTION_ANSWER_STATUS.SKIPPED;
+          scoringRule = 'skipped_empty_boolean';
+          break;
+        }
         if (lower === 'true') parsed = true;
         if (lower === 'false') parsed = false;
       }
@@ -792,10 +839,11 @@ export function evaluateAssessmentSubmission({
   };
 
   // Evidence policy evaluation: High score does not automatically grant verified if policy requires stronger proof
+  const isAiEvaluated = submission.evaluatedBy === 'ai' || validatedAssessment.evaluatedBy === 'ai';
   const requiresStrongerProof =
     (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER &&
       submission.evidencePolicy?.allowBeginnerVerified !== true) ||
-    submission.evaluatedBy === 'ai' ||
+    isAiEvaluated ||
     submission.isPractice === true ||
     validatedAssessment.isPractice === true ||
     submission.evidencePolicy?.requiresStrongerProof === true ||
@@ -816,12 +864,12 @@ export function evaluateAssessmentSubmission({
   } else if (requiresStrongerProof) {
     eligibleForVerified = false;
     evidenceStrength = EVIDENCE_STRENGTH.SUPPORTED;
-    if (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER) {
-      evidenceReason =
-        'Beginner assessments provide supported evidence but do not meet the intermediate threshold required for verified provenance.';
-    } else if (submission.evaluatedBy === 'ai') {
+    if (isAiEvaluated) {
       evidenceReason =
         'AI Copilot evaluations are advisory and cannot produce verified evidence directly.';
+    } else if (validatedAssessment.difficulty === DIFFICULTY_LEVELS.BEGINNER) {
+      evidenceReason =
+        'Beginner assessments provide supported evidence but do not meet the intermediate threshold required for verified provenance.';
     } else if (submission.isPractice || validatedAssessment.isPractice) {
       evidenceReason =
         'Practice assessments establish supported evidence but cannot produce verified provenance.';
@@ -850,13 +898,11 @@ export function evaluateAssessmentSubmission({
     assessmentId: validatedAssessment.id,
     completedAt: evalDate,
     passMark: validatedAssessment.passMark,
+    difficulty: validatedAssessment.difficulty,
+    isPractice: Boolean(validatedAssessment.isPractice || submission.isPractice),
+    evaluatedBy: submission.evaluatedBy ?? validatedAssessment.evaluatedBy ?? 'assessment-engine',
+    eligibleForVerified,
   });
-
-  // If evidence policy determined that stronger proof is required, override eligibleForVerified
-  if (!eligibleForVerified) {
-    evidenceResult.eligibleForVerified = false;
-    evidenceResult.evidence = null;
-  }
 
   return {
     attemptId: submission.attemptId ?? null,

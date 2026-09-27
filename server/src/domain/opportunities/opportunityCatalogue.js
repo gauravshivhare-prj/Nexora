@@ -45,37 +45,56 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
  * Invalid, duplicated, or stale records are rejected before matching. This is
  * intentionally strict: an unsupported catalogue item must not leak into a
  * student's result merely because one field happened to match.
+ *
+ * Supports optional filters (roleId, skill) without compromising deterministic matching.
  */
 export function matchOpportunities(
   twin,
   profile,
   catalogue = OPPORTUNITY_CATALOGUE,
+  filters = {},
 ) {
   validateCatalogue(catalogue);
 
   const verifiedSkills = new Set(
     (twin?.skills ?? [])
-      .filter((skill) => skill.strength === EVIDENCE_STRENGTH.VERIFIED)
-      .map((skill) => skill.key ?? skillKey(skill.name)),
+      .filter((skill) => skill && skill.strength === EVIDENCE_STRENGTH.VERIFIED)
+      .map((skill) => skill.key || (skill.name ? skillKey(skill.name) : ''))
+      .filter(Boolean),
   );
-  const targetRoleId = resolveTargetRoleId(profile?.career?.targetRole);
+  const targetRoleId = resolveTargetRoleId(profile?.career?.targetRole ?? profile?.targetRole);
+
+  const filterRoleId = filters?.roleId ? filters.roleId.trim().toLowerCase() : null;
+  const filterSkillKey = filters?.skill ? skillKey(filters.skill) : null;
 
   return catalogue
-    .filter((opportunity) => isCurrentSource(opportunity.source))
+    .filter((opportunity) => isCurrentSource(opportunity?.source))
+    .filter((opportunity) => {
+      if (filterRoleId && !opportunity.targetRoleIds?.some((r) => r.toLowerCase() === filterRoleId)) {
+        return false;
+      }
+      if (filterSkillKey && !opportunity.requiredSkills?.some((s) => skillKey(s) === filterSkillKey)) {
+        return false;
+      }
+      return true;
+    })
     .map((opportunity) => matchOne(opportunity, verifiedSkills, targetRoleId))
     .filter(Boolean);
 }
 
 function matchOne(opportunity, verifiedSkills, targetRoleId) {
+  if (!opportunity || typeof opportunity !== 'object') return null;
   const matchedEligibility = [];
 
-  for (const rule of opportunity.eligibility) {
+  for (const rule of opportunity.eligibility ?? []) {
+    if (!rule || typeof rule !== 'object') return null;
     if (rule.type === 'verified_skills') {
-      const skills = rule.skills.map((name) => skillKey(name));
-      if (!skills.every((key) => verifiedSkills.has(key))) return null;
+      const skills = (rule.skills ?? []).map((name) => skillKey(name)).filter(Boolean);
+      if (skills.length === 0 || !skills.every((key) => verifiedSkills.has(key))) return null;
       matchedEligibility.push({ type: rule.type, skills: rule.skills });
     } else if (rule.type === 'target_role') {
-      if (!targetRoleId || !rule.roleIds.includes(targetRoleId)) return null;
+      const roleIds = Array.isArray(rule.roleIds) ? rule.roleIds : [];
+      if (!targetRoleId || !roleIds.includes(targetRoleId)) return null;
       matchedEligibility.push({ type: rule.type, roleIds: rule.roleIds });
     } else {
       return null;
@@ -97,10 +116,12 @@ function matchOne(opportunity, verifiedSkills, targetRoleId) {
 
 function resolveTargetRoleId(targetRole) {
   if (!targetRole || typeof targetRole !== 'string') return null;
-  const normalized = targetRole.trim().toLowerCase();
+  const trimmed = targetRole.trim().toLowerCase();
   return (
     CAREER_ROLES.find(
-      (role) => role.id === normalized || role.title.toLowerCase() === normalized,
+      (role) =>
+        role.id.toLowerCase() === trimmed ||
+        role.title.toLowerCase() === trimmed,
     )?.id ?? null
   );
 }
@@ -122,6 +143,10 @@ function isCurrentSource(metadata) {
 }
 
 function validateCatalogue(catalogue) {
+  if (!Array.isArray(catalogue)) {
+    throw new Error('Opportunity catalogue must be an array.');
+  }
+
   const ids = new Set();
   for (const opportunity of catalogue) {
     if (!opportunity?.id || ids.has(opportunity.id)) {

@@ -1,4 +1,9 @@
-import { EVIDENCE_SOURCES, makeEvidence, strongestStrength } from '../evidence/evidence.js';
+import {
+  EVIDENCE_SOURCES,
+  EVIDENCE_STRENGTH_ORDER,
+  makeEvidence,
+  strongestStrength,
+} from '../evidence/evidence.js';
 import { skillDisplayName, skillKey, uniqueSkills } from '../skills/skillKey.js';
 
 /**
@@ -231,8 +236,7 @@ function compareSkills(left, right) {
   return left.name.localeCompare(right.name);
 }
 
-const STRENGTH_RANK = { claimed: 0, supported: 1, verified: 2 };
-const rank = (strength) => STRENGTH_RANK[strength] ?? -1;
+const rank = (strength) => EVIDENCE_STRENGTH_ORDER.indexOf(strength);
 
 /**
  * Whether a certification's title names a skill.

@@ -12,25 +12,27 @@ import { CareerTwin, StudentProfile } from '../models/index.js';
 export async function getOpportunities(userId, filters = {}) {
   const [twin, profile] = await Promise.all([
     CareerTwin.findOne({ user: userId }).lean(),
-    StudentProfile.findOne({ user: userId }).select('career.targetRole').lean(),
+    StudentProfile.findOne({ user: userId }).select('career.targetRole targetRole').lean(),
   ]);
 
-  let matched = matchOpportunities(twin, profile);
-
+  let effectiveFilters = { ...filters };
   const roleFilter = filters?.role || filters?.roleId;
   if (roleFilter && typeof roleFilter === 'string' && roleFilter.trim() !== '') {
     const normalized = roleFilter.trim().toLowerCase();
-    matched = matched.filter((opp) =>
-      opp.targetRoleIds.some((id) => id.toLowerCase() === normalized) ||
-      opp.targetRoleIds.some((id) => {
-        const r = CAREER_ROLES.find((cr) => cr.id === id);
-        return r && r.title.toLowerCase() === normalized;
-      }),
+    const matchedRole = CAREER_ROLES.find(
+      (cr) => cr.id.toLowerCase() === normalized || cr.title.toLowerCase() === normalized,
     );
+    if (matchedRole) {
+      effectiveFilters.roleId = matchedRole.id;
+    } else {
+      effectiveFilters.roleId = roleFilter.trim();
+    }
   }
 
+  const opportunities = matchOpportunities(twin, profile, OPPORTUNITY_CATALOGUE, effectiveFilters);
+
   return {
-    opportunities: matched,
+    opportunities,
     catalogue: {
       version: OPPORTUNITY_CATALOGUE_VERSION,
       source: OPPORTUNITY_CATALOGUE[0]?.source ?? null,
@@ -40,6 +42,8 @@ export async function getOpportunities(userId, filters = {}) {
       usesAi: false,
       requiresVerifiedEvidence: true,
       sourceStatus: 'curated_internal',
+      liveCoverage: false,
+      note: 'Opportunities are curated internal practice exercises and apprenticeships, not live external job postings.',
     },
   };
 }

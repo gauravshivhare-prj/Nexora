@@ -18,7 +18,7 @@ This document defines the controlled development sequence for Nexora.
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
 | 8 — Assessment & AI Interview | Complete (Backend assessment engine & AI interview session lifecycle, prompt boundary hardening, schema validation, red-team suite, and institutional evidence integration; UI scheduled for future phase) |
-| 9 — Opportunity Matching | Complete (Backend deterministic curated catalogue matching & evidence checking delivered; see docs/opportunities.md) |
+| 9 — Opportunity Matching | Complete (Backend curated catalogue, verified-evidence matching, REST endpoint, and deterministic eligibility; see docs/opportunities.md; no live scraping/job board claims) |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
 A phase is marked complete only when its exit criteria are met and its tests
@@ -216,7 +216,8 @@ published formula, and named matched/missing skills each have a test.
   naming the status it would reach and whether it is available yet.
 - Priority ordering by what to act on next.
 - `GET /api/careers/roles/:roleId/skill-gap`.
-- 22 tests: 15 pure-function, 7 API.
+- `GET /api/careers/roles/:roleId/readiness`: Deterministic role-scoped evidence projection (`insufficient_data` / `partial` / `supported` / `verified`), fresh/stale status, and non-verified blockers. (See [readiness.md](readiness.md)).
+- 22 tests: 15 pure-function, 7 API (plus 12 readiness unit/contract/API tests).
 
 All three exit criteria are met, each with a direct test: a reason on every
 skill, counts rather than unbounded scores, and a 404 when the role is not
@@ -298,7 +299,7 @@ the thing this architecture exists to prevent. Items expose
 **Delivered — AI Interview Architecture & Safety**
 - **AI Interview Session Architecture**:
   - `InterviewSession` model enforcing ownership, strict lifecycle states (`initialized` → `in_progress` → `completed` | `abandoned` | `timed_out`), and question/session attempt limits.
-  - Curated question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy (`SKILL_TAXONOMY_VERSION = 1`).
+  - Curated question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy (`SKILL_TAXONOMY_VERSION = 2`).
   - Full REST API suite: session creation, listing, retrieval, starting, answering, completing, and abandoning.
 - **Prompt Boundary Hardening & Safety**:
   - Candidate answers strictly enclosed in `<candidate_untrusted_answer>` XML tags with XML character escaping, neutralizing delimiter breakout, instruction override, or rubric manipulation.
@@ -335,6 +336,12 @@ the thing this architecture exists to prevent. Items expose
 - Deterministic eligibility checks against student's verified skills and target role.
 - Transparent match explanations showing which verified evidence satisfied eligibility rules.
 - Strict non-goals enforced: no scraping of external job boards, no fake live listing claims, and no LLM hallucinated roles.
+
+**Delivered — Backend Foundation**
+- **Curated Catalogue**: Versioned reference catalogue (`domain/opportunities/opportunityCatalogue.js`, `OPPORTUNITY_CATALOGUE_VERSION = 1`) with stable, source-qualified IDs (`curated_internal:backend-apprenticeship`, `curated_internal:frontend-apprenticeship`) and explicit `source.asOf` metadata.
+- **Deterministic Matcher**: Pure-function engine (`matchOpportunities`) matching verified skills from the student's CareerTwin (`verified_skills`) and explicit stated target roles (`target_role`).
+- **REST API Endpoint**: `GET /api/opportunities` with authentication and optional query filtering (`?roleId=`, `?skill=`).
+- **Strict Non-Goals**: No scraping, live job-board claims, employer feeds, application submission, or LLM-invented opportunities.
 
 **Exit criteria**
 - Opportunity records contain immutable IDs, source type (`curated_internal`), version, and date metadata.

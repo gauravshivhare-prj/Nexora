@@ -17,7 +17,18 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
     score: { type: Number, min: 0, max: 1, required: true },
     passMark: { type: Number, min: 0, max: 1, required: true },
     outcome: { type: String, enum: Object.values(CHECK_OUTCOMES), required: true },
-    eligibleForVerified: { type: Boolean, required: true },
+    eligibleForVerified: {
+      type: Boolean,
+      required: true,
+      validate: {
+        validator: function (val) {
+          if (val === true && this.evaluatedBy === 'ai') return false;
+          if (val === true && this.outcome !== CHECK_OUTCOMES.PASS) return false;
+          return true;
+        },
+        message: 'AI evaluations and non-passing outcomes cannot be eligible for verified evidence.',
+      },
+    },
     evaluatedBy: { type: String, required: true },
     reference: { type: String, required: true, maxlength: 200 },
     completedAt: { type: Date, required: true },

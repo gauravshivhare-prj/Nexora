@@ -36,25 +36,31 @@ import { skillDisplayName, skillKey } from '../skills/skillKey.js';
  * @param {import('./roleCatalogue.js').CareerRole} role
  * @returns {object} Score, band, and the full reasoning behind both.
  */
-export function scoreRoleMatch(twin, role) {
-  const held = indexSkills(twin.skills ?? []);
+export function scoreRoleMatch(twin, role, precomputedHeld = null) {
+  const safeTwin = twin && typeof twin === 'object' ? twin : {};
+  const held = precomputedHeld ?? indexSkills(safeTwin.skills ?? []);
 
-  const required = classify(role.requiredSkills, held);
-  const preferred = classify(role.preferredSkills, held);
+  const requiredSkills = Array.isArray(role?.requiredSkills) ? role.requiredSkills : [];
+  const preferredSkills = Array.isArray(role?.preferredSkills) ? role.preferredSkills : [];
+
+  const required = classify(requiredSkills, held);
+  const preferred = classify(preferredSkills, held);
 
   const dimensions = {
-    requiredSkills: ratio(required.matched.length, role.requiredSkills.length),
-    preferredSkills: ratio(preferred.matched.length, role.preferredSkills.length),
+    requiredSkills: ratio(required.matched.length, requiredSkills.length),
+    preferredSkills: ratio(preferred.matched.length, preferredSkills.length),
     evidenceStrength: evidenceScore([...required.matched, ...preferred.matched]),
-    interestAlignment: interestScore(twin, role),
-    backgroundAlignment: backgroundScore(twin, role),
+    interestAlignment: interestScore(safeTwin, role),
+    backgroundAlignment: backgroundScore(safeTwin, role),
   };
 
   const score = Math.round(
-    Object.entries(dimensions).reduce(
-      (total, [name, value]) => total + value * DIMENSION_WEIGHTS[name],
-      0,
-    ) * 100,
+    (dimensions.requiredSkills * DIMENSION_WEIGHTS.requiredSkills +
+      dimensions.preferredSkills * DIMENSION_WEIGHTS.preferredSkills +
+      dimensions.evidenceStrength * DIMENSION_WEIGHTS.evidenceStrength +
+      dimensions.interestAlignment * DIMENSION_WEIGHTS.interestAlignment +
+      dimensions.backgroundAlignment * DIMENSION_WEIGHTS.backgroundAlignment) *
+      100,
   );
 
   const band = bandFor(score);
@@ -102,11 +108,17 @@ export function scoreRoleMatch(twin, role) {
  * @returns {{ matches: object[], catalogue: object }}
  */
 export function rankRoles(twin, { limit = 5, includeBelowThreshold = false } = {}) {
-  const scored = CAREER_ROLES.map((role) => scoreRoleMatch(twin, role))
+  const safeTwin = twin && typeof twin === 'object' ? twin : {};
+  const held = indexSkills(safeTwin.skills ?? []);
+  const scored = CAREER_ROLES.map((role) => scoreRoleMatch(safeTwin, role, held))
     .filter((match) => includeBelowThreshold || match.score >= MINIMUM_RECOMMENDABLE_SCORE)
-    // Ties broken by title so the order is stable across runs — an unstable
-    // ordering would make a recommendation list appear to change on its own.
-    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title));
+    // Ties broken deterministically by title, then roleId so ordering is rock-solid across runs and environments.
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.title.localeCompare(right.title, 'en') ||
+        (left.roleId ?? '').localeCompare(right.roleId ?? '', 'en'),
+    );
 
   return {
     matches: scored.slice(0, limit),
@@ -121,9 +133,26 @@ export function rankRoles(twin, { limit = 5, includeBelowThreshold = false } = {
 
 // ------------------------------------------------------------------ scoring
 
-/** The student's skills, keyed for lookup. */
+/** The student's skills, keyed for lookup with duplicate resolution retaining highest credit. */
 function indexSkills(skills) {
-  return new Map(skills.map((skill) => [skill.key, skill]));
+  const map = new Map();
+  for (const skill of skills ?? []) {
+    if (!skill || typeof skill !== 'object') continue;
+    const key = skill.key || (skill.name ? skillKey(skill.name) : '');
+    if (!key) continue;
+
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, skill);
+    } else {
+      const existingCredit = STRENGTH_CREDIT[existing.strength] ?? 0;
+      const newCredit = STRENGTH_CREDIT[skill.strength] ?? 0;
+      if (newCredit > existingCredit) {
+        map.set(key, skill);
+      }
+    }
+  }
+  return map;
 }
 
 /**
@@ -136,9 +165,15 @@ function indexSkills(skills) {
 function classify(roleSkills, held) {
   const matched = [];
   const missing = [];
+  const seenKeys = new Set();
 
-  for (const name of roleSkills) {
-    const skill = held.get(skillKey(name));
+  for (const name of roleSkills ?? []) {
+    if (!name || typeof name !== 'string') continue;
+    const key = skillKey(name);
+    if (!key || seenKeys.has(key)) continue;
+    seenKeys.add(key);
+
+    const skill = held.get(key);
 
     if (skill) matched.push({ required: name, skill });
     else missing.push(skillDisplayName(name));
@@ -186,21 +221,32 @@ function evidenceScore(matches) {
  * few points at most.
  */
 function interestScore(twin, role) {
-  const roleWords = normalise(role.title);
+  const roleTitleWords = normalise(role?.title);
+  const meaningfulRoleWords = new Set(roleTitleWords.filter((w) => !GENERIC_TITLE_WORDS.has(w)));
 
-  const statedTarget = (twin.targetRoles ?? []).some(
-    (target) => target.origin === 'student' && sharesWord(normalise(target.title), roleWords),
+  const statedTarget = (twin?.targetRoles ?? []).some(
+    (target) =>
+      target &&
+      target.origin === 'student' &&
+      sharesWord(normalise(target.title), meaningfulRoleWords),
   );
   if (statedTarget) return 1;
 
-  const interests = twin.interests ?? [];
-  const matchesInterest = interests.some(
-    (interest) =>
-      sharesWord(normalise(interest), roleWords) ||
-      [...role.requiredSkills, ...role.preferredSkills].some(
-        (skill) => skillKey(skill) === skillKey(interest),
-      ),
+  const interests = twin?.interests ?? [];
+  if (interests.length === 0) return 0;
+
+  const roleSkillKeys = new Set(
+    [...(role?.requiredSkills ?? []), ...(role?.preferredSkills ?? [])]
+      .map(skillKey)
+      .filter(Boolean),
   );
+
+  const matchesInterest = interests.some((interest) => {
+    if (!interest) return false;
+    if (sharesWord(normalise(interest), meaningfulRoleWords)) return true;
+    const key = skillKey(interest);
+    return Boolean(key && roleSkillKeys.has(key));
+  });
 
   return matchesInterest ? 0.5 : 0;
 }
@@ -218,7 +264,7 @@ function interestScore(twin, role) {
  * deliberately no exclusion rule anywhere in this file.
  */
 function backgroundScore(twin, role) {
-  const branch = twin.academic?.branch;
+  const branch = twin?.academic?.branch;
   if (!branch) return 0.5;
 
   // Compared as text rather than word sets, and in both directions, so
@@ -226,7 +272,7 @@ function backgroundScore(twin, role) {
   // and a listed "computer science and engineering" matches a branch of
   // "Computer Science".
   const normalised = flatten(branch);
-  const matches = role.commonBackgrounds.some((background) => {
+  const matches = (role?.commonBackgrounds ?? []).some((background) => {
     const candidate = flatten(background);
     return normalised.includes(candidate) || candidate.includes(normalised);
   });
@@ -258,10 +304,15 @@ function collectEvidence(matches) {
   const seen = new Map();
 
   for (const { skill } of matches) {
-    for (const item of skill.evidence ?? []) {
-      const key = `${item.source}:${item.reference ?? item.detail}`;
+    for (const item of skill?.evidence ?? []) {
+      if (!item || typeof item !== 'object') continue;
+      const key = `${item.source}:${item.reference ?? item.detail ?? ''}`;
       if (seen.has(key)) {
-        seen.get(key).skills.push(skill.name);
+        const record = seen.get(key);
+        if (skill?.name && !record.skills.includes(skill.name)) {
+          record.skills.push(skill.name);
+          record.skills.sort((a, b) => a.localeCompare(b, 'en'));
+        }
         continue;
       }
 
@@ -270,14 +321,18 @@ function collectEvidence(matches) {
         strength: item.strength,
         detail: item.detail,
         reference: item.reference ?? null,
-        skills: [skill.name],
+        skills: skill?.name ? [skill.name] : [],
       });
     }
   }
 
   // Strongest evidence first — it is the most persuasive thing to read.
   const order = { verified: 0, supported: 1, claimed: 2 };
-  return [...seen.values()].sort((left, right) => order[left.strength] - order[right.strength]);
+  return [...seen.values()].sort((left, right) => {
+    const leftOrder = order[left.strength] ?? 3;
+    const rightOrder = order[right.strength] ?? 3;
+    return leftOrder - rightOrder || (left.detail ?? '').localeCompare(right.detail ?? '', 'en');
+  });
 }
 
 /**
@@ -353,7 +408,6 @@ const GENERIC_TITLE_WORDS = new Set([
   'applications',
 ]);
 
-function sharesWord(left, right) {
-  const meaningful = new Set(right.filter((word) => !GENERIC_TITLE_WORDS.has(word)));
-  return left.some((word) => meaningful.has(word));
+function sharesWord(leftWords, meaningfulSet) {
+  return leftWords.some((word) => meaningfulSet.has(word));
 }

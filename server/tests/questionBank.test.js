@@ -13,8 +13,10 @@ import {
   DIFFICULTY_LEVEL_VALUES,
   QUESTION_TYPES,
   evaluateAssessmentSubmission,
+  scoreQuestion,
   validateAssessmentDefinition,
 } from '../src/domain/assessment/assessmentContract.js';
+import { getAssessmentCatalog } from '../src/domain/assessment/assessmentCatalog.js';
 import { canonicalSkill, skillKey } from '../src/domain/skills/skillKey.js';
 import { ASSESSMENT_LIMITS } from '../src/constants/assessmentPolicy.js';
 
@@ -284,5 +286,191 @@ describe('A4 — Curated Question Bank: Dynamic Assessment Assembly', () => {
       () => assembleAssessmentFromBank({ skill: 'MadeUpLanguage_XYZ' }),
       /Unknown canonical skill/,
     );
+  });
+});
+
+describe('A06 — Question-Bank Quality & Cross-Platform Integrity Audit', () => {
+  const bank = getQuestionBank();
+  const catalog = getAssessmentCatalog();
+  const catalogQuestions = catalog.flatMap((asm) => asm.questions);
+
+  it('audits answer validity across all questions in question bank', () => {
+    for (const q of bank) {
+      if (q.type === QUESTION_TYPES.SINGLE_CHOICE) {
+        assert.ok(Array.isArray(q.options) && q.options.length >= 2);
+        const optIds = q.options.map((o) => o.id);
+        assert.ok(optIds.includes(q.expectedAnswer.correctOptionId));
+        const evalRes = scoreQuestion(q, q.expectedAnswer.correctOptionId);
+        assert.equal(evalRes.isCorrect, true);
+        assert.equal(evalRes.status, 'correct');
+      } else if (q.type === QUESTION_TYPES.MULTIPLE_CHOICE) {
+        assert.ok(Array.isArray(q.options) && q.options.length >= 2);
+        const optIds = q.options.map((o) => o.id);
+        for (const correctId of q.expectedAnswer.correctOptionIds) {
+          assert.ok(optIds.includes(correctId));
+        }
+        const evalRes = scoreQuestion(q, q.expectedAnswer.correctOptionIds);
+        assert.equal(evalRes.isCorrect, true);
+        assert.equal(evalRes.status, 'correct');
+      } else if (q.type === QUESTION_TYPES.CODE_OUTPUT) {
+        assert.equal(typeof q.expectedAnswer.expectedOutput, 'string');
+        assert.ok(q.expectedAnswer.expectedOutput.length > 0);
+        const evalRes = scoreQuestion(q, q.expectedAnswer.expectedOutput);
+        assert.equal(evalRes.isCorrect, true);
+        const crlfAnswer = q.expectedAnswer.expectedOutput.replace(/\n/g, '\r\n');
+        const evalCrlf = scoreQuestion(q, crlfAnswer);
+        assert.equal(evalCrlf.isCorrect, true);
+      } else if (q.type === QUESTION_TYPES.SHORT_ANSWER) {
+        assert.ok(Array.isArray(q.expectedAnswer.acceptedAnswers));
+        assert.ok(q.expectedAnswer.acceptedAnswers.length > 0);
+        for (const accepted of q.expectedAnswer.acceptedAnswers) {
+          assert.equal(typeof accepted, 'string');
+          assert.ok(accepted.trim().length > 0);
+          const evalRes = scoreQuestion(q, accepted);
+          assert.equal(evalRes.isCorrect, true);
+        }
+      } else if (q.type === QUESTION_TYPES.BOOLEAN) {
+        assert.equal(typeof q.expectedAnswer.expectedValue, 'boolean');
+        const evalCorrect = scoreQuestion(q, q.expectedAnswer.expectedValue);
+        assert.equal(evalCorrect.isCorrect, true);
+        const evalWrong = scoreQuestion(q, !q.expectedAnswer.expectedValue);
+        assert.equal(evalWrong.isCorrect, false);
+      }
+    }
+  });
+
+  it('audits answer validity across all questions in assessment catalog', () => {
+    for (const q of catalogQuestions) {
+      if (q.type === QUESTION_TYPES.SINGLE_CHOICE) {
+        assert.ok(Array.isArray(q.options) && q.options.length >= 2);
+        const optIds = q.options.map((o) => o.id);
+        assert.ok(optIds.includes(q.expectedAnswer.correctOptionId));
+        const evalRes = scoreQuestion(q, q.expectedAnswer.correctOptionId);
+        assert.equal(evalRes.isCorrect, true);
+      } else if (q.type === QUESTION_TYPES.MULTIPLE_CHOICE) {
+        assert.ok(Array.isArray(q.options) && q.options.length >= 2);
+        const optIds = q.options.map((o) => o.id);
+        for (const correctId of q.expectedAnswer.correctOptionIds) {
+          assert.ok(optIds.includes(correctId));
+        }
+        const evalRes = scoreQuestion(q, q.expectedAnswer.correctOptionIds);
+        assert.equal(evalRes.isCorrect, true);
+      } else if (q.type === QUESTION_TYPES.CODE_OUTPUT) {
+        assert.equal(typeof q.expectedAnswer.expectedOutput, 'string');
+        const evalRes = scoreQuestion(q, q.expectedAnswer.expectedOutput);
+        assert.equal(evalRes.isCorrect, true);
+        const crlfAnswer = q.expectedAnswer.expectedOutput.replace(/\n/g, '\r\n');
+        assert.equal(scoreQuestion(q, crlfAnswer).isCorrect, true);
+      } else if (q.type === QUESTION_TYPES.SHORT_ANSWER) {
+        assert.ok(Array.isArray(q.expectedAnswer.acceptedAnswers));
+        for (const accepted of q.expectedAnswer.acceptedAnswers) {
+          assert.equal(scoreQuestion(q, accepted).isCorrect, true);
+        }
+      } else if (q.type === QUESTION_TYPES.BOOLEAN) {
+        assert.equal(typeof q.expectedAnswer.expectedValue, 'boolean');
+        assert.equal(scoreQuestion(q, q.expectedAnswer.expectedValue).isCorrect, true);
+        assert.equal(scoreQuestion(q, !q.expectedAnswer.expectedValue).isCorrect, false);
+      }
+    }
+  });
+
+  it('verifies verified quality fixes for short-answer accepted answers', () => {
+    // Git staging in question bank
+    const gitQ = getQuestionById('qb_git_beg_staging');
+    assert.ok(gitQ);
+    assert.ok(gitQ.expectedAnswer.acceptedAnswers.includes('git add --all'));
+    assert.equal(scoreQuestion(gitQ, 'git add --all').isCorrect, true);
+    assert.equal(scoreQuestion(gitQ, '  GIT ADD --ALL  ').isCorrect, true);
+
+    // Docker CLI in assessment catalog
+    const dockerQ = catalogQuestions.find((q) => q.id === 'q_docker_cli');
+    assert.ok(dockerQ);
+    assert.ok(dockerQ.expectedAnswer.acceptedAnswers.includes('docker container prune --force'));
+    assert.ok(dockerQ.expectedAnswer.acceptedAnswers.includes('docker system prune -f'));
+    assert.ok(dockerQ.expectedAnswer.acceptedAnswers.includes('docker system prune --force'));
+    assert.equal(scoreQuestion(dockerQ, 'docker container prune --force').isCorrect, true);
+    assert.equal(scoreQuestion(dockerQ, 'docker system prune -f').isCorrect, true);
+  });
+
+  it('verifies cross-platform newline normalization when trimWhitespace is false', () => {
+    const qNoTrim = {
+      id: 'q_custom_notrim',
+      type: QUESTION_TYPES.CODE_OUTPUT,
+      weight: 1,
+      expectedAnswer: {
+        expectedOutput: 'Line1\nLine2',
+        trimWhitespace: false,
+        caseSensitive: true,
+      },
+    };
+
+    // Submitting with Windows \r\n should match Linux \n expectedOutput even when trimWhitespace is false
+    const windowsAnswer = 'Line1\r\nLine2';
+    const evalRes = scoreQuestion(qNoTrim, windowsAnswer);
+    assert.equal(evalRes.isCorrect, true, 'CRLF must match LF even when trimWhitespace is false');
+
+    // But leading/trailing whitespace difference should still be respected
+    const trailingSpaceAnswer = 'Line1\nLine2 ';
+    assert.equal(scoreQuestion(qNoTrim, trailingSpaceAnswer).isCorrect, false);
+  });
+
+  it('audits skill mapping: all questions ground in canonical taxonomy with coverage for frontend', () => {
+    for (const q of bank) {
+      const canonical = canonicalSkill(q.skillKey);
+      assert.ok(canonical, `Question "${q.id}" has invalid canonical skill "${q.skillKey}"`);
+      assert.equal(q.skillKey, canonical.key);
+      assert.equal(q.skillName, canonical.name);
+    }
+
+    // Verify React and HTML questions are now present and assemblable
+    const reactQuestions = getQuestionsForSkill({ skill: 'React' });
+    assert.ok(reactQuestions.length >= 2, 'Must have React questions');
+    const assembledReact = assembleAssessmentFromBank({ skill: 'React', questionCount: 2 });
+    assert.equal(assembledReact.skillKey, 'react');
+    assert.equal(assembledReact.questions.length, 2);
+
+    const htmlQuestions = getQuestionsForSkill({ skill: 'HTML' });
+    assert.ok(htmlQuestions.length >= 2, 'Must have HTML questions');
+    const assembledHtml = assembleAssessmentFromBank({ skill: 'HTML', questionCount: 2 });
+    assert.equal(assembledHtml.skillKey, 'html');
+    assert.equal(assembledHtml.questions.length, 2);
+  });
+
+  it('audits duplicates: verifies zero duplicate IDs or prompts across bank and catalog', () => {
+    // 1. Question IDs
+    const bankIds = new Set(bank.map((q) => q.id));
+    assert.equal(bankIds.size, bank.length, 'No duplicate IDs in question bank');
+
+    const catalogIds = new Set(catalogQuestions.map((q) => q.id));
+    assert.equal(catalogIds.size, catalogQuestions.length, 'No duplicate IDs in catalog');
+
+    for (const id of bankIds) {
+      assert.ok(!catalogIds.has(id), `Question ID "${id}" duplicated between bank and catalog`);
+    }
+
+    // 2. Question prompts (normalized)
+    const normalizePrompt = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const bankPrompts = new Map();
+    for (const q of bank) {
+      const norm = normalizePrompt(q.prompt);
+      assert.ok(!bankPrompts.has(norm), `Duplicate prompt in bank: "${q.prompt}" and "${bankPrompts.get(norm)}"`);
+      bankPrompts.set(norm, q.id);
+    }
+
+    for (const q of catalogQuestions) {
+      const norm = normalizePrompt(q.prompt);
+      assert.ok(!bankPrompts.has(norm), `Duplicate prompt between catalog ("${q.id}") and bank ("${bankPrompts.get(norm)}")`);
+    }
+  });
+
+  it('audits difficulty calibration across tiers', () => {
+    const difficulties = bank.map((q) => q.difficulty);
+    const beginnerCount = difficulties.filter((d) => d === DIFFICULTY_LEVELS.BEGINNER).length;
+    const intermediateCount = difficulties.filter((d) => d === DIFFICULTY_LEVELS.INTERMEDIATE).length;
+    const advancedCount = difficulties.filter((d) => d === DIFFICULTY_LEVELS.ADVANCED).length;
+
+    assert.ok(beginnerCount >= 5, `Expected >= 5 beginner questions, found ${beginnerCount}`);
+    assert.ok(intermediateCount >= 5, `Expected >= 5 intermediate questions, found ${intermediateCount}`);
+    assert.ok(advancedCount >= 3, `Expected >= 3 advanced questions, found ${advancedCount}`);
   });
 });

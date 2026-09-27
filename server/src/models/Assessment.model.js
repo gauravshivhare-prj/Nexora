@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 import {
+  ASSESSMENT_GROUP_VALUES,
   DIFFICULTY_LEVEL_VALUES,
   QUESTION_TYPE_VALUES,
 } from '../domain/assessment/assessmentContract.js';
@@ -139,6 +140,13 @@ const assessmentSchema = new mongoose.Schema(
       required: true,
       enum: DIFFICULTY_LEVEL_VALUES,
     },
+    group: {
+      type: String,
+      enum: [...ASSESSMENT_GROUP_VALUES, null],
+      default: null,
+      trim: true,
+      index: true,
+    },
     title: {
       type: String,
       required: true,
@@ -189,6 +197,11 @@ const assessmentSchema = new mongoose.Schema(
         message: `Assessment must contain between ${ASSESSMENT_LIMITS.questions.minItems} and ${ASSESSMENT_LIMITS.questions.maxItems} questions.`,
       },
     },
+    isPractice: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -202,6 +215,7 @@ const assessmentSchema = new mongoose.Schema(
 assessmentSchema.index({ skillKey: 1, difficulty: 1, isActive: 1 });
 assessmentSchema.index({ isActive: 1, title: 1 });
 assessmentSchema.index({ isActive: 1, skillKey: 1, difficulty: 1 });
+assessmentSchema.index({ group: 1, isActive: 1 });
 
 /**
  * Strips answers and explanations before exposing assessment to students.
@@ -209,24 +223,31 @@ assessmentSchema.index({ isActive: 1, skillKey: 1, difficulty: 1 });
 export function toPublicAssessment(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
+  const id = raw.assessmentId ?? raw.id;
 
-  const assessmentId = raw.assessmentId ?? raw.id;
   return {
-    id: assessmentId,
-    assessmentId,
+    id,
+    assessmentId: id,
+    slug: id,
     version: raw.version,
     skillKey: raw.skillKey,
     skillName: raw.skillName,
+    canonicalSkill: raw.skillName ?? raw.skillKey,
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
+    group: raw.group ?? null,
+    isPractice: raw.isPractice === true,
+    isAvailable: raw.isActive !== false,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,
     timeLimitMinutes: raw.timeLimitMinutes,
+    durationMinutes: raw.timeLimitMinutes ?? 0,
     totalQuestions: raw.questions?.length ?? 0,
     questions: (raw.questions ?? []).map((q) => {
       const pub = {
         id: q.id,
+        questionId: q.id,
         type: q.type,
         prompt: q.prompt,
         weight: q.weight,
@@ -257,6 +278,8 @@ export function toAdminAssessment(doc) {
     skillName: raw.skillName,
     secondarySkillKeys: raw.secondarySkillKeys ?? [],
     difficulty: raw.difficulty,
+    group: raw.group ?? null,
+    isPractice: raw.isPractice === true,
     title: raw.title,
     description: raw.description,
     passMark: raw.passMark,

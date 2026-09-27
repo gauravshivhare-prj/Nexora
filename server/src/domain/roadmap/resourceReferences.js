@@ -1,3 +1,5 @@
+import { GAP_STATUS } from '../skillGap/computeSkillGap.js';
+
 /**
  * Learning resource references.
  *
@@ -89,12 +91,12 @@ export function verificationFor(skillName) {
     method: 'project',
     description: `Add a project to your profile that lists ${skillName} among its technologies.`,
     /** The gap status this would reach. Matches GAP_STATUS.SUPPORTED. */
-    reaches: 'supported',
+    reaches: GAP_STATUS.SUPPORTED,
     available: true,
     alternative: {
       method: 'assessment',
       description: `Pass a Nexora ${skillName} assessment.`,
-      reaches: 'verified',
+      reaches: GAP_STATUS.VERIFIED,
       available: false,
       note: 'Assessments are not available yet.',
     },

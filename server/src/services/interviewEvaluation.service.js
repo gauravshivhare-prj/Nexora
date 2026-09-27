@@ -158,13 +158,20 @@ export async function evaluateQuestionAnswer({
  * @returns {{ overallScore: number, evaluatorType: string, eligibleForVerified: boolean, evidenceResults: Array<object>, completedAt: Date }}
  */
 export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
-  if (!session || typeof session !== 'object') {
+  if (!session || typeof session !== 'object' || Array.isArray(session)) {
     throw ApiError.badRequest('Session object is required for evaluation.');
   }
 
+  for (const key of Object.keys(session)) {
+    if (key === '__proto__' || key === 'prototype' || key === 'constructor' || key.startsWith('$')) {
+      throw ApiError.badRequest(`Invalid session field "${key}".`);
+    }
+  }
+
+  const normalizedEvaluator = evaluatorType === 'human' ? 'human' : 'ai';
   const questions = Array.isArray(session.questions) ? session.questions : [];
   const evaluatedQuestions = questions.filter(
-    (q) => q.evaluation && typeof q.evaluation.compositeScore === 'number',
+    (q) => q.evaluation && (typeof q.evaluation.compositeScore === 'number' || typeof q.evaluation.score === 'number'),
   );
 
   if (evaluatedQuestions.length === 0) {
@@ -174,12 +181,25 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
     );
   }
 
-  // Calculate composite average
+  const getQuestionScore = (q) => {
+    const raw = q.evaluation?.compositeScore ?? q.evaluation?.score;
+    return typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+  };
+
+  const getQuestionWeight = (q) => {
+    return typeof q.weight === 'number' && Number.isFinite(q.weight) && q.weight > 0 ? q.weight : 1;
+  };
+
+  // Calculate weighted composite average
   const totalScore = evaluatedQuestions.reduce(
-    (sum, q) => sum + q.evaluation.compositeScore,
+    (sum, q) => sum + getQuestionScore(q) * getQuestionWeight(q),
     0,
   );
-  const overallScore = Math.round((totalScore / evaluatedQuestions.length) * 10000) / 10000;
+  const totalWeight = evaluatedQuestions.reduce(
+    (sum, q) => sum + getQuestionWeight(q),
+    0,
+  );
+  const overallScore = totalWeight > 0 ? Math.round((totalScore / totalWeight) * 10000) / 10000 : 0;
 
   const targetSkills = Array.isArray(session.targetSkills) ? session.targetSkills : [];
   const interviewId = String(session._id ?? session.id ?? 'interview-session');
@@ -196,15 +216,24 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
       (q) => q.targetSkill && canonicalSkill(q.targetSkill)?.key === canonical.key,
     );
 
-    const skillScore = skillQuestions.length > 0
-      ? Math.round((skillQuestions.reduce((sum, q) => sum + q.evaluation.compositeScore, 0) / skillQuestions.length) * 10000) / 10000
-      : overallScore;
+    let skillScore = overallScore;
+    if (skillQuestions.length > 0) {
+      const skillScoreSum = skillQuestions.reduce(
+        (sum, q) => sum + getQuestionScore(q) * getQuestionWeight(q),
+        0,
+      );
+      const skillWeightSum = skillQuestions.reduce(
+        (sum, q) => sum + getQuestionWeight(q),
+        0,
+      );
+      skillScore = skillWeightSum > 0 ? Math.round((skillScoreSum / skillWeightSum) * 10000) / 10000 : overallScore;
+    }
 
     const evidenceCheck = buildInterviewResult({
       skill: canonical.name,
       score: skillScore,
       interviewId,
-      evaluatedBy: evaluatorType,
+      evaluatedBy: normalizedEvaluator,
       completedAt,
     });
 
