@@ -37,7 +37,7 @@ export const GAP_STATUS = {
   CLAIMED: 'claimed',
   /** They pointed at a project or certification that involves it. */
   SUPPORTED: 'supported',
-  /** An independent check passed. Nothing produces this yet — Phase 8. */
+  /** An independent check passed via skill assessment or human interview. */
   VERIFIED: 'verified',
 };
 
