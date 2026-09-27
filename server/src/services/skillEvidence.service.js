@@ -61,7 +61,6 @@ export async function loadVerifiedEvidence(userId) {
       detail: `${check.kind === CHECK_KINDS.ASSESSMENT ? 'Passed assessment' : 'Passed interview'} for ${check.skillName} with score ${check.score}.`,
       reference: check.reference,
     },
-    completedAt: check.completedAt,
   }));
 }
 
