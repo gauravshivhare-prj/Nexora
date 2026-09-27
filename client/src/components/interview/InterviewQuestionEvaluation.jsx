@@ -15,7 +15,7 @@ export function InterviewQuestionEvaluation({
 }) {
   const answer = question?.answer;
   const evaluation = question?.evaluation;
-  if (!evaluation) return null;
+  if (!evaluation || (!evaluation.dimensions && typeof evaluation.compositeScore !== 'number')) return null;
 
   const score = typeof evaluation.compositeScore === 'number' ? evaluation.compositeScore : 0;
   const isPassing = score >= INTERVIEW_PASS_MARK;

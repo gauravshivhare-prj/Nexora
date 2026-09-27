@@ -399,13 +399,23 @@ export const INTERVIEW_ERROR_PRESENTATION = Object.freeze({
  * @returns {{ code: string, title: string, message: string, userAction: string, retryable: boolean, status: number }}
  */
 export function resolveInterviewError(error) {
+  const status =
+    typeof error?.status === 'number'
+      ? error.status
+      : (typeof error?.statusCode === 'number' ? error.statusCode : 500);
+
   const code =
     error?.errorCode ||
     error?.code ||
+    (status === 429 ? INTERVIEW_ERROR_CODES.RATE_LIMIT_EXCEEDED : null) ||
+    (status === 503 ? INTERVIEW_ERROR_CODES.AI_PROVIDER_FAILED : null) ||
+    (status === 502 ? INTERVIEW_ERROR_CODES.AI_OUTPUT_INVALID : null) ||
+    (status === 404 ? INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_NOT_FOUND : null) ||
+    (status === 409 ? INTERVIEW_ERROR_CODES.CONFLICT : null) ||
+    (status === 400 ? INTERVIEW_ERROR_CODES.BAD_REQUEST : null) ||
     (typeof error?.message === 'string' && error.message.toLowerCase().includes('expired')
       ? INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_EXPIRED
       : null);
-  const status = typeof error?.status === 'number' ? error.status : 500;
 
   if (code && INTERVIEW_ERROR_PRESENTATION[code]) {
     const presentation = INTERVIEW_ERROR_PRESENTATION[code];

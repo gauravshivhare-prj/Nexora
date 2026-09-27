@@ -33,7 +33,10 @@ export function InterviewActiveFlow({
   const totalQuestions = questions.length || session?.questionCount || 1;
   const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
 
-  const hasEvaluation = Boolean(currentQuestion?.evaluation);
+  const hasEvaluation = Boolean(
+    currentQuestion?.evaluation &&
+      (currentQuestion.evaluation.dimensions || typeof currentQuestion.evaluation.compositeScore === 'number'),
+  );
   const diffPresentation =
     INTERVIEW_DIFFICULTY_PRESENTATION[session?.difficulty] ||
     INTERVIEW_DIFFICULTY_PRESENTATION.intermediate;
