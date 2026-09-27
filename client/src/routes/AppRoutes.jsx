@@ -12,6 +12,7 @@ import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
 import { RoadmapPage } from '../pages/RoadmapPage.jsx';
 import { SkillGapPage } from '../pages/SkillGapPage.jsx';
+import { InterviewPage } from '../pages/InterviewPage.jsx';
 
 /**
  * Application routes.
@@ -22,13 +23,6 @@ import { SkillGapPage } from '../pages/SkillGapPage.jsx';
  * because of where it is, not because someone remembered to wrap it — the
  * previous arrangement repeated ProtectedRoute per route, which is one
  * omission away from a leak.
- *
- * Only routes for currently delivered UI views exist. While assessment backend
- * endpoints are delivered and ready for client service integration, their UI views
- * (along with AI interviews and opportunities) are scheduled for subsequent UI phases.
- *
- * The catch-all is routing infrastructure rather than a feature: without it
- * an unknown URL renders nothing, which would look like a broken build.
  */
 export function AppRoutes() {
   return (
@@ -49,6 +43,9 @@ export function AppRoutes() {
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/careers/:roleId/skill-gap" element={<SkillGapPage />} />
         <Route path="/careers/:roleId/roadmap" element={<RoadmapPage />} />
+
+        <Route path="/interviews" element={<InterviewPage />} />
+        <Route path="/interviews/:sessionId" element={<InterviewPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
