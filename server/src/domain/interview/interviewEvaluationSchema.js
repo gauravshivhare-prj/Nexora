@@ -251,7 +251,13 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         `Feedback summary exceeds maximum length of ${INTERVIEW_LIMITS.feedbackSummary.max} characters.`,
       );
     } else if (hasInjectionContent(trimmed)) {
-      errors.push('Feedback summary contains potentially unsafe or injection-like content.');
+      const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(trimmed);
+      if (hasXss || !options.allowInjectionEcho) {
+        errors.push('Feedback summary contains potentially unsafe or injection-like content.');
+      } else {
+        warnings.push('Feedback summary contains potentially unsafe or injection-like content.');
+        validFeedback = trimmed;
+      }
     } else {
       validFeedback = trimmed;
     }
@@ -272,7 +278,13 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         } else if (item.trim().length > 250) {
           errors.push(`Strength at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
-          errors.push(`Strength at index ${i} contains injection-like content.`);
+          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
+          if (hasXss || !options.allowInjectionEcho) {
+            errors.push(`Strength at index ${i} contains injection-like content.`);
+          } else {
+            warnings.push(`Strength at index ${i} contains injection-like content.`);
+            validStrengths.push(item.trim());
+          }
         } else {
           validStrengths.push(item.trim());
         }
@@ -295,7 +307,13 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         } else if (item.trim().length > 250) {
           errors.push(`Growth area at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
-          errors.push(`Growth area at index ${i} contains injection-like content.`);
+          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
+          if (hasXss || !options.allowInjectionEcho) {
+            errors.push(`Growth area at index ${i} contains injection-like content.`);
+          } else {
+            warnings.push(`Growth area at index ${i} contains injection-like content.`);
+            validGrowthAreas.push(item.trim());
+          }
         } else {
           validGrowthAreas.push(item.trim());
         }

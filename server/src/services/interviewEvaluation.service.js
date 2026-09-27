@@ -14,7 +14,7 @@ import {
   buildInterviewEvaluationRequest,
   groundAnswerEvaluation,
 } from '../domain/interview/interviewAnswerGrounding.js';
-import { validateAiEvaluationJson } from '../domain/interview/interviewEvaluationSchema.js';
+import { validateAiEvaluationJson, hasInjectionContent } from '../domain/interview/interviewEvaluationSchema.js';
 import { buildInterviewResult } from '../domain/evidence/skillEvidenceCheck.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
 
@@ -109,7 +109,10 @@ export async function evaluateQuestionAnswer({
   const latencyMs = Date.now() - startTime;
 
   // Step 3: Validate AI response against strict JSON schema
-  const validated = validateAiEvaluationJson(completion.text, { strict: false });
+  const validated = validateAiEvaluationJson(completion.text, {
+    strict: false,
+    allowInjectionEcho: hasInjectionContent(answerText),
+  });
   if (!validated.isValid) {
     logger.warn(`AI evaluation schema rejected output from ${provider.name}: ${validated.errors.join(' ')}`);
     throw new ApiError(
