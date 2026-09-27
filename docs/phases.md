@@ -18,7 +18,7 @@ This document defines the controlled development sequence for Nexora.
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
 | 8 — Assessment & AI Interview | Complete (Backend assessment engine & AI interview session lifecycle, prompt boundary hardening, schema validation, red-team suite, and institutional evidence integration; UI scheduled for future phase) |
-| 9 — Opportunity Matching | Not started |
+| 9 — Opportunity Matching | Complete (Backend curated catalogue, verified-evidence matching, and REST endpoint; no live scraping/job board claims) |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
 A phase is marked complete only when its exit criteria are met and its tests
@@ -299,7 +299,7 @@ the thing this architecture exists to prevent. Items expose
 **Delivered — AI Interview Architecture & Safety**
 - **AI Interview Session Architecture**:
   - `InterviewSession` model enforcing ownership, strict lifecycle states (`initialized` → `in_progress` → `completed` | `abandoned` | `timed_out`), and question/session attempt limits.
-  - Curated question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy (`SKILL_TAXONOMY_VERSION = 1`).
+  - Curated question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy (`SKILL_TAXONOMY_VERSION = 2`).
   - Full REST API suite: session creation, listing, retrieval, starting, answering, completing, and abandoning.
 - **Prompt Boundary Hardening & Safety**:
   - Candidate answers strictly enclosed in `<candidate_untrusted_answer>` XML tags with XML character escaping, neutralizing delimiter breakout, instruction override, or rubric manipulation.
@@ -336,6 +336,12 @@ the thing this architecture exists to prevent. Items expose
 - Skill matching
 - Match explanation
 - Opportunity details
+
+**Delivered — Backend Foundation**
+- **Curated Catalogue**: Versioned reference catalogue (`domain/opportunities/opportunityCatalogue.js`, `OPPORTUNITY_CATALOGUE_VERSION = 1`) with stable, source-qualified IDs (`curated_internal:backend-apprenticeship`, `curated_internal:frontend-apprenticeship`) and explicit `source.asOf` metadata.
+- **Deterministic Matcher**: Pure-function engine (`matchOpportunities`) matching verified skills from the student's CareerTwin (`verified_skills`) and explicit stated target roles (`target_role`).
+- **REST API Endpoint**: `GET /api/opportunities` with authentication and optional query filtering (`?roleId=`, `?skill=`).
+- **Strict Non-Goals**: No scraping, live job-board claims, employer feeds, application submission, or LLM-invented opportunities.
 
 **Exit criteria**
 - Opportunity data contains source/date fields.

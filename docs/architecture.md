@@ -204,6 +204,7 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
 | `GET` | `/api/careers/roles/:roleId/roadmap` | Bearer | Prioritised plan built from the gap |
 | `GET` | `/api/careers/roles/:roleId/readiness` | Bearer | Deterministic role-scoped evidence projection (`insufficient_data` / `partial` / `supported` / `verified`), fresh/stale status, and non-verified blockers |
+| `GET` | `/api/opportunities` | Bearer | Curated opportunity matching against verified skills and target roles |
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
 | `POST` | `/api/skill-evidence/assessments` | Bearer (admin) | Records an assessment result directly. Students earn evidence through `/api/assessments` instead |
 | `POST` | `/api/skill-evidence/interviews` | Bearer (admin) | Records a human- or AI-evaluated interview result directly. Students earn evidence through `/api/interviews` instead |
@@ -355,7 +356,7 @@ attached to evidence saying where it came from.
 |---|---|---|
 | `claimed` | The student said so | Profile skill entry, resume mention |
 | `supported` | They pointed at something concrete | Project technology, certification |
-| `verified` | An independent check passed | **Nothing yet** — Phase 8 |
+| `verified` | An independent check passed | Passing skill assessments or human-evaluated technical interviews |
 
 A resume is `claimed`, not `supported`: it is a document its subject wrote
 about themselves, and grounding proves the resume says it, not that it is
@@ -469,7 +470,7 @@ it take for Nexora to say you have Docker?".
 | `missing` | Not seen anywhere in the profile or resumes |
 | `claimed` | Listed, but Nexora has not seen it used |
 | `supported` | Backed by a project or certification |
-| `verified` | Independently checked. **Nothing produces this yet** |
+| `verified` | Independently checked via passed assessment or human interview |
 
 `claimed` being its own status — rather than counted as "has the skill" — is
 the point of the feature. A student who typed "Docker, expert" into a form
@@ -552,6 +553,44 @@ Prerequisites come from a small explicit table (Express.js needs JavaScript
 and Node.js) and are filtered to skills that are *also on this roadmap*, so a
 prerequisite never points at nothing. Inferring a dependency graph across all
 of technology is not something this could do honestly.
+
+### Career Readiness
+
+Role-scoped career readiness (`GET /api/careers/roles/:roleId/readiness`) is a
+pure, deterministic evidence projection of the existing CareerTwin and
+skill-gap models. It is **not** an AI judgement, not a score, and not a
+percentage.
+
+```text
+CareerTwin → skill gap → deduplication & blocking skill extraction → readiness projection
+```
+
+Every response returns:
+- `evidenceStatus`: `insufficient_data` (no twin/comparison), `partial` (missing/claimed required skills exist), `supported` (all required skills supported or verified, none missing/claimed), or `verified` (100% of required skills independently verified).
+- `dataStatus`: `fresh`, `stale` (CareerTwin needs regeneration), or `incomplete`.
+- `required` / `preferred` counts: exactly matching skill-gap counts.
+- `blockingSkills`: non-verified required skills only (preferred skills never block readiness).
+- `basedOn`: provenance with timestamps, catalogue version, and `contractVersion = 1`.
+
+See [readiness.md](readiness.md) for the full contract specification.
+
+### Opportunity matching
+
+Opportunity matching (`GET /api/opportunities`) is a deterministic projection
+over verified student evidence and a small, curated internal catalogue
+(`domain/opportunities/opportunityCatalogue.js`).
+
+The repository currently has no live job-board, employer, or government API
+feed. As an explicit safety boundary, Nexora does not claim live market
+coverage, salaries, active openings, or application status.
+
+Matching rules:
+- Requires verified canonical skills (`verified_skills`) and explicit student target roles (`target_role`).
+- Claimed or supported skills never satisfy an eligibility rule that requires verification.
+- Deterministic and explainable; includes source metadata with `asOf` date and catalogue version.
+- Rejects ungrounded skills or uncanonical role definitions.
+
+See [opportunities.md](opportunities.md) for the full contract specification.
 
 ### Not implemented
 
@@ -1007,7 +1046,7 @@ CareerTwin & Skill-Gap Consumption (Skill elevated to 'verified')
 ### Core Components & Engineering Specifications
 
 1. **Curated Question Bank (`server/src/domain/interview/interviewQuestions.js`)**:
-   - Curated technical questions aligned with canonical skill taxonomy (`SKILL_TAXONOMY_VERSION = 1`).
+   - Curated technical questions aligned with canonical skill taxonomy (`SKILL_TAXONOMY_VERSION = 2`).
    - Stable question IDs (`iq-node-001`, `iq-mongo-001`, `iq-react-001`, etc.).
    - Explicit separation of intent, difficulty (`beginner`, `intermediate`, `advanced`), target skill, and rubric criteria.
    - Deterministic selection based on target role and skills.

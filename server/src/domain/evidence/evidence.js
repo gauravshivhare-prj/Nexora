@@ -14,10 +14,8 @@
 /**
  * Where a piece of evidence came from.
  *
- * ASSESSMENT and INTERVIEW are declared now and produced by nothing: they are
- * the sources that will make VERIFIED reachable, and the consumers of this
- * model are being written today. Declaring them means those consumers can
- * handle them from the start instead of being revisited.
+ * ASSESSMENT and INTERVIEW are produced by the skill assessment and technical
+ * interview services to make VERIFIED reachable.
  */
 export const EVIDENCE_SOURCES = {
   /** A skill the student listed on their profile. */
@@ -28,9 +26,9 @@ export const EVIDENCE_SOURCES = {
   PROJECT: 'project',
   /** A certification the student holds. */
   CERTIFICATION: 'certification',
-  /** Not produced yet — Phase 8. */
+  /** Produced by deterministic skill assessments. */
   ASSESSMENT: 'assessment',
-  /** Not produced yet — Phase 8. */
+  /** Produced by technical interview evaluations. */
   INTERVIEW: 'interview',
 };
 
@@ -70,10 +68,8 @@ export const EVIDENCE_STRENGTH = {
   /**
    * An independent check has passed.
    *
-   * **Nothing in Nexora produces this today.** Assessments and AI interviews
-   * are Phase 8. It exists here so that every consumer is written against the
-   * full scale, and so no later phase is tempted to overstate SUPPORTED to
-   * fill the gap.
+   * Produced by passing intermediate/advanced skill assessments or
+   * human-evaluated technical interviews.
    */
   VERIFIED: 'verified',
 };
