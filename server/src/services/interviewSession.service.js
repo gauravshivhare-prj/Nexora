@@ -29,6 +29,20 @@ import { canonicalSkill } from '../domain/skills/skillKey.js';
 import { findRole, CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
 
 /**
+ * In-flight answer evaluation locks.
+ *
+ * Prevents concurrency double-spend and token exhaustion: if concurrent
+ * requests arrive for the same question attempt, only the first request enters
+ * the expensive AI provider evaluation. Concurrent duplicates are immediately
+ * rejected with 409 CONFLICT before calling the upstream model.
+ */
+const inFlightEvaluations = new Set();
+
+export function clearInFlightEvaluations() {
+  inFlightEvaluations.clear();
+}
+
+/**
  * Loads an interview session scoped strictly to its owner.
  *
  * Prevents IDOR by design: a query for another student's session returns the
@@ -390,102 +404,115 @@ export async function submitQuestionAnswer(
     );
   }
 
-  // Step: Run AI evaluation service
-  const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
-    question,
-    answerText: answerText.trim(),
-    signal: options.signal,
-    timeoutMs: options.timeoutMs,
-  });
-
-  // Record answer and evaluation on question subdocument
-  const previousAttemptNumber = question.answer?.attemptNumber || 0;
-  const nextAttemptNumber = previousAttemptNumber + 1;
-  const previousAttemptCount = session.attemptCount || 0;
-  const questionPath = `questions.${questionIndex}`;
-
-  const attemptFilter = previousAttemptNumber === 0
-    ? {
-        $or: [
-          { [`${questionPath}.answer.attemptNumber`]: { $exists: false } },
-          { [`${questionPath}.answer`]: null },
-          { [`${questionPath}.answer`]: { $exists: false } },
-        ],
-      }
-    : { [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber };
-
-  // Atomically update: must still be in_progress, not expired, and attempt not yet recorded
-  const updated = await InterviewSession.findOneAndUpdate(
-    {
-      _id: session._id,
-      user: userId,
-      status: SESSION_STATUS.IN_PROGRESS,
-      expiresAt: { $gt: new Date() },
-      attemptCount: previousAttemptCount,
-      ...attemptFilter,
-    },
-    {
-      $set: {
-        [`${questionPath}.answer`]: {
-          answerText: answerText.trim(),
-          submittedAt: new Date(),
-          durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
-          attemptNumber: nextAttemptNumber,
-        },
-        [`${questionPath}.evaluation`]: {
-          dimensions: evaluation.dimensions,
-          compositeScore: evaluation.compositeScore,
-          feedback: evaluation.feedback,
-          strengths: evaluation.strengths,
-          growthAreas: evaluation.growthAreas,
-          groundedSkills: evaluation.groundedSkills,
-          evaluatedAt: new Date(),
-        },
-        providerMetadata,
-        attemptCount: previousAttemptCount + 1,
-        currentQuestionIndex: Math.max(
-          session.currentQuestionIndex,
-          Math.min(session.questionCount, questionIndex + 1),
-        ),
-      },
-    },
-    { new: true, runValidators: true },
-  );
-
-  if (!updated) {
-    const current = await findOwnedSession(userId, sessionId);
-    if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
-      if (current.status !== SESSION_STATUS.TIMED_OUT) {
-        current.status = SESSION_STATUS.TIMED_OUT;
-        current.completedAt = current.completedAt || new Date();
-        await current.save();
-      }
-      throw ApiError.badRequest(
-        'Session time limit has expired.',
-        ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
-      );
-    }
-
-    if (current.status !== SESSION_STATUS.IN_PROGRESS) {
-      throw ApiError.badRequest(
-        `Cannot submit answer: session is in "${current.status}" state (must be in_progress).`,
-        ERROR_CODES.INTERVIEW_INVALID_STATE,
-      );
-    }
-
+  const inflightKey = `${session._id}:${question.questionId}`;
+  if (inFlightEvaluations.has(inflightKey)) {
     throw ApiError.conflict(
-      'This answer was already recorded by another request. Reload the session and try again.',
+      'An evaluation is already in progress for this question.',
       ERROR_CODES.CONFLICT,
     );
   }
 
-  const recorded = updated.questions[questionIndex];
+  inFlightEvaluations.add(inflightKey);
+  try {
+    // Step: Run AI evaluation service
+    const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
+      question,
+      answerText: answerText.trim(),
+      signal: options.signal,
+      timeoutMs: options.timeoutMs,
+    });
 
-  return {
-    session: toPublicInterviewSession(updated),
-    evaluatedQuestion: toPublicInterviewQuestion(recorded),
-    warnings,
-  };
+    // Record answer and evaluation on question subdocument
+    const previousAttemptNumber = question.answer?.attemptNumber || 0;
+    const nextAttemptNumber = previousAttemptNumber + 1;
+    const previousAttemptCount = session.attemptCount || 0;
+    const questionPath = `questions.${questionIndex}`;
+
+    const attemptFilter = previousAttemptNumber === 0
+      ? {
+          $or: [
+            { [`${questionPath}.answer.attemptNumber`]: { $exists: false } },
+            { [`${questionPath}.answer`]: null },
+            { [`${questionPath}.answer`]: { $exists: false } },
+          ],
+        }
+      : { [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber };
+
+    // Atomically update: must still be in_progress, not expired, and attempt not yet recorded
+    const updated = await InterviewSession.findOneAndUpdate(
+      {
+        _id: session._id,
+        user: userId,
+        status: SESSION_STATUS.IN_PROGRESS,
+        expiresAt: { $gt: new Date() },
+        attemptCount: previousAttemptCount,
+        ...attemptFilter,
+      },
+      {
+        $set: {
+          [`${questionPath}.answer`]: {
+            answerText: answerText.trim(),
+            submittedAt: new Date(),
+            durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
+            attemptNumber: nextAttemptNumber,
+          },
+          [`${questionPath}.evaluation`]: {
+            dimensions: evaluation.dimensions,
+            compositeScore: evaluation.compositeScore,
+            feedback: evaluation.feedback,
+            strengths: evaluation.strengths,
+            growthAreas: evaluation.growthAreas,
+            groundedSkills: evaluation.groundedSkills,
+            evaluatedAt: new Date(),
+          },
+          providerMetadata,
+          attemptCount: previousAttemptCount + 1,
+          currentQuestionIndex: Math.max(
+            session.currentQuestionIndex,
+            Math.min(session.questionCount, questionIndex + 1),
+          ),
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!updated) {
+      const current = await findOwnedSession(userId, sessionId);
+      if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
+        if (current.status !== SESSION_STATUS.TIMED_OUT) {
+          current.status = SESSION_STATUS.TIMED_OUT;
+          current.completedAt = current.completedAt || new Date();
+          await current.save();
+        }
+        throw ApiError.badRequest(
+          'Session time limit has expired.',
+          ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+        );
+      }
+
+      if (current.status !== SESSION_STATUS.IN_PROGRESS) {
+        throw ApiError.badRequest(
+          `Cannot submit answer: session is in "${current.status}" state (must be in_progress).`,
+          ERROR_CODES.INTERVIEW_INVALID_STATE,
+        );
+      }
+
+      throw ApiError.conflict(
+        'This answer was already recorded by another request. Reload the session and try again.',
+        ERROR_CODES.CONFLICT,
+      );
+    }
+
+    const recorded = updated.questions[questionIndex];
+
+    return {
+      session: toPublicInterviewSession(updated),
+      evaluatedQuestion: toPublicInterviewQuestion(recorded),
+      warnings,
+    };
+  } finally {
+    inFlightEvaluations.delete(inflightKey);
+  }
 }
 
 /**
