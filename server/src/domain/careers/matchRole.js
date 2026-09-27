@@ -297,6 +297,7 @@ function collectEvidence(matches) {
         const record = seen.get(key);
         if (skill?.name && !record.skills.includes(skill.name)) {
           record.skills.push(skill.name);
+          record.skills.sort((a, b) => a.localeCompare(b, 'en'));
         }
         continue;
       }

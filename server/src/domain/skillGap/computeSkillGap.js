@@ -332,5 +332,7 @@ function extraSkills(twin, role) {
     }
   }
 
-  return [...seen.values()];
+  return [...seen.values()].sort((left, right) =>
+    (left.name ?? '').localeCompare(right.name ?? '', 'en'),
+  );
 }
