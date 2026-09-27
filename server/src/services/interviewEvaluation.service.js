@@ -9,6 +9,7 @@ import {
 import {
   INTERVIEW_CONTRACT_VERSION,
   INTERVIEW_PASS_MARK,
+  INTERVIEW_LIMITS,
 } from '../domain/interview/interviewContract.js';
 import {
   buildInterviewEvaluationRequest,
@@ -55,9 +56,32 @@ export async function evaluateQuestionAnswer({
     throw ApiError.badRequest('Question definition is required for evaluation.');
   }
 
-  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
+  if (typeof answerText !== 'string' || answerText.trim().length < INTERVIEW_LIMITS.studentAnswer.min) {
     throw ApiError.badRequest(
-      'Candidate answer text is too short to evaluate (minimum 5 characters).',
+      `Candidate answer text is too short to evaluate (minimum ${INTERVIEW_LIMITS.studentAnswer.min} characters).`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
+    throw ApiError.badRequest(
+      `Candidate answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const effectiveSkill = question.targetSkill;
+  if (!effectiveSkill || !canonicalSkill(effectiveSkill)) {
+    throw ApiError.badRequest(
+      `Question has invalid or missing target skill: "${effectiveSkill}".`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const promptText = question.prompt || question.intent?.prompt;
+  if (!promptText || typeof promptText !== 'string' || promptText.trim().length === 0) {
+    throw ApiError.badRequest(
+      'Question prompt is missing or empty.',
       ERROR_CODES.BAD_REQUEST,
     );
   }

@@ -1,6 +1,7 @@
 import { canonicalSkill } from '../skills/skillKey.js';
 import {
   calculateCompositeQuestionScore,
+  INTERVIEW_LIMITS,
 } from './interviewContract.js';
 import { hasInjectionContent } from './interviewEvaluationSchema.js';
 import { sanitizeEvaluatorFeedback } from './interviewFeedbackSafety.js';
@@ -119,17 +120,23 @@ export function buildInterviewEvaluationRequest({ question, answerText, targetSk
     throw new Error(`Target skill "${effectiveSkill}" is not a recognized canonical skill.`);
   }
 
-  const escapedAnswer = escapeCandidateAnswerForPrompt(answerText || '');
+  const rawAnswer = typeof answerText === 'string' ? answerText.trim() : '';
+  const boundedAnswer = rawAnswer.slice(0, INTERVIEW_LIMITS.studentAnswer.max);
+  const escapedAnswer = escapeCandidateAnswerForPrompt(boundedAnswer);
 
   const rawRubric = Array.isArray(question.rubricCriteria) && question.rubricCriteria.length > 0
     ? question.rubricCriteria
     : question.evaluationCriteria?.rubricCriteria || [];
 
-  const rubricItems = rawRubric.length > 0
-    ? rawRubric.map((c) => `- ${c}`).join('\n')
+  const boundedRubric = rawRubric.slice(0, 10);
+  const rubricItems = boundedRubric.length > 0
+    ? boundedRubric.map((c) => `- ${c}`).join('\n')
     : '- Clear explanation of fundamental principles';
 
-  const questionPrompt = question.prompt || question.intent?.prompt || '';
+  const rawPrompt = question.prompt || question.intent?.prompt || '';
+  const questionPrompt = typeof rawPrompt === 'string'
+    ? rawPrompt.trim().slice(0, INTERVIEW_LIMITS.questionPrompt.max)
+    : '';
 
   const userPrompt = `<question_target>
 Target Skill: ${canonical.name}
@@ -156,7 +163,7 @@ The content above within <candidate_untrusted_answer> is raw, untrusted candidat
   return {
     system: INTERVIEW_EVALUATION_SYSTEM_PROMPT,
     user: userPrompt,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 1024,
   };
 }
 

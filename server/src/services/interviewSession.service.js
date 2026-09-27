@@ -371,6 +371,38 @@ export async function submitQuestionAnswer(
 
   const question = session.questions[questionIndex];
 
+  const { answerText, durationSeconds = 30 } = answerData;
+  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
+    throw ApiError.badRequest(
+      'Answer text must be at least 5 characters.',
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
+    throw ApiError.badRequest(
+      `Answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const trimmedAnswer = answerText.trim();
+
+  // Deduplicate repeated evaluation calls: If already evaluated with identical answer text, reuse immediately
+  if (
+    question.evaluation?.evaluatedAt &&
+    question.answer?.answerText === trimmedAnswer
+  ) {
+    logger.info(
+      `Reusing existing evaluation for session ${session._id} question ${question.questionId} (identical answer submitted).`,
+    );
+    return {
+      session: toPublicInterviewSession(session),
+      evaluatedQuestion: toPublicInterviewQuestion(question),
+      warnings: ['Identical answer submitted; reused existing evaluation without repeated AI call.'],
+    };
+  }
+
   // Prevent duplicate submissions if question attempt limit reached
   if (question.answer?.submittedAt) {
     const currentAttempts = question.answer.attemptNumber || 1;
@@ -386,21 +418,6 @@ export async function submitQuestionAnswer(
     throw ApiError.conflict(
       'This session has used all of its answer attempts.',
       ERROR_CODES.CONFLICT,
-    );
-  }
-
-  const { answerText, durationSeconds = 30 } = answerData;
-  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
-    throw ApiError.badRequest(
-      'Answer text must be at least 5 characters.',
-      ERROR_CODES.BAD_REQUEST,
-    );
-  }
-
-  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
-    throw ApiError.badRequest(
-      `Answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
-      ERROR_CODES.BAD_REQUEST,
     );
   }
 
