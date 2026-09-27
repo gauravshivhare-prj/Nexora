@@ -1,5 +1,4 @@
 import {
-  assertNoForbiddenClientFields,
   getAssessment,
   getAttemptById,
   getLatestAssessmentResult,
@@ -61,8 +60,6 @@ export const startAttemptHandler = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('assessmentId parameter is required.', ERROR_CODES.VALIDATION_ERROR);
   }
 
-  assertNoForbiddenClientFields(req.body);
-
   const attempt = await startAssessmentAttempt(req.auth.userId, {
     ...(req.body && typeof req.body === 'object' ? req.body : {}),
     assessmentId: assessmentId.trim(),
@@ -92,8 +89,6 @@ export const submitAttemptHandler = asyncHandler(async (req, res) => {
     );
   }
 
-  assertNoForbiddenClientFields(req.body);
-
   const result = await submitAssessmentAttempt(req.auth.userId, {
     ...(req.body && typeof req.body === 'object' ? req.body : {}),
     attemptId,
@@ -101,13 +96,30 @@ export const submitAttemptHandler = asyncHandler(async (req, res) => {
     answers: req.body?.answers,
   });
 
+  const assessmentResult = result.attempt?.result ?? {
+    assessmentId: result.attempt.assessmentId,
+    canonicalSkill: result.attempt.skillName || result.attempt.skillKey,
+    difficulty: result.attempt.difficulty,
+    score: result.attempt.score,
+    earnedPoints: result.attempt.earnedPoints,
+    maxPoints: result.attempt.maxPoints,
+    passMark: result.attempt.passMark,
+    passed: result.attempt.passed,
+    outcome: result.attempt.outcome,
+    evidenceStatus: result.evidenceStatus,
+    completedAt: result.attempt.completedAt,
+    questionBreakdown: result.attempt.questionResults,
+  };
+
   res.status(200).json({
     success: true,
     message: 'Assessment attempt submitted and evaluated',
     data: {
       attempt: result.attempt,
+      result: assessmentResult,
       evidenceResult: result.evidenceResult,
       evidenceStatus: result.evidenceStatus,
+      verification: result.evidenceResult,
     },
   });
 });

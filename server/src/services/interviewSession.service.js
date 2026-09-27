@@ -70,9 +70,9 @@ function sessionNotFound() {
  * @returns {Promise<object>} Public interview session DTO
  */
 export async function createSession(userId, input = {}) {
+  const targetRole = input.targetRole || input.targetRoleId;
+  const targetSkills = input.targetSkills || input.skills;
   const {
-    targetRole,
-    targetSkills,
     difficulty = INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount = 5,
   } = input;
@@ -192,6 +192,13 @@ export async function listSessions(userId) {
  */
 export async function getSession(userId, sessionId) {
   const session = await findOwnedSession(userId, sessionId);
+  if (
+    (session.status === SESSION_STATUS.INITIALIZED || session.status === SESSION_STATUS.IN_PROGRESS) &&
+    session.isExpired()
+  ) {
+    session.status = SESSION_STATUS.TIMED_OUT;
+    await session.save();
+  }
   return toPublicInterviewSession(session);
 }
 
@@ -312,6 +319,18 @@ export async function submitQuestionAnswer(
     );
   }
 
+  const parsedDuration = Number(durationSeconds);
+  if (
+    !Number.isFinite(parsedDuration) ||
+    parsedDuration < 0 ||
+    parsedDuration > INTERVIEW_LIMITS.maxTimePerQuestionSeconds
+  ) {
+    throw ApiError.badRequest(
+      `durationSeconds must be a finite number between 0 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds}.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
   // Step: Run AI evaluation service
   const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
     question,
@@ -402,6 +421,15 @@ export async function completeSession(userId, sessionId, options = {}) {
     throw ApiError.badRequest(
       `Cannot complete session in "${session.status}" state.`,
       ERROR_CODES.INTERVIEW_INVALID_STATE,
+    );
+  }
+
+  if (session.isExpired()) {
+    session.status = SESSION_STATUS.TIMED_OUT;
+    await session.save();
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
     );
   }
 

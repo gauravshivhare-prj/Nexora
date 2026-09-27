@@ -28,7 +28,7 @@ const MAX_LIMIT = 20;
  * @throws {ApiError} 409 when none has been generated.
  */
 async function loadTwin(userId) {
-  const twin = await CareerTwin.findOne({ user: userId });
+  const twin = await CareerTwin.findOne({ user: userId }).lean();
 
   if (!twin) {
     // A 409 rather than a 404: the resource being asked for is the

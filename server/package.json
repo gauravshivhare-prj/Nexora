@@ -11,7 +11,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "seed:demo": "node src/scripts/seedDemo.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

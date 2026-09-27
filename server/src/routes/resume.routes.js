@@ -31,7 +31,7 @@ router.use(requireAuth);
 export const analysisLimiter = createRateLimiter(RATE_LIMIT_POLICY.aiAnalysis);
 export const uploadLimiter = createRateLimiter(RATE_LIMIT_POLICY.upload);
 
-router.post('/', create);
+router.post('/', uploadLimiter, create);
 
 // The multipart parser sits behind requireAuth *and* the limiter, so
 // neither an anonymous nor a flooding request gets a single byte of its

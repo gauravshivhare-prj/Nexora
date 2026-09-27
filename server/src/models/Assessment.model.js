@@ -119,7 +119,7 @@ const assessmentSchema = new mongoose.Schema(
     skillName: {
       type: String,
       default() {
-        return canonicalSkill(this.skillKey)?.name ?? this.skillKey;
+        return canonicalSkill(this?.skillKey)?.name ?? (this?.skillKey || '');
       },
       trim: true,
     },
@@ -210,8 +210,10 @@ export function toPublicAssessment(doc) {
   if (!doc) return null;
   const raw = doc.toObject ? doc.toObject() : doc;
 
+  const assessmentId = raw.assessmentId ?? raw.id;
   return {
-    id: raw.assessmentId ?? raw.id,
+    id: assessmentId,
+    assessmentId,
     version: raw.version,
     skillKey: raw.skillKey,
     skillName: raw.skillName,

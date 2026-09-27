@@ -27,7 +27,18 @@ export function createApp() {
     });
     next();
   });
-  app.use(cors({ origin: env.clientUrl }));
+  const allowedOrigins = env.clientUrl?.includes(',')
+    ? env.clientUrl.split(',').map((s) => s.trim()).filter(Boolean)
+    : env.clientUrl;
+
+  app.use(
+    cors({
+      origin: allowedOrigins,
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(requestLogger);
 

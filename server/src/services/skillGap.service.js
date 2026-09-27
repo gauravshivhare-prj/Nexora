@@ -24,7 +24,7 @@ import { ApiError } from '../utils/ApiError.js';
  * @throws {ApiError} 409 when none has been generated.
  */
 async function loadTwin(userId) {
-  const twin = await CareerTwin.findOne({ user: userId });
+  const twin = await CareerTwin.findOne({ user: userId }).lean();
 
   if (!twin) {
     throw new ApiError(

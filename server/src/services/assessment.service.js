@@ -255,21 +255,35 @@ export async function startAssessmentAttempt(userId, input) {
 
   const attemptNumber = previousAttempts.length + 1;
 
-  const attempt = await AssessmentAttempt.create({
-    user: userId,
-    assessmentId: fullAssessment.id,
-    attemptNumber,
-    version: fullAssessment.version,
-    skillKey: fullAssessment.skillKey,
-    skillName: fullAssessment.skillName,
-    difficulty: fullAssessment.difficulty,
-    passMark: fullAssessment.passMark,
-    status: ATTEMPT_STATUS.IN_PROGRESS,
-    startedAt: new Date(),
-    answers: {},
-  });
+  try {
+    const attempt = await AssessmentAttempt.create({
+      user: userId,
+      assessmentId: fullAssessment.id,
+      attemptNumber,
+      version: fullAssessment.version,
+      skillKey: fullAssessment.skillKey,
+      skillName: fullAssessment.skillName,
+      difficulty: fullAssessment.difficulty,
+      passMark: fullAssessment.passMark,
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+      startedAt: new Date(),
+      answers: {},
+    });
 
-  return toPublicAssessmentAttempt(attempt);
+    return toPublicAssessmentAttempt(attempt);
+  } catch (err) {
+    if (err.code === 11000) {
+      const active = await AssessmentAttempt.findOne({
+        user: userId,
+        assessmentId: fullAssessment.id,
+        status: ATTEMPT_STATUS.IN_PROGRESS,
+      });
+      if (active) {
+        return toPublicAssessmentAttempt(active);
+      }
+    }
+    throw err;
+  }
 }
 
 /**
@@ -430,7 +444,11 @@ export async function listUserAttempts(userId, { assessmentId } = {}) {
   }
   const query = { user: userId };
   if (assessmentId) {
-    if (typeof assessmentId !== 'string' || !/^[a-z0-9_-]+$/i.test(assessmentId.trim())) {
+    if (
+      typeof assessmentId !== 'string' ||
+      assessmentId.trim().length > ASSESSMENT_LIMITS.id.max ||
+      !/^[a-z0-9_-]+$/i.test(assessmentId.trim())
+    ) {
       throw ApiError.badRequest('assessmentId filter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
     }
     query.assessmentId = assessmentId.trim();
@@ -466,7 +484,12 @@ export async function getLatestAssessmentResult(userId, assessmentId) {
 // -----------------------------------------------------------------------------
 
 function validateAssessmentIdParam(id) {
-  if (typeof id !== 'string' || id.trim().length === 0 || !/^[a-z0-9_-]+$/i.test(id.trim())) {
+  if (
+    typeof id !== 'string' ||
+    id.trim().length === 0 ||
+    id.trim().length > ASSESSMENT_LIMITS.id.max ||
+    !/^[a-z0-9_-]+$/i.test(id.trim())
+  ) {
     throw ApiError.badRequest('assessmentId parameter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
   }
 }

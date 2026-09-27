@@ -438,24 +438,42 @@ export async function getProfile(userId) {
 export async function updateProfile(userId, payload) {
   const changes = validateProfilePatch(payload);
 
-  const profile = await StudentProfile.findOneAndUpdate(
-    { user: userId },
-    {
-      $set: changes,
-      // Only applied when the upsert creates the document, so an existing
-      // profile's owner is never rewritten.
-      $setOnInsert: { user: userId },
-    },
-    {
-      new: true,
-      upsert: true,
-      // Schema limits are a backstop behind the validator above. They would
-      // not run on an update otherwise, leaving the database rules unenforced
-      // for every path except document creation.
-      runValidators: true,
-      setDefaultsOnInsert: true,
-    },
-  );
+  try {
+    const profile = await StudentProfile.findOneAndUpdate(
+      { user: userId },
+      {
+        $set: changes,
+        // Only applied when the upsert creates the document, so an existing
+        // profile's owner is never rewritten.
+        $setOnInsert: { user: userId },
+      },
+      {
+        new: true,
+        upsert: true,
+        // Schema limits are a backstop behind the validator above. They would
+        // not run on an update otherwise, leaving the database rules unenforced
+        // for every path except document creation.
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      },
+    );
 
-  return toPublicProfile(profile);
+    return toPublicProfile(profile);
+  } catch (err) {
+    if (err.code === 11000) {
+      // Race condition during upsert insert: retry update directly now that the doc exists
+      const profile = await StudentProfile.findOneAndUpdate(
+        { user: userId },
+        { $set: changes },
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+      if (profile) {
+        return toPublicProfile(profile);
+      }
+    }
+    throw err;
+  }
 }

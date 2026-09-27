@@ -34,9 +34,10 @@ export function toAssessment(raw) {
     throw new Error('Invalid assessment data: expected an object.');
   }
 
-  const assessmentId = raw.assessmentId || raw.slug || '';
+  const assessmentId = raw.assessmentId || raw.id || raw.slug || '';
   return {
     assessmentId,
+    id: assessmentId,
     slug: raw.slug || assessmentId,
     title: raw.title ?? '',
     description: raw.description ?? '',

@@ -196,7 +196,7 @@ export async function requestWithHeaders(baseUrl, path, { method = 'GET', header
     body = text;
   }
 
-  return { status: response.status, body };
+  return { status: response.status, headers: response.headers, body };
 }
 
 /** GETs a path with a Bearer token attached. */

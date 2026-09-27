@@ -15,9 +15,17 @@ import { logger } from '../utils/logger.js';
  * - A periodic sweep removes entries whose entire window has expired, so IPs
  *   that stop making requests do not leak memory.
  *
- * Not suitable for horizontally scaled deployments (each process has its own
- * store). When multiple instances are needed, swap this for a Redis-backed
- * limiter — the middleware signature stays the same.
+ * Architectural Constraint — Distributed Scaling Note:
+ * - This implementation is in-memory and strictly single-instance only.
+ * - In horizontally scaled or multi-replica cluster environments (e.g., behind AWS ALB,
+ *   Kubernetes ingress, or multi-process PM2), each node maintains an independent
+ *   in-memory store. Consequently, a client could theoretically distribute requests
+ *   across N instances to multiply their allowed budget by N.
+ * - Migration Requirement: For multi-instance production deployments, replace this
+ *   in-memory store with a shared Redis or Memcached backend (e.g., using Redis sorted sets
+ *   or atomic token-bucket Lua scripts via `ioredis` / `rate-limiter-flexible`). The Express
+ *   middleware contract, error codes (429 RATE_LIMIT_EXCEEDED), and Retry-After headers
+ *   will remain identical.
  *
  * @param {{ windowMs: number, maxAttempts: number }} options
  * @returns {function} Express middleware

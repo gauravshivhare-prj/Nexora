@@ -49,11 +49,11 @@ function parseMaxItems(raw) {
  * @param {{ maxItems?: unknown }} [options]
  * @throws {ApiError} 404 unknown role, 409 no CareerTwin.
  */
-export async function getRoadmap(userId, roleId, { maxItems } = {}) {
+export async function getRoadmap(userId, roleId, { maxItems, skillGap } = {}) {
   // Reuses the skill gap service wholesale, including its ownership scoping,
-  // its 404 for an unknown role and its 409 for a missing CareerTwin. One
-  // implementation of each rule, not two.
-  const { gap, basedOn } = await getSkillGap(userId, roleId);
+  // its 404 for an unknown role and its 409 for a missing CareerTwin. If a
+  // precomputed skillGap is provided (e.g. by summary.service), reuse it directly.
+  const { gap, basedOn } = skillGap ?? (await getSkillGap(userId, roleId));
 
   const roadmap = buildRoadmap(gap, { maxItems: parseMaxItems(maxItems) });
 

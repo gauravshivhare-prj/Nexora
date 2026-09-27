@@ -202,7 +202,9 @@ and are enforced by both the request validator and the Mongoose schema.
 | `GET` | `/api/careers/recommendations` | Bearer | Ranked matches. `?limit=`, `?includeAll=` |
 | `GET` | `/api/careers/roles/:roleId/match` | Bearer | Score against one named role |
 | `GET` | `/api/careers/roles/:roleId/skill-gap` | Bearer | Per-skill status, reason and next step |
+| `GET` | `/api/careers/roles/:roleId/readiness` | Bearer | Evidence readiness breakdown for target role |
 | `GET` | `/api/careers/roles/:roleId/roadmap` | Bearer | Prioritised plan built from the gap |
+| `GET` | `/api/opportunities` | Bearer | Curated opportunity matching against verified skills and target role |
 | `GET` | `/api/skill-evidence` | Bearer | Owner-scoped assessment/interview results |
 | `POST` | `/api/skill-evidence/assessments` | Bearer (admin) | Records an assessment result directly. Students earn evidence through `/api/assessments` instead |
 | `POST` | `/api/skill-evidence/interviews` | Bearer (admin) | Records a human- or AI-evaluated interview result directly. Students earn evidence through `/api/interviews` instead |
@@ -254,13 +256,25 @@ No vendor SDK is imported anywhere in the domain. Everything goes through the
 
 **Nexora ships with one provider implementation** — a Gemini adapter in
 `server/src/services/ai/geminiProvider.js`. Set `AI_PROVIDER=gemini` and
-`GEMINI_API_KEY` to enable it. With no provider registered,
-`POST /api/resumes/:id/analysis` answers `503 AI_PROVIDER_NOT_CONFIGURED`
-and says so. Everything else works without it.
+`GEMINI_API_KEY` to enable it.
+- `POST /api/resumes/:id/analysis` and `POST /api/interviews/sessions/:id/questions/:questionId/answers` require the AI provider and return `503 AI_PROVIDER_NOT_CONFIGURED` if unconfigured.
+- `POST /api/career-twin?narrative=true` optionally uses the AI provider for plain-English synthesis, but falls back gracefully to a valid deterministic twin with `narrative: null` if AI is unconfigured or fails.
+- All career matching, readiness calculation, skill gap analysis, roadmap generation, assessment evaluation, and opportunity matching execute completely deterministically without AI.
 
 To add another provider: implement the contract, call `registerAiProvider()`
 at startup, and set `AI_PROVIDER` to its name. The provider's own API key
 belongs in its own environment variable.
+
+### AI Boundaries & Limitations
+
+Nexora enforces strict architectural limits around AI usage to protect data integrity, prevent credential/prompt leakage, and eliminate hallucinations:
+
+1. **Advisory Role Only for Interviews**: AI mock interview evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`). Even a 100% score from an AI evaluation cannot grant verified institutional skill evidence. Verified evidence is granted exclusively through deterministic assessments (e.g. passing multiple-choice/coding evaluations) or verified human examiner reviews (`evaluatorType: 'human'`).
+2. **Deterministic Recommendation Core**: Career recommendations, match scores, readiness statuses, skill gaps, roadmaps, and opportunity matches are 100% deterministic algorithms computed over verified and supported profile data. AI is never used to assign scores, compute percentages, or rank career opportunities.
+3. **Strict Delimiter Isolation & Escaping**: Candidate interview answers are wrapped in `<candidate_untrusted_answer>` XML boundary tags with XML escaping (`&lt;`, `&gt;`, `&amp;`) to block prompt injection, delimiter breakout, rubric tampering, and persona hijacking (DAN).
+4. **Structured JSON Validation & Grounding**: All model outputs must conform to strict JSON schemas. Unrecognized fields, script injection tags (`<script>`), and out-of-range scores cause immediate rejection (`502 AI_MALFORMED_OUTPUT`). Skills extracted from resumes or interview responses are strictly grounded against source text and the canonical taxonomy (`SKILL_TAXONOMY_VERSION = 1`); ungrounded skills are stripped.
+5. **Fault Isolation & Zero Secret Leakage**: AI provider outages, timeouts (standard 30s abort controller), and rate limits are handled through controlled 503 error boundaries (`AI_PROVIDER_NOT_CONFIGURED`, `AI_PROVIDER_TIMEOUT`, `AI_PROVIDER_FAILED`). Raw upstream stack traces, API keys, internal IP addresses, and system prompt rubrics are never exposed to the client or written to access logs.
+6. **No External Scraping / Live Job Claims**: Opportunity matching queries a curated internal catalogue. The system does not scrape live job boards, submit applications, or use LLMs to invent live external job listings.
 
 ### The AI safety pipeline
 

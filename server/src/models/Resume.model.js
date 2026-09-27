@@ -228,6 +228,9 @@ const resumeSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+resumeSchema.index({ user: 1, createdAt: -1 });
+resumeSchema.index({ user: 1, 'analysis.status': 1, createdAt: -1 });
+
 /**
  * Keeps the denormalised length honest.
  *
