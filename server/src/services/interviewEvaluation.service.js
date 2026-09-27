@@ -222,7 +222,7 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
             ) / 10000,
           ),
         )
-      : overallScore;
+      : 0;
 
     const evidenceCheck = buildInterviewResult({
       skill: canonical.name,

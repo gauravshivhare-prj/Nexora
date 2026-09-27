@@ -1,5 +1,8 @@
 import { SkillEvidenceCheck, toPublicSkillEvidenceCheck } from '../models/SkillEvidenceCheck.model.js';
 import {
+  CHECK_KINDS,
+  CHECK_OUTCOMES,
+  INTERVIEW_PASS_MARK,
   buildAssessmentResult,
   buildInterviewResult,
 } from '../domain/evidence/skillEvidenceCheck.js';
@@ -24,13 +27,38 @@ export async function loadVerifiedEvidence(userId) {
     completedAt: -1,
   });
 
-  return checks.map((check) => ({
+  // Defense-in-depth: enforce institutional evidence policy.
+  // AI-evaluated interviews are strictly advisory and NEVER qualify as verified.
+  // Only human-evaluated interviews with score >= passMark and passing assessments qualify.
+  const verifiedChecks = checks.filter((check) => {
+    if (check.kind === CHECK_KINDS.INTERVIEW) {
+      return (
+        check.evaluatedBy === 'human' &&
+        check.outcome === CHECK_OUTCOMES.PASS &&
+        typeof check.score === 'number' &&
+        typeof check.passMark === 'number' &&
+        check.score >= check.passMark &&
+        check.passMark >= INTERVIEW_PASS_MARK
+      );
+    }
+    if (check.kind === CHECK_KINDS.ASSESSMENT) {
+      return (
+        check.outcome === CHECK_OUTCOMES.PASS &&
+        typeof check.score === 'number' &&
+        typeof check.passMark === 'number' &&
+        check.score >= check.passMark
+      );
+    }
+    return false;
+  });
+
+  return verifiedChecks.map((check) => ({
     skill: check.skillName,
     completedAt: check.completedAt,
     evidence: {
       source: check.kind,
       strength: 'verified',
-      detail: `${check.kind === 'assessment' ? 'Passed assessment' : 'Passed interview'} for ${check.skillName} with score ${check.score}.`,
+      detail: `${check.kind === CHECK_KINDS.ASSESSMENT ? 'Passed assessment' : 'Passed interview'} for ${check.skillName} with score ${check.score}.`,
       reference: check.reference,
     },
     completedAt: check.completedAt,

@@ -76,6 +76,11 @@ export function buildInterviewResult({
   validateReference(interviewId, 'interviewId');
   validateDate(completedAt, 'completedAt');
   validatePassMark(passMark);
+  if (passMark < INTERVIEW_PASS_MARK) {
+    throw new SkillEvidenceInputError(
+      `Interview pass mark cannot be lower than institutional threshold of ${INTERVIEW_PASS_MARK}.`,
+    );
+  }
 
   const outcome =
     evaluatedBy === 'human'
