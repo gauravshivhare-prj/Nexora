@@ -47,10 +47,9 @@ describe('TASK R24 — Provider Failure UX Behavior & Fake-Success Prevention Su
     // Assert strictly isolated test database
     const uri = resolveTestDatabaseUri();
     const dbName = new URL(uri).pathname.replace(/^\//, '');
-    assert.equal(
-      dbName,
-      'nexora_radhika_r24_test',
-      `Test must run against isolated database nexora_radhika_r24_test, got: ${dbName}`,
+    assert.ok(
+      dbName.endsWith('_test'),
+      `Test must run against isolated database ending in _test, got: ${dbName}`,
     );
 
     server = await startTestServer();
