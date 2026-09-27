@@ -1211,6 +1211,17 @@ Nexora's intelligence architecture is built as a deterministic, multi-layered pi
 | **Tenant Isolation (IDOR)** | All endpoints strictly scope queries by `req.auth.userId`; unowned resources return 404 with zero existence leakage | Express controllers & Mongoose queries |
 | **Tamper Proofing** | Clients cannot submit scores, outcomes, or evidence flags; all scoring and checks computed server-side | Assessment & interview submission controllers |
 
+### 10.4 Quality, Verification & System Limitations
+
+Nexora adheres to an explicit transparency standard regarding its artificial intelligence capabilities, deterministic pipelines, and verified operational boundaries. For the complete, detailed engineering audit, consult [quality-and-limitations.md](file:///c:/Users/WINDOWS%2010/OneDrive/Desktop/nexora/Nexora/docs/quality-and-limitations.md).
+
+Key verified boundaries include:
+1. **Explainable Deterministic Heuristics (Zero Exaggerated ML)**: Career recommendations employ an explainable, 5-dimensional rule-based formula with fixed weights ($45\%$ required, $20\%$ preferred, $20\%$ evidence, $10\%$ interests, $5\%$ background). It does not use opaque deep learning, black-box neural collaborative filtering, or speculative statistical models.
+2. **Curated Skill Taxonomy Scope**: Enforces `SKILL_TAXONOMY_VERSION = 2` across 132 canonical technical skills. Skills outside this curated dictionary cannot attain canonical representation or automated in-platform verification. The question bank curates 31 questions across 10 core skills.
+3. **External AI Dependency & Verification Barrier**: Integrates Google Gemini for unstructured text extraction and mock interview evaluation. Outbound AI token requests are throttled and prompt-hardened with XML delimiter escaping (`<candidate_untrusted_answer>`, `escapeCandidateAnswerForPrompt`). Crucially, raw AI evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`) and can never accredit skills directly.
+4. **Curated Opportunity Catalogue**: Operates on versioned internal records (`OPPORTUNITY_SOURCE_TYPES.CURATED_INTERNAL`) and matches exclusively on verified skills and explicit target roles; it makes zero claims of live external job-board scraping, real-time vacancy tracking, or salary predictions.
+5. **Operational Constraints**: In-memory sliding-window rate limiters reset on server restart (Redis recommended for horizontal scaling); assessment code questions evaluate output predictions deterministically without containerized sandboxes; mock interviews operate via text input without audio/video proctoring.
+
 ## 11. Nexora Design & Experience Standard
 
 ### Final Visual Theme — Sunset Warm
