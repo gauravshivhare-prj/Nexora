@@ -40,7 +40,7 @@ import { findRole, CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
  * @throws {ApiError} 404 if not found or not owned by caller
  */
 async function findOwnedSession(userId, sessionId) {
-  if (!mongoose.isValidObjectId(sessionId)) {
+  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(sessionId)) {
     throw sessionNotFound();
   }
 
@@ -71,6 +71,10 @@ function sessionNotFound() {
  * @returns {Promise<object>} Public interview session DTO
  */
 export async function createSession(userId, input = {}) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw ApiError.unauthorized('Authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+
   const {
     targetRole,
     targetSkills,
@@ -182,6 +186,10 @@ export async function createSession(userId, input = {}) {
  * @returns {Promise<Array<object>>}
  */
 export async function listSessions(userId) {
+  if (!mongoose.isValidObjectId(userId)) {
+    return [];
+  }
+
   const now = new Date();
   await InterviewSession.updateMany(
     {
@@ -575,7 +583,7 @@ export async function completeSession(userId, sessionId, options = {}) {
   if (savedChecks.length > 0) {
     completedSession.evidenceCheck = savedChecks[0]._id;
     await InterviewSession.updateOne(
-      { _id: completedSession._id },
+      { _id: completedSession._id, user: userId },
       { $set: { evidenceCheck: savedChecks[0]._id } },
     );
   }
