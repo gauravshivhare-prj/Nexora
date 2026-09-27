@@ -22,8 +22,11 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (val) {
-          if (val === true && this.evaluatedBy === 'ai') return false;
-          if (val === true && this.outcome !== CHECK_OUTCOMES.PASS) return false;
+          const update = typeof this.getUpdate === 'function' ? this.getUpdate() : null;
+          const evaluatedBy = this.evaluatedBy ?? update?.$set?.evaluatedBy ?? update?.evaluatedBy;
+          const outcome = this.outcome ?? update?.$set?.outcome ?? update?.outcome;
+          if (val === true && evaluatedBy === 'ai') return false;
+          if (val === true && outcome !== CHECK_OUTCOMES.PASS) return false;
           return true;
         },
         message: 'AI evaluations and non-passing outcomes cannot be eligible for verified evidence.',

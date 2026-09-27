@@ -162,14 +162,16 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
     throw ApiError.badRequest('Session object is required for evaluation.');
   }
 
-  for (const key of Object.keys(session)) {
+  const rawSession = typeof session.toObject === 'function' ? session.toObject() : session;
+
+  for (const key of Object.keys(rawSession)) {
     if (key === '__proto__' || key === 'prototype' || key === 'constructor' || key.startsWith('$')) {
       throw ApiError.badRequest(`Invalid session field "${key}".`);
     }
   }
 
   const normalizedEvaluator = evaluatorType === 'human' ? 'human' : 'ai';
-  const questions = Array.isArray(session.questions) ? session.questions : [];
+  const questions = Array.isArray(rawSession.questions) ? rawSession.questions : [];
   const evaluatedQuestions = questions.filter(
     (q) => q.evaluation && (typeof q.evaluation.compositeScore === 'number' || typeof q.evaluation.score === 'number'),
   );
@@ -201,8 +203,8 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
   );
   const overallScore = totalWeight > 0 ? Math.round((totalScore / totalWeight) * 10000) / 10000 : 0;
 
-  const targetSkills = Array.isArray(session.targetSkills) ? session.targetSkills : [];
-  const interviewId = String(session._id ?? session.id ?? 'interview-session');
+  const targetSkills = Array.isArray(rawSession.targetSkills) ? rawSession.targetSkills : [];
+  const interviewId = String(rawSession._id ?? rawSession.id ?? session._id ?? session.id ?? 'interview-session');
   const completedAt = new Date();
 
   // Evaluate evidence for each target skill
