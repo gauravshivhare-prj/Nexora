@@ -6,6 +6,7 @@ import {
   isBlank,
   isPlainObject,
 } from '../../utils/fieldTypes.js';
+import { isForbiddenOrPrototypeKey } from '../interview/interviewContract.js';
 
 /**
  * Schema validation for AI-parsed resume data.
@@ -45,6 +46,12 @@ export function validateParsedResume(raw) {
 
   if (!isPlainObject(raw)) {
     return { value: null, errors: ['The AI response was not a parsed-resume object.'], warnings };
+  }
+
+  for (const key of Object.keys(raw)) {
+    if (isForbiddenOrPrototypeKey(key)) {
+      errors.push(`Security violation: AI resume output contains forbidden security field "${key}".`);
+    }
   }
 
   const value = {

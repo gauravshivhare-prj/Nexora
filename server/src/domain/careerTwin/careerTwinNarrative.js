@@ -1,5 +1,6 @@
 import { skillKey } from '../skills/skillKey.js';
 import { checkString, isPlainObject } from '../../utils/fieldTypes.js';
+import { isForbiddenOrPrototypeKey } from '../interview/interviewContract.js';
 
 /**
  * The optional model-written summary of a CareerTwin.
@@ -82,6 +83,15 @@ Rules:
  */
 export function validateNarrative(raw) {
   if (!isPlainObject(raw)) return { value: null, error: 'The AI response was not an object.' };
+
+  for (const key of Object.keys(raw)) {
+    if (isForbiddenOrPrototypeKey(key)) {
+      return {
+        value: null,
+        error: `Security violation: AI narrative contains forbidden security field "${key}".`,
+      };
+    }
+  }
 
   const { value, error } = checkString(raw.summary, { max: MAX_NARRATIVE_CHARS, min: 1 });
   if (error) return { value: null, error: `The summary field was unusable: ${error.toLowerCase()}.` };
