@@ -136,8 +136,22 @@ The rate limiter stores hit counts in Node.js process memory. In a multi-instanc
 ### In-Memory Resume File Extraction
 `POST /api/resumes/upload` extracts text in-memory from PDF/DOCX uploads and stores the extracted text in MongoDB. Original file binaries are discarded after extraction. The `file.storageKey` field on the Resume model serves as a placeholder for future persistent object storage (e.g., S3/GCS) if re-downloading becomes a product requirement.
 
-### AI Provider Configuration
-Resume analysis (`POST /api/resumes/:id/analysis`) requires `AI_PROVIDER=gemini` (or another registered adapter) and its corresponding API key (e.g., `GEMINI_API_KEY`). If no provider is configured, the endpoint returns `503 AI_PROVIDER_NOT_CONFIGURED` without inventing student career data.
+### AI Provider Configuration & Interview Deployment
+- **Provider Setup**: Resume analysis (`POST /api/resumes/:id/analysis`) and live interview question evaluation (`POST /api/interviews/sessions/:id/questions/:questionId/answers`) require `AI_PROVIDER=gemini` and `GEMINI_API_KEY`. If unconfigured, endpoints return `503 AI_PROVIDER_NOT_CONFIGURED` without corrupting session state or inventing student data.
+- **Institutional Evidence Policy**: Student interview completions run via AI evaluation and produce advisory evidence (`outcome: 'uncertain'`, `evidenceStrength: 'supported'`). Institutional `verified` evidence requires authorized human administrative evaluation (`POST /api/skill-evidence/interviews` or human examiner workflow).
+- **Evidence Coexistence**: Advisory interview evidence (`supported`) coexists with assessment evidence without downgrading existing verified evidence (`verified`) in CareerTwin aggregation.
+- **Provider Outage & Rate Limiting**: Upstream 429 quota exhaustion and network drop/timeout are safely isolated to 503/429 without committing fake evaluations or advancing question progress. In-flight evaluations for the same question are deduplicated.
+- **Text-Only Submissions**: Candidates type text responses (10–5,000 characters); speech-to-text and video proctoring are intentional non-goals for MVP.
+
+### Post-Deployment AI Interview Verification
+To smoke test the live interview feature:
+1. Navigate to `/interview` on the deployed frontend.
+2. Select target role (e.g. Backend Developer), select canonical skills (e.g. Node.js, MongoDB), select difficulty (Intermediate), and click Start Interview.
+3. Verify session initializes and transitions to `in_progress`.
+4. Enter technical response (verifying active question countdown timer and live character counter bounded between 10 and 5,000 chars).
+5. Submit answer; verify loading state, structured rubric dimension cards (accuracy: 0.35, depth: 0.30, clarity: 0.20, relevance: 0.15), feedback, strengths, and growth areas.
+6. Complete session; verify overall score calculation and institutional badge ("Advisory Supported" for score >= 75%).
+7. Check dashboard / CareerTwin to confirm recorded evidence coexists cleanly with existing assessment results without downgrade.
 
 ## Nexora Design & Experience Standard
 

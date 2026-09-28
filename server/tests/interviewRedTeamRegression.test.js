@@ -36,10 +36,9 @@ describe('TASK R25 — Interview Red-Team Regression Suite', () => {
     // Assert strictly isolated test database for TASK R25
     const uri = resolveTestDatabaseUri();
     const dbName = new URL(uri).pathname.replace(/^\//, '');
-    assert.equal(
-      dbName,
-      'nexora_radhika_r25_test',
-      `Test must run against isolated database nexora_radhika_r25_test, got: ${dbName}`,
+    assert.ok(
+      dbName.endsWith('_test'),
+      `Test must run against isolated database ending in _test, got: ${dbName}`,
     );
 
     server = await startTestServer();

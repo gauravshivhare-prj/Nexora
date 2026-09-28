@@ -52,15 +52,18 @@
 - FR-ASM-07: System enforces IDOR tenant isolation (404 responses), atomic concurrency locking, anti-tampering guards, and sliding-window rate limiting.
 
 ### AI Interview
-- FR-INT-01: User can initialize an interview session targeting a role and canonical skills.
-- FR-INT-02: System selects curated questions from the versioned question bank with stable IDs (`iq-*-*`).
-- FR-INT-03: User transitions session to `in_progress` and submits text answers bounded by length (5–5,000 chars) and attempt limits.
-- FR-INT-04: System validates and XML-escapes candidate answers within strict XML prompt boundaries (`<candidate_untrusted_answer>`) to prevent injection or instruction override.
-- FR-INT-05: AI evaluation service evaluates answers against rubric criteria and parses structured JSON output with 4 dimension scores (`accuracy`, `depth`, `clarity`, `relevance`), feedback, strengths, and growth areas.
-- FR-INT-06: Evaluator domain grounds skills against canonical taxonomy and withholds verified skill claims on failing answers (< 0.65).
-- FR-INT-07: Malformed model outputs, forbidden privilege escalation fields, or provider failures safely return operational 502/503 errors without leaking secrets or credentials.
-- FR-INT-08: Completed sessions persist `SkillEvidenceCheck` records; AI evaluations remain advisory (`uncertain`, unverified), while only authorized human passes grant `verified` status.
-- FR-INT-09: Verified interview results flag CareerTwin staleness and are consumed by CareerTwin and Skill-Gap.
+- FR-INT-01: User can initialize an interview session targeting a role and 1–5 canonical skills at a chosen difficulty level (`beginner`, `intermediate`, `advanced`) and question count (1–10).
+- FR-INT-02: System selects curated questions from the versioned question bank with stable IDs (`iq-*-*`) aligned with canonical taxonomy.
+- FR-INT-03: User advances session through strict lifecycle state machine (`initialized` → `in_progress` → `completed` | `abandoned` | `timed_out` | `failed`), bounded by duration (max 600s per question, max 90m per session) and attempt limits.
+- FR-INT-04: System validates candidate answers (5–5,000 chars) and XML-escapes text within `<candidate_untrusted_answer>` prompt boundaries, with sandwich defense and ChatML neutralization preventing injection and instruction override.
+- FR-INT-05: AI evaluation service evaluates answers against 4 weighted rubric dimensions summing to 1.0 (`accuracy`: 0.35, `depth`: 0.30, `clarity`: 0.20, `relevance`: 0.15) and returns structured JSON output with feedback, strengths, and growth areas.
+- FR-INT-06: Evaluator domain grounds skills against canonical taxonomy, strips unasked/hallucinated skills, withholds skill grounding on failing answers (< 0.65), and caps adversarial attempts to <= 0.1.
+- FR-INT-07: Malformed model outputs, forbidden privilege escalation fields, or provider failures safely return operational 502/503 errors without leaking secrets, internal IPs, or credentials, and without recording fake evaluations in the database.
+- FR-INT-08: Completed sessions persist `SkillEvidenceCheck` records; institutional policy enforces that AI evaluations are strictly advisory (`outcome: 'uncertain'`, `evidenceStrength: 'supported'`), while only authorized human passes (>= 75%) grant `verified` status.
+- FR-INT-09: Advisory interview evidence (`supported`) coexists with assessment evidence without downgrading or overwriting existing verified evidence (`verified`) in CareerTwin or skill-gap analysis.
+- FR-INT-10: Verified interview results flag CareerTwin staleness and are consumed by CareerTwin, skill-gap, and readiness scoring.
+- FR-INT-11: Frontend client (`/interview`) provides full interactive flow: role/skill setup, active question flow with live countdown timer and character counter, retry resolution on provider interruption, dimension breakdown cards, institutional evidence badges, and session history.
+- FR-INT-12: System bounds AI evaluation cost and latency (max 1024 output tokens, in-flight answer evaluation deduplication) and protects multi-tenant isolation (IDOR 404 responses).
 
 ### Opportunities
 - FR-OPP-01: System stores opportunity records.

@@ -71,8 +71,12 @@ The institutional evidence model enforces strict separation between automated AI
    - Raw AI claims can **never** directly grant verified skill evidence, regardless of a perfect score (1.0).
    - Student session completions default to `evaluatorType: 'ai'`.
 2. **Human / Institutional Verification**:
-   - Only authorized administrative/human evaluations with a passing score ($\ge 0.75$) grant `eligibleForVerified: true`.
-3. **CareerTwin Integration**:
+   - Only authorized administrative/human evaluations with a passing score ($\ge 0.75$) grant `eligibleForVerified: true` and `evidenceStrength: 'verified'`.
+3. **Evidence Coexistence & Non-Downgrade Invariant**:
+   - Both assessment and interview evidence records coexist in the `skillevidencechecks` collection.
+   - Advisory interview evidence (`supported`) **never** overwrites, downgrades, or replaces an existing verified assessment check (`verified`).
+   - In CareerTwin aggregation, the strongest evidence for each skill always takes precedence (`verified` > `supported` > `claimed`).
+4. **CareerTwin Integration**:
    - Completed sessions persist individual `SkillEvidenceCheck` documents in MongoDB for each target skill.
    - Newly recorded verified evidence flags CareerTwin staleness (`latestEvidenceAt > generatedAt`).
    - Subsequent CareerTwin generation consumes the verified evidence checks, elevating skills from `claimed` or `supported` to `verified`.
@@ -108,16 +112,27 @@ Candidate answers are untrusted input. The architecture enforces multi-layered b
    System instructions are repeated after the candidate's untrusted input to re-establish evaluator instruction authority.
 4. **Strict JSON Schema Validation**:
    - AI response must be valid JSON matching the exact schema.
-   - Forbidden privilege escalation fields (`verified`, `eligibleForVerified`, `outcome`, `evaluatorType`, `user`, `role`) immediately reject the response with `502 AI_MALFORMED_OUTPUT`.
+   - Forbidden privilege escalation fields (`verified`, `eligibleForVerified`, `outcome`, `evaluatorType`, `user`, `role`) immediately reject the response with `502 AI_OUTPUT_INVALID`.
    - Dimensions outside $[0.0, 1.0]$ or non-numeric values are rejected.
 5. **Answer Grounding**:
    - Skills returned in `groundedSkills` are filtered strictly against Nexora's canonical taxonomy and target question skill.
    - Non-canonical, unasked, or hallucinated skills are discarded.
-   - Candidate scores below 0.65 withhold skill grounding.
+   - Candidate scores below 0.65 withhold skill grounding. Adversarial attempts clamp composite score to $\le 0.1$.
 
-## Frontend Contract & Presentation Tokens
+## AI Cost, Latency & Provider Failure UX
 
-The client interface adheres to the **Sunset Warm** design theme token set:
+1. **Token & Latency Bounds**:
+   - Candidate answers bounded to 5,000 characters before calling AI provider.
+   - Evaluator completion prompts enforce `maxOutputTokens: 1024`.
+   - In-flight evaluation deduplication prevents duplicate model calls on rapid/concurrent submissions.
+2. **Provider Failure & Zero Fake-Success Guarantee**:
+   - Upstream 429 quota exhaustion and 503 network drops/timeouts are safely isolated to 503/429.
+   - No fake evaluations, synthetic scores, or incremented attempt counts are ever recorded in MongoDB during provider failure.
+   - Question state remains open and retryable without penalty.
+
+## Frontend Contract & User Flow
+
+The client interface delivered at `/interview` adheres to the **Sunset Warm** design theme token set:
 
 | Token | Class | Usage |
 |---|---|---|
@@ -128,6 +143,13 @@ The client interface adheres to the **Sunset Warm** design theme token set:
 | Warning | `#F59E0B` | Partial evaluation, attention states |
 | Error | `#EF4444` | Failed attempts, timeouts, validation errors |
 | Card | `#FFFFFF` | Form surfaces, question cards |
+
+### Delivered Client Components:
+1. `InterviewSetup.jsx`: Target role selection, 1–5 canonical skills, difficulty tier, question count.
+2. `InterviewActiveFlow.jsx`: Question prompt, skill badge, countdown timer, candidate answer textarea (10–5000 chars), submit button.
+3. `InterviewQuestionEvaluation.jsx`: Score ring, 4 dimension breakdown cards, feedback, strengths, and growth areas.
+4. `InterviewResults.jsx`: Overall session score, question breakdown, institutional evidence badges ("Advisory Supported", "Institutionally Verified", or "Below Passing Threshold"), and CareerTwin update indicator.
+5. `InterviewSessionList.jsx`: Complete session history list with status badges and scores.
 
 ### Client Normalizer Rules:
 - Never expose MongoDB `_id`, `__v`, or owner `user` IDs to UI components.

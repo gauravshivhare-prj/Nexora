@@ -353,8 +353,8 @@ attached to evidence saying where it came from.
 | Strength | Meaning | Produced by |
 |---|---|---|
 | `claimed` | The student said so | Profile skill entry, resume mention |
-| `supported` | They pointed at something concrete | Project technology, certification |
-| `verified` | An independent check passed | **Nothing yet** — Phase 8 |
+| `supported` | Concrete usage or advisory evaluation | Project technology, certification, advisory AI interview completion |
+| `verified` | An independent check passed | Intermediate/advanced skill assessment pass (>= 70%) or authorized human examiner interview pass (>= 75%) |
 
 A resume is `claimed`, not `supported`: it is a document its subject wrote
 about themselves, and grounding proves the resume says it, not that it is
@@ -467,8 +467,8 @@ it take for Nexora to say you have Docker?".
 |---|---|
 | `missing` | Not seen anywhere in the profile or resumes |
 | `claimed` | Listed, but Nexora has not seen it used |
-| `supported` | Backed by a project or certification |
-| `verified` | Independently checked. **Nothing produces this yet** |
+| `supported` | Backed by a project, certification, or advisory AI interview |
+| `verified` | Independently checked via skill assessment or human-evaluated interview |
 
 `claimed` being its own status — rather than counted as "has the skill" — is
 the point of the feature. A student who typed "Docker, expert" into a form
@@ -561,10 +561,12 @@ of technology is not something this could do honestly.
   limitation: writing to disk or a blob store would add infrastructure
   complexity with no current product requirement for re-downloading the
   original.
-- **Frontend UI for Assessments and Interviews.** The backend engines, question
-  banks, deterministic scoring, prompt boundary hardening, evaluation schemas,
-  evidence integrations, and red-team regression suites are delivered. Frontend UI
-  interfaces are planned for upcoming phases.
+- **Frontend UI for Assessments.** The backend assessment engine, question
+  banks, deterministic scoring, attempt lifecycle, and evidence integrations are
+  delivered; the frontend test-taking interface remains scheduled for future integration.
+  The AI Interview feature includes complete frontend integration (`/interview` route
+  with setup, active question flow, timer, retry resolution, dimension breakdowns,
+  institutional badges, and session list).
 - Any readiness score, pending a target role to measure against.
 
 ## 8. Assessment Feature Architecture & API Specification
@@ -1013,53 +1015,76 @@ CareerTwin & Skill-Gap Consumption (Skill elevated to 'verified')
    - Rejects uncanonical skills and invalid question parameters with `400 VALIDATION_ERROR`.
 
 2. **Session Lifecycle State Machine (`server/src/models/InterviewSession.model.js`)**:
-   - State progression: `initialized` → `in_progress` → `completed` | `abandoned` | `timed_out`.
-   - Terminal state enforcement: once in `completed` or `abandoned`, no further transitions, answer submissions, or completions are allowed.
+   - State progression: `initialized` → `in_progress` → `completed` | `abandoned` | `timed_out` | `failed`.
+   - Terminal state enforcement: once in `completed`, `abandoned`, `timed_out`, or `failed`, no further transitions, answer submissions, or completions are allowed.
    - Attempt limits: 1–3 attempts allowed per question (default: 1), max 10 attempts total per session (capped at 30).
-   - Question duration limits: bounded to `maxTimePerQuestionSeconds = 300` (5 minutes).
+   - Question duration limits: bounded to `maxTimePerQuestionSeconds = 600` (10 minutes).
+   - Session duration limits: bounded to `maxSessionMinutes = 90` minutes.
 
 3. **Provider Dependency & Fault Tolerance (`server/src/services/ai/aiProvider.js`)**:
    - Built on the unified `AiProvider` abstraction (`{ name, complete({ system, user, maxOutputTokens, signal }) }`).
    - Requires configured AI provider (`AI_PROVIDER=gemini`). If unconfigured, returns `503 AI_PROVIDER_NOT_CONFIGURED`.
-   - Timeout protection via `AbortController` (30,000ms standard). Returns `503 AI_PROVIDER_TIMEOUT` if provider hangs.
+   - Timeout protection via `AbortController` (30,000ms standard). Returns `503 AI_PROVIDER_FAILED` if provider hangs.
    - Sanitized error boundary: upstream network failures catch and mask raw secrets, simulated API keys, internal IPs, and stack traces, returning a safe, operational `503 AI_PROVIDER_FAILED`.
+   - Upstream 429 quota exhaustion is safely isolated to `503 AI_PROVIDER_FAILED` or `429 RATE_LIMIT_EXCEEDED` without recording fake evaluations or advancing session progress in MongoDB.
    - Provider audit envelope on session subdocument records `provider`, `model`, `promptTokens`, `completionTokens`, and `latencyMs`. Never stores raw credentials.
 
 4. **Prompt Boundary Hardening & Delimiter Isolation (`server/src/domain/interview/interviewPromptBoundaries.js`)**:
    - Untrusted candidate text is strictly wrapped in XML boundary tags:
      `<candidate_untrusted_answer>...</candidate_untrusted_answer>`
    - Candidate input is XML-escaped (`&lt;`, `&gt;`, `&amp;`), neutralizing closing tag breakouts (`</candidate_untrusted_answer>`).
+   - Sandwich defense pattern: prompt instruction hierarchy precedes untrusted input and is reinforced after untrusted input.
    - System instructions enforce strict adversarial boundaries: candidate answers cannot override developer instructions, rewrite rubrics, change grading dimensions, or extract system prompts.
    - Persona hijacking (e.g. DAN / "Do Anything Now") and ChatML delimiter injections are neutralized; evaluator evaluates technical accuracy solely against the true question rubric.
 
-5. **Structured Output Validation & Answer Grounding (`server/src/services/interviewEvaluation.service.js`)**:
-   - Model must respond strictly in JSON format. Non-JSON output or prose markdown returns `502 AI_MALFORMED_OUTPUT`.
-   - Validates all 4 dimension scores: `accuracy`, `depth`, `clarity`, `relevance` ($0.0 \le x \le 1.0$). Out-of-bounds scores are rejected with `502`.
-   - Script and HTML tags (`<script>`) in feedback are rejected with `502`.
-   - Forbidden privilege escalation keys (e.g. `"verified": true`, `"evidenceGranted"`) in model response are rejected with `502`.
-   - Grounding: `groundedSkills` returned by model are filtered strictly against canonical taxonomy and the target question's skill. Hallucinated or unasked skills are stripped. Failing answers ($< 0.65$) withhold verified skill evidence.
+5. **Structured Output Validation, Scoring Formula & Grounding (`server/src/services/interviewEvaluation.service.js`)**:
+   - Model must respond strictly in JSON format. Non-JSON output or prose markdown returns `502 AI_OUTPUT_INVALID`.
+   - Validates all 4 dimension scores with deterministic weights summing exactly to 1.0:
+     - `accuracy` (0.35)
+     - `depth` (0.30)
+     - `clarity` (0.20)
+     - `relevance` (0.15)
+     $$\text{Composite Score} = (0.35 \times \text{accuracy}) + (0.30 \times \text{depth}) + (0.20 \times \text{clarity}) + (0.15 \times \text{relevance})$$
+   - Out-of-bounds scores ($< 0.0$ or $> 1.0$) are rejected with `502 AI_OUTPUT_INVALID`.
+   - Script and HTML tags (`<script>`, `<iframe>`) in feedback are rejected with `502 AI_OUTPUT_INVALID`.
+   - Forbidden privilege escalation keys (e.g. `"verified": true`, `"evidenceGranted"`) in model response are rejected with `502 AI_OUTPUT_INVALID`.
+   - Grounding: `groundedSkills` returned by model are filtered strictly against canonical taxonomy and the target question's skill. Hallucinated or unasked skills are stripped. Failing answers ($< 0.65$) withhold verified skill evidence. Adversarial injection attempts cap composite score to $\le 0.1$ and record audit warnings.
 
 6. **Institutional Evidence Integration & Verification Policy (`server/src/services/interviewSession.service.js`)**:
    - Completed sessions persist individual `SkillEvidenceCheck` documents for every evaluated target skill.
-   - **Verification Policy Rule**: AI evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`). Raw AI claims can never directly create verified skills, regardless of composite score (even perfect 1.0 answers).
+   - **Institutional Pass Threshold**: `INTERVIEW_PASS_MARK = 0.75` (75%).
+   - **Verification Policy Rule**: AI evaluations are strictly advisory (`outcome: 'uncertain'`, `eligibleForVerified: false`, `evidenceStrength: 'supported'`). Raw AI claims can never directly create verified skills, regardless of composite score (even perfect 1.0 answers).
    - **Role Enforcement**: Student callers completing their session are always evaluated as `'ai'`. Passing `{ "evaluatorType": "human" }` in the request body is rejected/defaulted to `'ai'` unless the caller has an authenticated `admin` role in the database.
-   - **Human Examiner Evaluation**: Only human-evaluated passes ($\ge 0.75$) grant `outcome: 'pass'` and `eligibleForVerified: true`.
+   - **Human Examiner Evaluation**: Only human-evaluated passes ($\ge 0.75$) grant `outcome: 'pass'`, `eligibleForVerified: true`, and `evidenceStrength: 'verified'`.
+   - **Evidence Coexistence & Non-Downgrade Invariant**: Advisory interview evidence (`supported`) coexists with assessment evidence without overwriting or downgrading existing verified evidence (`verified`). The highest evidence strength always prevails in CareerTwin aggregation.
    - **CareerTwin Consumption**:
      - `loadVerifiedEvidence(userId)` fetches only `eligibleForVerified: true` records.
      - `isCareerTwinStale` detects when new verified evidence has arrived (`latestEvidenceAt > generatedAt` or count mismatch).
      - Fresh CareerTwin generation consumes verified checks, upgrades skills to `strength: 'verified'`, and increments `indicators.verified`.
      - Skill-gap identifies verified interview skills as `GAP_STATUS.VERIFIED` and clears suggested evidence.
 
-7. **Rate Limiting & Security Boundaries**:
+7. **Rate Limiting, Latency/Cost Optimization & Security Boundaries**:
    - `evaluationLimiter` sliding-window limiter mounted on answer submission routes.
-   - Answer size constraints: answers $< 5$ characters or $> 5,000$ characters are rejected immediately at the HTTP boundary with `400 VALIDATION_ERROR` before invoking AI provider tokens.
+   - Answer size constraints: answers $< 5$ characters or $> 5,000$ characters are rejected immediately at the HTTP boundary with `400 BAD_REQUEST` before invoking AI provider tokens.
+   - AI cost and latency bounding: prompt generation enforces `maxOutputTokens: 1024`.
+   - In-flight answer evaluation deduplication: concurrent submissions for the same question reuse the in-flight evaluation promise, preventing duplicate provider invocations.
    - Attempt count and session count boundaries prevent infinite loops and token exhaustion.
-   - Strict IDOR tenant isolation: all interview session routes derive owner from verified JWT (`req.auth.userId`). Cross-tenant access returns `404 INTERVIEW_SESSION_NOT_FOUND`.
+   - Strict IDOR tenant isolation: all interview session routes derive owner from verified JWT (`req.auth.userId`). Cross-tenant access returns `404 INTERVIEW_SESSION_NOT_FOUND` with zero timing or existence leaks.
 
-8. **Known MVP Limitations**:
+8. **Frontend User Flow & Contract Parity (`client/src/pages/InterviewPage.jsx`)**:
+   - Full client experience delivered at `/interview`:
+     - Setup flow: select target role, choose 1–5 canonical skills, select difficulty, and pick question count.
+     - Active flow: question prompt, target skill badge, countdown timer, candidate answer textarea with live character counter (10–5000 chars), submit button with loading state.
+     - Resilient error handling: retryable banner and action button for transient AI provider or network interruptions.
+     - Question evaluation presentation: score ring, dimension breakdown cards, feedback, strengths, and growth areas.
+     - Results view: overall score, question summary, institutional evidence badge ("Advisory Supported", "Institutionally Verified", or "Below Passing Threshold"), and CareerTwin update indicator.
+     - Session history: list of past sessions with status badges and scores.
+   - Client DTO normalizers (`toInterviewSession`, `toInterviewQuestion`, `toInterviewEvaluation`, `toInterviewEvidenceCheck`) strip MongoDB internal IDs and enforce contract invariants.
+
+9. **Known MVP Limitations**:
    - **In-Memory Rate Limiting**: Limiters use memory stores; sliding windows reset on server restart. (Production recommendation: Redis store).
    - **Text-Only Answers**: Candidates type text responses; audio/speech-to-text and video proctoring are not included in the MVP.
-   - **Curated Question Scope**: 15 curated questions across primary software engineering roles (Backend Developer, Frontend Developer, Fullstack Developer). Dynamic LLM question generation from live job descriptions is planned for future phases.
+   - **Curated Question Scope**: Curated question bank covering canonical software engineering skills (`Node.js`, `React`, `Python`, `SQL`, `MongoDB`, etc.). Dynamic LLM question generation from live job descriptions is planned for future phases.
    - **Synchronous JSON Responses**: AI evaluation returns complete JSON objects synchronously. Real-time token streaming via SSE / WebSockets is not implemented in MVP.
    - **Linear Question Progression**: Sessions present questions sequentially in order; jumping between questions or pausing/resuming over days is not supported in MVP.
 
