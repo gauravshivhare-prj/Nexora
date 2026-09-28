@@ -17,7 +17,7 @@ This document defines the controlled development sequence for Nexora.
 | 5 — Career Recommendation | Backend complete; frontend via dashboard summary |
 | 6 — Skill Gap | Backend complete; frontend via dashboard summary |
 | 7 — Personalized Roadmap | Backend complete; frontend via dashboard summary |
-| 8 — Assessment & AI Interview | Complete (Backend assessment engine, AI interview session lifecycle, prompt boundary hardening, schema validation, red-team regression suites, institutional evidence integration, and Interview frontend integration `/interview` delivered) |
+| 8 — Assessment & AI Interview | Complete (Backend assessment engine, AI interview session lifecycle, prompt boundary hardening, schema validation, red-team regression suites, institutional evidence integration, Interview frontend integration `/interview`, deterministic demo path, and sign-off delivered) |
 | 9 — Opportunity Matching | Not started |
 | 10 — Dashboard Integration | Dashboard summary endpoint and frontend delivered |
 
@@ -284,6 +284,7 @@ the thing this architecture exists to prevent. Items expose
 - Evidence coexistence & non-downgrade invariants (Delivered)
 - Deterministic demo path & truthful provider-unavailable behavior (Delivered)
 - Final AI quality audit across provider boundary, security, schema, evidence and UX (Delivered)
+- Interview sign-off, verification freeze and full regression (Delivered)
 
 **Delivered — Skill Assessment Engine & API**
 - **Domain Contract & Question Bank**: Curated, versioned assessment question bank covering 10 canonical skills (`Node.js`, `React`, `Python`, `SQL`, `Docker`, `TypeScript`, `Git`, `MongoDB`, `REST APIs`, `System Design`) across 3 difficulty tiers (`beginner`, `intermediate`, `advanced`) and 4 question types (`single_choice`, `multiple_choice`, `code_output`, `short_answer`).
@@ -341,6 +342,9 @@ the thing this architecture exists to prevent. Items expose
 - **Final AI Quality & Security Audit**:
   - Verified provider boundary isolation, credential zero-leakage, prompt sandwich defense, and post-evaluation score clamping on adversarial injection.
   - Verified strict schema validation, deterministic composite score recalculation, and non-downgrade evidence coexistence across full regression suites.
+- **Interview Sign-Off & Verification Freeze**:
+  - Full sequential regressions across interview, evidence, CareerTwin, and readiness suites on isolated test databases with 100% pass rate.
+  - Zero open release blockers, verified frontend contracts and production build, clean working tree, and safe remote synchronization.
 
 **Deliberately NOT delivered in this slice, and why**
 - **No untrusted code execution sandbox.** Predicts code output via deterministic string matching (`normalized_string`) rather than running arbitrary code in a container sandbox.
