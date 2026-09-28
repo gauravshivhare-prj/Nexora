@@ -282,6 +282,8 @@ the thing this architecture exists to prevent. Items expose
 - AI interview client integration at `/interview` (Delivered)
 - AI cost/latency sanity & evaluation deduplication (Delivered)
 - Evidence coexistence & non-downgrade invariants (Delivered)
+- Deterministic demo path & truthful provider-unavailable behavior (Delivered)
+- Final AI quality audit across provider boundary, security, schema, evidence and UX (Delivered)
 
 **Delivered — Skill Assessment Engine & API**
 - **Domain Contract & Question Bank**: Curated, versioned assessment question bank covering 10 canonical skills (`Node.js`, `React`, `Python`, `SQL`, `Docker`, `TypeScript`, `Git`, `MongoDB`, `REST APIs`, `System Design`) across 3 difficulty tiers (`beginner`, `intermediate`, `advanced`) and 4 question types (`single_choice`, `multiple_choice`, `code_output`, `short_answer`).
@@ -333,6 +335,12 @@ the thing this architecture exists to prevent. Items expose
   - Question evaluation cards: composite score ring, 4 dimension breakdown cards, feedback, strengths, and growth areas.
   - Results view: overall score, institutional evidence badges ("Advisory Supported", "Institutionally Verified", "Below Passing Threshold"), and CareerTwin update indicator.
   - Session history list with status badges and scores.
+- **Deterministic Demo Path & Truthful Provider-Unavailable Behavior**:
+  - Deterministic evaluation provider (`AI_PROVIDER=demo`) allowing offline demonstration of rubric grading across weak, partial, and strong tiers without live Gemini keys.
+  - Truthful 503 provider-unavailable handling when unconfigured or when outage triggers (`[trigger-outage]`) are supplied, demonstrating non-destructive UI answer retention and retry actions.
+- **Final AI Quality & Security Audit**:
+  - Verified provider boundary isolation, credential zero-leakage, prompt sandwich defense, and post-evaluation score clamping on adversarial injection.
+  - Verified strict schema validation, deterministic composite score recalculation, and non-downgrade evidence coexistence across full regression suites.
 
 **Deliberately NOT delivered in this slice, and why**
 - **No untrusted code execution sandbox.** Predicts code output via deterministic string matching (`normalized_string`) rather than running arbitrary code in a container sandbox.
