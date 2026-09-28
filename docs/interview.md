@@ -156,3 +156,11 @@ The client interface delivered at `/interview` adheres to the **Sunset Warm** de
 - Standardize session ID property as `id`.
 - Strip any internal scoring keys, weights, or provider credentials.
 - Gracefully handle in-flight, empty, and terminal session states.
+
+## Deterministic Demo Path
+
+For demonstrations, evaluation walkthroughs, and offline testing, Nexora provides a deterministic demo path that does not require live Gemini API keys:
+1. **Unconfigured / Provider-Unavailable Demo** (`AI_PROVIDER=` unset/empty): Demonstrates setup, curated question retrieval from bank, start lifecycle, answer entry, and truthful 503 provider-unavailable handling with non-destructive UI answer retention and retry actions.
+2. **Deterministic Evaluation Demo** (`AI_PROVIDER=demo`): Evaluates answers using deterministic heuristics across quality tiers (weak, partial, strong technical passing $\ge 0.75$), neutralizes adversarial injections ($\le 0.1$), and creates advisory `supported` evidence checks.
+3. **Outage Simulation**: Include `[trigger-outage]` in answer text to simulate upstream provider timeout and verify non-destructive retry UX.
+4. For complete walkthrough steps, see [`docs/interview-demo.md`](file:///c:/Users/radhi/Nexora/docs/interview-demo.md).
