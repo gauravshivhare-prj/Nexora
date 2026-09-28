@@ -1,4 +1,5 @@
-process.env.MONGODB_URI_TEST = 'mongodb://127.0.0.1:27017/nexora_radhika_r21_test';
+process.env.MONGODB_URI_TEST =
+  process.env.MONGODB_URI_TEST || 'mongodb://127.0.0.1:27017/nexora_radhika_r21_test';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';

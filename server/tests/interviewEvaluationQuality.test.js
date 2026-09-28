@@ -64,10 +64,9 @@ describe('TASK R17 — Evaluation Quality Fixtures & Rubric Boundaries Suite', (
 
     // Verify isolated MongoDB name
     const dbName = mongoose.connection.name;
-    assert.equal(
-      dbName,
-      'nexora_radhika_r17_test',
-      `Test must run against isolated database nexora_radhika_r17_test, got: ${dbName}`,
+    assert.ok(
+      dbName.endsWith('_test'),
+      `Test must run against isolated database ending in _test, got: ${dbName}`,
     );
 
     registerAiProvider({
