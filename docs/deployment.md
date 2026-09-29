@@ -50,7 +50,7 @@ Maintain `.env.example` with variable names only.
 - [ ] Database migrations/schema changes reviewed
 - [ ] API health check works
 - [ ] Critical user flow tested locally
-- [ ] `error.md` reviewed
+- [ ] Known open issues reviewed
 
 ### Frontend
 - [ ] Production build succeeds
@@ -124,7 +124,7 @@ If deployment introduces a critical regression:
 1. Stop promoting new changes.
 2. Identify last known good version.
 3. Roll back.
-4. Record incident in `error.md`.
+4. Record the incident in the team issue tracker.
 5. Fix and test in staging.
 6. Redeploy only after verification.
 
