@@ -124,6 +124,13 @@ async function extractPdf(buffer) {
   // Imported here rather than at module load: the parser pulls in a large
   // dependency tree, and a deployment with uploads disabled should not pay
   // for it at startup.
+  // The type and extension are client-declared. The bytes must agree before
+  // an untrusted file reaches the parser. The PDF header may be preceded by
+  // up to 1 KB of junk, which readers tolerate.
+  if (buffer.subarray(0, 1024).indexOf('%PDF-') === -1) {
+    return { ok: false, reason: 'That file could not be read as a PDF. It may be corrupt, or not really a PDF.' };
+  }
+
   const { PDFParse } = await import('pdf-parse');
 
   const parser = new PDFParse({ data: buffer });
@@ -151,8 +158,68 @@ async function extractPdf(buffer) {
   }
 }
 
+/**
+ * Limits on what a DOCX may expand to. A DOCX is a ZIP, and a 5 MB upload
+ * can declare gigabytes of content; unzipping that in-process exhausts the
+ * heap and takes the server down for everyone. A real resume is well under
+ * a megabyte uncompressed and a few dozen entries.
+ */
+const DOCX_MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
+const DOCX_MAX_ENTRIES = 1000;
+
+const ZIP_LOCAL_HEADER = 0x04034b50;
+const ZIP_CENTRAL_HEADER = 0x02014b50;
+const ZIP_END_OF_DIRECTORY = 0x06054b50;
+
+/**
+ * Reads the ZIP central directory and totals the declared uncompressed
+ * sizes, without decompressing anything. Returns a rejection reason, or
+ * null when the archive is within limits.
+ */
+function checkDocxArchive(buffer) {
+  const unreadable = 'That file could not be read as a Word document. It may be corrupt, or not really a .docx.';
+  if (buffer.length < 22 || buffer.readUInt32LE(0) !== ZIP_LOCAL_HEADER) return unreadable;
+
+  // The end-of-directory record sits in the last 22 bytes plus an optional
+  // comment of up to 65535 bytes.
+  let eocd = -1;
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 22 - 65535); i -= 1) {
+    if (buffer.readUInt32LE(i) === ZIP_END_OF_DIRECTORY) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) return unreadable;
+
+  const entries = buffer.readUInt16LE(eocd + 10);
+  const directoryOffset = buffer.readUInt32LE(eocd + 16);
+  // 0xFFFF / 0xFFFFFFFF mean ZIP64, which no real resume needs.
+  if (entries === 0xffff || directoryOffset === 0xffffffff) return unreadable;
+  if (entries > DOCX_MAX_ENTRIES) return 'That Word document is too complex to read.';
+
+  let offset = directoryOffset;
+  let total = 0;
+  for (let n = 0; n < entries; n += 1) {
+    if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== ZIP_CENTRAL_HEADER) {
+      return unreadable;
+    }
+    const uncompressed = buffer.readUInt32LE(offset + 24);
+    if (uncompressed === 0xffffffff) return unreadable;
+    total += uncompressed;
+    if (total > DOCX_MAX_UNCOMPRESSED_BYTES) {
+      return 'That Word document expands to far more content than a resume. Export it again, or paste the text instead.';
+    }
+    offset += 46 + buffer.readUInt16LE(offset + 28) + buffer.readUInt16LE(offset + 30) + buffer.readUInt16LE(offset + 32);
+  }
+
+  return null;
+}
+
 /** DOCX. Raw text only — formatting is not part of what gets analysed. */
 async function extractDocx(buffer) {
+  const rejection = checkDocxArchive(buffer);
+  if (rejection) return { ok: false, reason: rejection };
+
   const mammoth = (await import('mammoth')).default ?? (await import('mammoth'));
 
   const result = await mammoth.extractRawText({ buffer });
