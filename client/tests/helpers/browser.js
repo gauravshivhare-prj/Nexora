@@ -210,17 +210,30 @@ export async function connectBrowser(debugPort) {
       })()`);
     },
 
-    /** Clicks the first button or link whose trimmed text matches. */
-    async clickText(text) {
-      const ok = await evaluate(`(() => {
-        const el = [...document.querySelectorAll('button, a')]
-          .find((n) => n.textContent.trim() === ${JSON.stringify(text)});
-        if (!el) return false;
-        el.click();
-        return true;
-      })()`);
+    /**
+     * Clicks the first button or link whose trimmed text matches.
+     *
+     * Waits briefly for it to appear: right after a navigation or sign-in the
+     * target is often not rendered yet, and on a loaded machine that race
+     * failed unrelated tests at random. The match is still exact, and a
+     * control that never appears still fails the test.
+     */
+    async clickText(text, { timeoutMs = 5_000 } = {}) {
+      const deadline = Date.now() + timeoutMs;
 
-      if (!ok) throw new Error(`No clickable element with text "${text}".`);
+      for (;;) {
+        const ok = await evaluate(`(() => {
+          const el = [...document.querySelectorAll('button, a')]
+            .find((n) => n.textContent.trim() === ${JSON.stringify(text)});
+          if (!el) return false;
+          el.click();
+          return true;
+        })()`);
+
+        if (ok) return;
+        if (Date.now() > deadline) throw new Error(`No clickable element with text "${text}".`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
     },
 
     /**
