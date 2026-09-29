@@ -128,13 +128,13 @@ function ResumeRow({ resume }) {
       className="animate-rise block rounded-xl border border-orange-100 bg-orange-50/30 p-4 transition-colors duration-200 hover:border-brand hover:bg-orange-50"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="font-semibold text-ink">{resume.label ?? 'Untitled resume'}</p>
+        <p className="font-semibold text-ink break-words">{resume.label ?? 'Untitled resume'}</p>
         <p className="text-xs text-ink-muted">{formatDate(resume.createdAt)}</p>
       </div>
 
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1 text-xs text-ink-muted break-words">
         {resume.textLength.toLocaleString('en')} characters
-        {resume.file.originalName ? ` · ${resume.file.originalName}` : ''}
+        {resume.file.originalName ? <span className="break-all"> · {resume.file.originalName}</span> : ''}
       </p>
 
       <div className="mt-2 flex flex-wrap gap-2">
@@ -352,7 +352,7 @@ function AddResumeCard({ isFull, onAdded }) {
                 onClick={submitFile}
                 disabled={isSaving || !file}
                 aria-busy={isSaving}
-                className="w-full rounded-xl border border-brand px-5 py-3 text-sm font-semibold text-brand transition-colors duration-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-ink-muted disabled:text-ink-muted sm:w-auto sm:px-8"
+                className="w-full rounded-xl border border-brand px-5 py-3 text-sm font-semibold text-brand-text transition-colors duration-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-ink-muted disabled:text-ink-muted sm:w-auto sm:px-8"
               >
                 {isSaving ? 'Uploading…' : 'Upload resume'}
               </button>

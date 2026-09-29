@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ErrorState, PageShell } from '../components/PageShell.jsx';
 import { FormAlert } from '../components/FormAlert.jsx';
 import { FormField } from '../components/FormField.jsx';
 import { FormSelect } from '../components/FormSelect.jsx';
@@ -16,8 +17,9 @@ import {
   LIST_LIMITS,
   SEMESTER_OPTIONS,
 } from '../constants/profileOptions.js';
-import { ApiRequestError } from '../services/apiClient.js';
 import { blankProfile, fetchProfile, saveProfile } from '../services/profile.service.js';
+import { ApiRequestError } from '../services/apiClient.js';
+import { toMessage } from '../utils/errorMessage.js';
 
 /**
  * /profile — the student's own profile.
@@ -74,7 +76,7 @@ export function ProfilePage() {
     } catch (error) {
       if (signal?.aborted) return;
 
-      setLoadError(toMessage(error, 'load'));
+      setLoadError(toMessage(error, 'Something went wrong while loading your profile.'));
       setLoadStatus(LOAD_STATUS.FAILED);
     }
   }, []);
@@ -168,7 +170,7 @@ export function ProfilePage() {
         // offered here — pressing it again would fail identically.
         setRejectionCount((count) => count + 1);
       } else {
-        setSaveError(toMessage(error, 'save'));
+        setSaveError(toMessage(error, 'Something went wrong while saving. Your changes have not been lost — try again.'));
         setIsRetryable(true);
       }
     } finally {
@@ -189,28 +191,18 @@ export function ProfilePage() {
 
   if (loadStatus === LOAD_STATUS.FAILED) {
     return (
-      <PageFrame>
-        <div
-          role="alert"
-          className="animate-rise rounded-2xl border border-red-200 bg-surface p-6 text-center sm:p-8"
-        >
-          <p className="text-base font-semibold text-ink">Your profile could not be loaded</p>
-          <p className="mt-2 text-sm text-ink-muted">{loadError}</p>
-
-          <button
-            type="button"
-            onClick={() => load()}
-            className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft"
-          >
-            Try again
-          </button>
-        </div>
-      </PageFrame>
+      <PageShell>
+        <ErrorState
+          title="Your profile could not be loaded"
+          message={loadError}
+          onRetry={() => load()}
+        />
+      </PageShell>
     );
   }
 
   return (
-    <PageFrame>
+    <PageShell>
       <header className="animate-rise mb-6">
         <Link
           to="/app"
@@ -479,7 +471,7 @@ export function ProfilePage() {
           short enough relative to the viewport that a pinned bar would only
           be spending space the content wants.
         */}
-        <div className="sticky bottom-0 -mx-1 rounded-t-2xl border-t border-orange-100 bg-canvas/95 px-1 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
+        <div className="flex flex-wrap items-center justify-between gap-3 sticky bottom-0 -mx-1 rounded-t-2xl border-t border-orange-100 bg-canvas/95 px-1 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
           <button
             type="submit"
             disabled={isSaving}
@@ -488,16 +480,24 @@ export function ProfilePage() {
           >
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/resume"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Upload Resumes →
+            </Link>
+            <Link
+              to="/career-twin"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-200 bg-surface px-4 py-2 text-xs font-semibold text-ink hover:border-brand hover:text-brand-text"
+            >
+              Build CareerTwin →
+            </Link>
+          </div>
         </div>
       </form>
-    </PageFrame>
-  );
-}
-
-/** Shared page width and padding, so every state lines up with the others. */
-function PageFrame({ children }) {
-  return (
-    <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-6 sm:py-14">{children}</main>
+    </PageShell>
   );
 }
 
@@ -509,7 +509,7 @@ function PageFrame({ children }) {
  */
 function ProfileSkeleton() {
   return (
-    <PageFrame>
+    <PageShell>
       <div aria-busy="true" className="flex flex-col gap-5">
         <p role="status" className="sr-only">
           Loading your profile…
@@ -527,7 +527,7 @@ function ProfileSkeleton() {
           </div>
         ))}
       </div>
-    </PageFrame>
+    </PageShell>
   );
 }
 
@@ -571,29 +571,4 @@ function scrollBehavior() {
 function countOf(count, noun) {
   if (count === 0) return null;
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-/**
- * Turns a failure into something a student can act on.
- *
- * Mirrors the login page: backend 4xx messages are written for display and
- * shown as-is, anything unexpected gets a generic line rather than risking
- * internals in the UI.
- */
-function toMessage(error, action) {
-  const fallback =
-    action === 'load'
-      ? 'Something went wrong while loading your profile.'
-      : 'Something went wrong while saving. Your changes have not been lost — try again.';
-
-  if (error instanceof ApiRequestError) {
-    if (error.status === null) return error.message; // network / timeout
-    if (error.status >= 500) {
-      return 'Nexora is having trouble right now. Please try again in a moment.';
-    }
-    return error.message;
-  }
-
-  console.error(`Unexpected profile ${action} failure:`, error);
-  return fallback;
 }

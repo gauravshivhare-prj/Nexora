@@ -317,7 +317,7 @@ export async function startAssessmentAttempt(userId, input) {
         user: userId,
         assessmentId: fullAssessment.id,
         status: ATTEMPT_STATUS.IN_PROGRESS,
-      });
+      }).lean();
       if (active) {
         return toPublicAssessmentAttempt(active);
       }

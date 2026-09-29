@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Card, EmptyState, ErrorState, LoadingState, PageShell } from '../components/PageShell.jsx';
+import { ReadinessVisualization } from '../components/ReadinessVisualization.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { SECTION_STATUS, fetchDashboard } from '../services/dashboard.service.js';
 import { formatDateTime } from '../utils/dateFormat.js';
@@ -139,7 +140,7 @@ function Tile({ section, title, description, empty, emptyAction, onRetry, childr
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-danger-text transition-colors duration-200 hover:bg-red-100"
+            className="mt-2 rounded-lg border border-red-300 px-3 py-2.5 text-xs font-semibold text-danger-text transition-colors duration-200 hover:bg-red-100"
           >
             Try again
           </button>
@@ -172,8 +173,8 @@ function Action({ to, children, primary = false }) {
       to={to}
       className={
         primary
-          ? 'inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft'
-          : 'inline-block rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text'
+          ? 'inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand transition-colors duration-200 hover:bg-brand-soft'
+          : 'inline-flex min-h-[44px] items-center rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text'
       }
     >
       {children}
@@ -347,7 +348,7 @@ function MatchesTile({ section, onRetry }) {
                 </span>
                 <Link
                   to={`/careers/${match.roleId}/skill-gap`}
-                  className="rounded-lg border border-orange-200 px-3 py-1 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
+                  className="rounded-lg border border-orange-200 px-3 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:border-brand hover:bg-orange-50"
                 >
                   Gap
                 </Link>
@@ -402,12 +403,6 @@ function SkillGapTile({ section, role, onRetry }) {
 
 function ReadinessTile({ section, role, onRetry }) {
   const readiness = section.value;
-  const statusMessage = {
-    insufficient_data: 'There is not enough evidence to compare this role yet.',
-    partial: 'Some required skills are missing or only claimed.',
-    supported: 'Every required skill has supporting evidence; some still need verification.',
-    verified: 'Every required skill has verified evidence.',
-  }[readiness?.evidenceStatus];
 
   return (
     <Tile
@@ -423,25 +418,7 @@ function ReadinessTile({ section, role, onRetry }) {
       onRetry={onRetry}
     >
       {readiness ? (
-        <div className="flex flex-col gap-4">
-          <p className="text-sm font-semibold text-ink">{statusMessage}</p>
-          <Stats
-            items={[
-              ['Required missing', readiness.required.missing],
-              ['Required claimed', readiness.required.claimed],
-              ['Required supported', readiness.required.supported],
-              ['Required verified', readiness.required.verified],
-            ]}
-          />
-          <p className="text-xs text-ink-muted">
-            Readiness is based on evidence states, not a percentage or overall score.
-          </p>
-          {role ? (
-            <div>
-              <Action to={`/careers/${role.roleId}/skill-gap`}>See the evidence</Action>
-            </div>
-          ) : null}
-        </div>
+        <ReadinessVisualization readiness={readiness} role={role} />
       ) : null}
     </Tile>
   );

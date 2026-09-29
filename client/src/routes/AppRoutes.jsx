@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppLayout } from '../layouts/AppLayout.jsx';
+import { AssessmentRunnerPage } from '../pages/AssessmentRunnerPage.jsx';
+import { AssessmentsPage } from '../pages/AssessmentsPage.jsx';
 import { CareerTwinPage } from '../pages/CareerTwinPage.jsx';
 import { CareersPage } from '../pages/CareersPage.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -12,6 +14,9 @@ import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
 import { RoadmapPage } from '../pages/RoadmapPage.jsx';
 import { SkillGapPage } from '../pages/SkillGapPage.jsx';
+import { InterviewsPage } from '../pages/InterviewsPage.jsx';
+import { InterviewSessionPage } from '../pages/InterviewSessionPage.jsx';
+import { OpportunitiesPage } from '../pages/OpportunitiesPage.jsx';
 
 /**
  * Application routes.
@@ -19,16 +24,11 @@ import { SkillGapPage } from '../pages/SkillGapPage.jsx';
  * Public routes sit at the top level; everything a signed-in student uses
  * sits inside AppLayout, which carries both the navigation and the auth
  * guard. Nesting the guard means a route added below it is protected
- * because of where it is, not because someone remembered to wrap it — the
- * previous arrangement repeated ProtectedRoute per route, which is one
- * omission away from a leak.
+ * because of where it is, not because someone remembered to wrap it.
  *
- * Only routes for currently delivered UI views exist. While assessment backend
- * endpoints are delivered and ready for client service integration, their UI views
- * (along with AI interviews and opportunities) are scheduled for subsequent UI phases.
- *
- * The catch-all is routing infrastructure rather than a feature: without it
- * an unknown URL renders nothing, which would look like a broken build.
+ * All pages are lazily loaded with React.lazy and wrapped in Suspense so that
+ * the initial payload remains lean and users only download code for the views
+ * they actually visit.
  */
 export function AppRoutes() {
   return (
@@ -45,10 +45,18 @@ export function AppRoutes() {
         <Route path="/resume/:resumeId" element={<ResumeDetailPage />} />
 
         <Route path="/career-twin" element={<CareerTwinPage />} />
+        <Route path="/assessments" element={<AssessmentsPage />} />
+        <Route path="/assessments/:assessmentId" element={<AssessmentRunnerPage />} />
+        <Route path="/assessments/:assessmentId/run" element={<AssessmentRunnerPage />} />
+
+        <Route path="/interviews" element={<InterviewsPage />} />
+        <Route path="/interviews/:sessionId" element={<InterviewSessionPage />} />
 
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/careers/:roleId/skill-gap" element={<SkillGapPage />} />
         <Route path="/careers/:roleId/roadmap" element={<RoadmapPage />} />
+
+        <Route path="/opportunities" element={<OpportunitiesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

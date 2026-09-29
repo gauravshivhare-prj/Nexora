@@ -118,3 +118,25 @@ export async function fetchOpportunities({ signal } = {}) {
     method: data.method ?? null,
   };
 }
+
+/**
+ * GET /api/careers/roles/:roleId/readiness
+ * Fetches explainable career readiness derived from skill-gap evidence.
+ *
+ * @param {string} roleId
+ * @param {{ signal?: AbortSignal }} [options]
+ */
+export async function fetchReadiness(roleId, { signal } = {}) {
+  if (!roleId) throw new Error('roleId is required.');
+
+  const body = await request(
+    `/api/careers/roles/${encodeURIComponent(roleId)}/readiness`,
+    { signal },
+  );
+  const data = body?.data;
+  if (!data?.readiness) {
+    throw new Error('The backend returned an unexpected readiness response.');
+  }
+
+  return { readiness: data.readiness };
+}

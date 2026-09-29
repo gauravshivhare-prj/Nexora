@@ -22,8 +22,8 @@ const CONTRIBUTIONS = [
   },
   { label: 'Skills you have only claimed', state: 'Claimed', fill: 0.38, available: true },
   { label: 'Projects and certifications on file', state: 'Sources', fill: 0.55, available: true },
-  { label: 'Assessments passed', state: 'Verified', fill: 0.12, available: false },
-  { label: 'Interviews passed by a human', state: 'Verified', fill: 0.08, available: false },
+  { label: 'Assessments passed', state: 'Verified', fill: 0.24, available: true },
+  { label: 'Interviews evaluated & verified', state: 'Verified', fill: 0.18, available: true },
 ];
 
 export function ReadinessSection() {
@@ -74,9 +74,7 @@ export function ReadinessSection() {
             <span aria-hidden="true" className="mr-1.5">
               ⓘ
             </span>
-            Illustrative proportions for one example CareerTwin. The bottom two routes are the
-            only ones that can produce Verified, and the screens that collect them are in
-            development.
+            Illustrative proportions for one example CareerTwin. Verified evidence is produced through assessments and evaluated interviews.
           </p>
         </Reveal>
 

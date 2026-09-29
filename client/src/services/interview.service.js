@@ -1,106 +1,232 @@
 import { AI_REQUEST_TIMEOUT_MS, post, request } from './apiClient.js';
+import {
+  INTERVIEW_DIFFICULTY,
+  SESSION_STATUS,
+} from '../constants/interviewOptions.js';
+
+export { AI_REQUEST_TIMEOUT_MS, INTERVIEW_DIFFICULTY, SESSION_STATUS };
 
 /**
- * Client service adapter for Nexora AI mock interview sessions.
- * Communicates with /api/interviews/sessions endpoints.
+ * Normalizes an interview session DTO from the backend.
+ *
+ * @param {object} raw
+ * @returns {object}
  */
+export function toInterviewSession(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid interview session data: expected an object.');
+  }
+
+  const id = raw.id || (raw._id ? String(raw._id) : '');
+  return {
+    id,
+    sessionId: id,
+    status: raw.status ?? SESSION_STATUS.INITIALIZED,
+    targetRole: raw.targetRole ?? '',
+    targetSkills: Array.isArray(raw.targetSkills) ? [...raw.targetSkills] : [],
+    difficulty: raw.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,
+    questionCount: typeof raw.questionCount === 'number' ? raw.questionCount : (raw.questions?.length ?? 5),
+    currentQuestionIndex: typeof raw.currentQuestionIndex === 'number' ? raw.currentQuestionIndex : 0,
+    evaluatorType: raw.evaluatorType ?? 'ai',
+    evidenceCheck: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
+    providerMetadata: raw.providerMetadata ?? null,
+    overallScore: typeof raw.overallScore === 'number' ? raw.overallScore : null,
+    questions: Array.isArray(raw.questions)
+      ? raw.questions.map((q) => ({
+          questionId: q.questionId || q.id || '',
+          order: typeof q.order === 'number' ? q.order : 0,
+          type: q.type ?? 'conceptual',
+          prompt: q.prompt ?? '',
+          targetSkill: q.targetSkill ?? '',
+          difficulty: q.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,
+          rubricCriteria: Array.isArray(q.rubricCriteria) ? q.rubricCriteria : [],
+          answer: q.answer ? { ...q.answer } : null,
+          evaluation: q.evaluation ? { ...q.evaluation } : null,
+        }))
+      : [],
+    startedAt: raw.startedAt ?? null,
+    completedAt: raw.completedAt ?? null,
+    expiresAt: raw.expiresAt ?? null,
+    createdAt: raw.createdAt ?? null,
+  };
+}
 
 /**
+ * POST /api/interviews/sessions
  * Initializes a new interview session.
  *
- * @param {{ targetRoleId: string, skills?: string[] }} payload
+ * @param {{ targetRole?: string, targetRoleId?: string, targetSkills?: string[], skills?: string[], difficulty?: string, questionCount?: number, evaluatorType?: string }} payload
  * @param {{ signal?: AbortSignal }} [options]
  * @returns {Promise<{ session: object }>}
  */
-export async function createInterviewSession({ targetRoleId, skills = [] } = {}, { signal } = {}) {
-  const body = await post('/api/interviews/sessions', { targetRoleId, skills }, { signal });
-  if (!body?.data?.session) {
-    throw new Error('The backend returned an unexpected interview session response.');
+export async function createInterviewSession(payload = {}, { signal } = {}) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Interview session configuration is required.');
   }
-  return { session: body.data.session };
+
+  const requestPayload = {
+    ...payload,
+    ...(payload.targetRoleId && !payload.targetRole ? { targetRole: payload.targetRoleId } : {}),
+    ...(payload.skills && !payload.targetSkills ? { targetSkills: payload.skills } : {}),
+  };
+
+  const body = await post('/api/interviews/sessions', requestPayload, { signal });
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
+  }
+
+  return { session: toInterviewSession(data.session) };
 }
 
 /**
- * Lists the authenticated user's interview sessions.
+ * GET /api/interviews/sessions
+ * Lists all interview sessions for the authenticated user.
  *
  * @param {{ signal?: AbortSignal }} [options]
- * @returns {Promise<{ sessions: object[] }>}
+ * @returns {Promise<{ sessions: object[], count: number }>}
  */
 export async function fetchInterviewSessions({ signal } = {}) {
   const body = await request('/api/interviews/sessions', { signal });
-  if (!Array.isArray(body?.data?.sessions)) {
-    throw new Error('The backend returned an unexpected interview sessions response.');
-  }
-  return { sessions: body.data.sessions };
+  const data = body?.data;
+  const sessions = Array.isArray(data?.sessions) ? data.sessions.map(toInterviewSession) : [];
+
+  return { sessions, count: data?.count ?? sessions.length };
 }
 
 /**
- * Retrieves details of a single interview session.
+ * GET /api/interviews/sessions/:sessionId
+ * Retrieves a single session belonging to the authenticated student.
  *
  * @param {string} sessionId
  * @param {{ signal?: AbortSignal }} [options]
  * @returns {Promise<{ session: object }>}
  */
 export async function fetchInterviewSessionById(sessionId, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+
   const body = await request(`/api/interviews/sessions/${encodeURIComponent(sessionId)}`, { signal });
-  if (!body?.data?.session) {
-    throw new Error('The backend returned an unexpected interview session response.');
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
   }
-  return { session: body.data.session };
+
+  return { session: toInterviewSession(data.session) };
 }
 
 /**
- * Starts an initialized interview session, transitioning it to in_progress.
+ * POST /api/interviews/sessions/:sessionId/start
+ * Starts the initialized interview session.
  *
  * @param {string} sessionId
  * @param {{ signal?: AbortSignal }} [options]
  * @returns {Promise<{ session: object }>}
  */
 export async function startInterviewSession(sessionId, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+
   const body = await post(`/api/interviews/sessions/${encodeURIComponent(sessionId)}/start`, {}, { signal });
-  if (!body?.data?.session) {
-    throw new Error('The backend returned an unexpected interview session response.');
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
   }
-  return { session: body.data.session };
+
+  return { session: toInterviewSession(data.session) };
+}
+
+/**
+ * POST /api/interviews/sessions/:sessionId/questions/:questionId/answers
+ * Submits candidate's answer for evaluation.
+ *
+ * @param {string} sessionId
+ * @param {string} questionId
+ * @param {{ answerText: string, durationSeconds?: number }} payload
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<{ session: object, evaluatedQuestion: object, warnings?: string[] }>}
+ */
+export async function submitInterviewQuestionAnswer(sessionId, questionId, payload, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+  if (!questionId) throw new Error('questionId is required.');
+  if (!payload || typeof payload.answerText !== 'string') {
+    throw new Error('Candidate answer text is required.');
+  }
+
+  const body = await post(
+    `/api/interviews/sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/answers`,
+    payload,
+    { timeoutMs: AI_REQUEST_TIMEOUT_MS, signal },
+  );
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
+  }
+
+  return {
+    session: toInterviewSession(data.session),
+    evaluatedQuestion: data.evaluatedQuestion ?? null,
+    warnings: Array.isArray(data.warnings) ? data.warnings : [],
+  };
 }
 
 /**
  * Submits an answer to a question in the interview session and runs AI evaluation.
+ * Compatible adapter supporting both { answer: string } and { answerText: string } payloads.
  *
  * @param {string} sessionId
  * @param {string} questionId
- * @param {{ answer: string }} payload
+ * @param {{ answer?: string, answerText?: string, durationSeconds?: number }} payload
  * @param {{ signal?: AbortSignal }} [options]
- * @returns {Promise<{ evaluation: object, session: object }>}
+ * @returns {Promise<{ evaluation: object, session: object, evaluatedQuestion: object, warnings?: string[] }>}
  */
-export async function submitInterviewAnswer(sessionId, questionId, { answer } = {}, { signal } = {}) {
-  const body = await post(
-    `/api/interviews/sessions/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/answers`,
-    { answer },
-    { timeoutMs: AI_REQUEST_TIMEOUT_MS, signal },
+export async function submitInterviewAnswer(sessionId, questionId, payload = {}, { signal } = {}) {
+  const answerText = typeof payload === 'string' ? payload : (payload.answerText ?? payload.answer ?? '');
+  const durationSeconds = payload.durationSeconds;
+  const result = await submitInterviewQuestionAnswer(
+    sessionId,
+    questionId,
+    { answerText, ...(durationSeconds !== undefined ? { durationSeconds } : {}) },
+    { signal },
   );
-  if (!body?.data) {
-    throw new Error('The backend returned an unexpected answer evaluation response.');
-  }
-  return body.data;
+
+  return {
+    ...result,
+    evaluation: result.evaluatedQuestion?.evaluation ?? null,
+  };
 }
 
 /**
- * Completes an active interview session, computing final score and recording evidence.
+ * POST /api/interviews/sessions/:sessionId/complete
+ * Completes the interview session, computing overall score and evidence.
  *
  * @param {string} sessionId
+ * @param {object} [payload]
  * @param {{ signal?: AbortSignal }} [options]
- * @returns {Promise<{ session: object }>}
+ * @returns {Promise<{ session: object, overallScore: number|null, eligibleForVerified: boolean, evidenceResults?: object[], evidenceChecks?: object[] }>}
  */
-export async function completeInterviewSession(sessionId, { signal } = {}) {
-  const body = await post(`/api/interviews/sessions/${encodeURIComponent(sessionId)}/complete`, {}, { signal });
-  if (!body?.data?.session) {
-    throw new Error('The backend returned an unexpected interview completion response.');
+export async function completeInterviewSession(sessionId, payload = {}, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+
+  const body = await post(
+    `/api/interviews/sessions/${encodeURIComponent(sessionId)}/complete`,
+    payload,
+    { signal },
+  );
+  const data = body?.data;
+  if (!data?.session) {
+    throw new Error('The backend returned an unexpected response shape.');
   }
-  return { session: body.data.session };
+
+  return {
+    session: toInterviewSession(data.session),
+    overallScore: typeof data.overallScore === 'number' ? data.overallScore : (data.session.overallScore ?? null),
+    eligibleForVerified: Boolean(data.eligibleForVerified),
+    evidenceResults: Array.isArray(data.evidenceResults) ? data.evidenceResults : [],
+    evidenceChecks: Array.isArray(data.evidenceChecks) ? data.evidenceChecks : [],
+  };
 }
 
 /**
+ * POST /api/interviews/sessions/:sessionId/abandon
  * Abandons an active interview session.
  *
  * @param {string} sessionId
@@ -108,9 +234,13 @@ export async function completeInterviewSession(sessionId, { signal } = {}) {
  * @returns {Promise<{ session: object }>}
  */
 export async function abandonInterviewSession(sessionId, { signal } = {}) {
+  if (!sessionId) throw new Error('sessionId is required.');
+
   const body = await post(`/api/interviews/sessions/${encodeURIComponent(sessionId)}/abandon`, {}, { signal });
-  if (!body?.data?.session) {
+  const data = body?.data;
+  if (!data?.session) {
     throw new Error('The backend returned an unexpected interview session response.');
   }
-  return { session: body.data.session };
+
+  return { session: toInterviewSession(data.session) };
 }

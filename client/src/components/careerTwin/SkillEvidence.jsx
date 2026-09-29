@@ -70,7 +70,7 @@ export function SkillRow({ skill }) {
     <li className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-semibold text-ink">{skill.name}</span>
+          <span className="min-w-0 break-words font-semibold text-ink">{skill.name}</span>
           <StrengthBadge strength={skill.strength} />
         </div>
 
@@ -79,7 +79,7 @@ export function SkillRow({ skill }) {
           onClick={() => setIsOpen((open) => !open)}
           aria-expanded={isOpen}
           aria-controls={panelId}
-          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-brand-text transition-colors duration-200 hover:bg-orange-100"
+          className="shrink-0 rounded-lg px-2 py-2.5 text-xs font-semibold text-brand-text transition-colors duration-200 hover:bg-orange-100"
         >
           {/*
             The count is in the button, so a student can see how much is

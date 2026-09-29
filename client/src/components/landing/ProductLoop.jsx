@@ -63,16 +63,16 @@ const STAGES = [
     label: 'Assess',
     produces: 'Assessment and interview results, stored with their provenance.',
     detail:
-      'The backend accepts and stores results today, and only a passing result can produce verified evidence — AI evaluation is advisory and never verifies on its own. The screens that collect them are in development.',
-    available: false,
+      'Verified assessments and AI interview sessions with timers, attempt limits, and objective evaluation criteria. Passing verified assessments grants verified evidence to your CareerTwin.',
+    available: true,
   },
   {
     key: 'readiness',
     label: 'Readiness',
     produces: 'A rebuilt CareerTwin, and every match, gap and step re-derived from it.',
     detail:
-      'Readiness is the state of your evidence, not a score Nexora invents. New evidence marks your twin out of date; rebuilding it moves everything downstream. Opportunity matching has a deterministic backend contract, but no student-facing screen yet.',
-    available: false,
+      'Readiness is the state of your evidence, not a score Nexora invents. New evidence marks your twin out of date; rebuilding it moves everything downstream. Opportunity matching has a deterministic backend contract and is matched directly to your verified skills.',
+    available: true,
   },
 ];
 

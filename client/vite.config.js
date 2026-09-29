@@ -13,4 +13,21 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router') || id.includes('@remix-run')) {
+              return 'vendor-router';
+            }
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
 });

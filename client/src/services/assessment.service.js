@@ -50,16 +50,20 @@ export function toAssessment(raw) {
     title: raw.title ?? '',
     description: raw.description ?? '',
     canonicalSkill: raw.canonicalSkill ?? raw.skillName ?? raw.skillKey ?? '',
+    skillKey: raw.skillKey || '',
+    skillName: raw.skillName || raw.canonicalSkill || raw.skillKey || '',
     difficulty: raw.difficulty ?? DIFFICULTY_LEVEL.BEGINNER,
     group: raw.group ?? null,
     isPractice: raw.isPractice === true,
     version: raw.version ?? 1,
-    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : (raw.timeLimitMinutes ?? 0),
+    durationMinutes: typeof raw.durationMinutes === 'number' ? raw.durationMinutes : (typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : 0),
+    timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : (typeof raw.durationMinutes === 'number' ? raw.durationMinutes : 0),
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     totalQuestions: typeof raw.totalQuestions === 'number' ? raw.totalQuestions : (raw.questions?.length ?? 0),
     questions: Array.isArray(raw.questions)
       ? raw.questions.map((q) => ({
           questionId: q.questionId || q.id || '',
+          id: q.id || q.questionId || '',
           prompt: q.prompt ?? '',
           type: q.type ?? QUESTION_TYPE.SINGLE_CHOICE,
           weight: typeof q.weight === 'number' ? q.weight : 1,
@@ -100,8 +104,13 @@ export function toAssessmentAttempt(raw) {
     timeSpentSeconds: typeof raw.timeSpentSeconds === 'number' ? raw.timeSpentSeconds : (raw.durationSeconds ?? null),
     timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : null,
     answers: Array.isArray(raw.answers) ? raw.answers : [],
-    result: raw.result ? toAssessmentResult(raw.result) : (raw.status === ATTEMPT_STATUS.EVALUATED ? toAssessmentResult(raw) : null),
+    result: raw.result
+      ? toAssessmentResult(raw.result)
+      : raw.status === ATTEMPT_STATUS.EVALUATED || typeof raw.score === 'number'
+        ? toAssessmentResult(raw)
+        : null,
     evidenceCheck: raw.evidenceCheck ?? raw.evidenceCheckId ?? null,
+    evidenceCheckId: raw.evidenceCheckId ?? raw.evidenceCheck ?? null,
   };
 }
 
@@ -126,12 +135,25 @@ export function toAssessmentResult(raw) {
     passMark: typeof raw.passMark === 'number' ? raw.passMark : 0.7,
     passed: Boolean(raw.passed),
     outcome: raw.outcome ?? (raw.passed ? EVALUATION_OUTCOME.PASS : EVALUATION_OUTCOME.FAIL),
-    evidenceStatus: raw.evidenceStatus ?? (raw.evidenceCheckId ? EVIDENCE_STATUS.VERIFIED : (raw.passed ? EVIDENCE_STATUS.SUPPORTED : EVIDENCE_STATUS.UNSUPPORTED)),
+    evidenceStatus:
+      raw.evidenceStatus ??
+      (raw.evidenceCheckId || raw.evidenceCheck
+        ? EVIDENCE_STATUS.VERIFIED
+        : raw.passed
+          ? EVIDENCE_STATUS.SUPPORTED
+          : EVIDENCE_STATUS.UNSUPPORTED),
+    evidenceCheckId: raw.evidenceCheckId || raw.evidenceCheck || null,
     completedAt: raw.completedAt ?? null,
     questionBreakdown: Array.isArray(raw.questionBreakdown || raw.questionResults)
-      ? (raw.questionBreakdown || raw.questionResults).map((item) => ({
-          questionId: item.questionId ?? '',
-          status: item.status ?? (item.isCorrect ? QUESTION_RESULT_STATUS.CORRECT : QUESTION_RESULT_STATUS.INCORRECT),
+      ? (raw.questionBreakdown || raw.questionResults).map((item, idx) => ({
+          questionId: item.questionId ?? `q_${idx + 1}`,
+          prompt: item.prompt ?? `Question ${idx + 1}`,
+          status:
+            item.status ??
+            (item.isCorrect
+              ? QUESTION_RESULT_STATUS.CORRECT
+              : QUESTION_RESULT_STATUS.INCORRECT),
+          isCorrect: Boolean(item.isCorrect),
           earnedPoints: typeof item.earnedPoints === 'number' ? item.earnedPoints : 0,
           maxPoints: typeof item.maxPoints === 'number' ? item.maxPoints : 1,
           studentAnswer: item.studentAnswer ?? item.selectedOption ?? null,
@@ -229,14 +251,16 @@ export async function submitAssessmentAttempt(attemptId, { answers, timeSpentSec
   );
 
   const data = body?.data;
-  if (!data?.attempt || !data?.result) {
+  if (!data?.attempt) {
     throw new Error('The backend returned an unexpected response shape.');
   }
 
+  const rawResult = data.result || data.attempt;
+
   return {
     attempt: toAssessmentAttempt(data.attempt),
-    result: toAssessmentResult(data.result),
-    verification: data.verification ?? null,
+    result: toAssessmentResult(rawResult),
+    verification: data.verification ?? data.evidenceResult ?? null,
   };
 }
 

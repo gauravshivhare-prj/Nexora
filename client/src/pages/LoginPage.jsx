@@ -64,7 +64,7 @@ export function LoginPage() {
       footer={
         <>
           New to Nexora?{' '}
-          <Link to="/register" className="font-semibold text-brand hover:underline">
+          <Link to="/register" className="font-semibold text-brand-text hover:underline">
             Create an account
           </Link>
         </>
