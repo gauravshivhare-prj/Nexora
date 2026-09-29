@@ -57,6 +57,16 @@ function assertRequiredVariables() {
         'GEMINI_API_KEY is required when AI_PROVIDER is set to "gemini".',
     );
   }
+
+  // The demo provider returns canned, deterministic evaluations. Serving them
+  // to real students as if a model had read their work would be a false
+  // result, so production refuses to start with it.
+  if (process.env.AI_PROVIDER?.trim() === 'demo' && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'AI_PROVIDER "demo" is not allowed when NODE_ENV is "production". ' +
+        'Use "gemini", or leave AI_PROVIDER empty to disable AI features.',
+    );
+  }
 }
 
 function parsePort(value, fallback) {
