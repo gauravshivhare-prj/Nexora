@@ -88,7 +88,7 @@ describe('P29 — Demo & Product Polish Verification Suite', () => {
       const navSource = readFileSync(resolve(CLIENT_ROOT, 'src/components/AppNav.jsx'), 'utf8');
 
       assert.ok(
-        navSource.includes('<ThemeToggle className="hidden sm:inline-flex" />'),
+        navSource.includes('<ThemeToggle className="hidden xl:inline-flex" />'),
         'AppNav must offer desktop ThemeToggle',
       );
       assert.ok(

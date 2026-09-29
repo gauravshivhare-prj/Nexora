@@ -61,16 +61,16 @@ export function AppNav() {
         Skip to content
       </a>
 
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-5 py-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-5 py-3 sm:px-6">
         <Link
           to="/app"
-          className="text-sm font-bold tracking-[0.2em] text-brand-text uppercase"
+          className="text-sm font-bold tracking-[0.2em] whitespace-nowrap text-brand-text uppercase"
         >
           Nexora
         </Link>
 
         {/* Desktop */}
-        <nav aria-label="Main" className="hidden sm:block">
+        <nav aria-label="Main" className="hidden xl:block">
           <ul className="flex items-center gap-1">
             {DESTINATIONS.map((destination) => (
               <li key={destination.to}>
@@ -81,19 +81,19 @@ export function AppNav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <p className="hidden text-sm text-ink-muted lg:block">{user.name}</p>
+          <p className="hidden text-sm whitespace-nowrap text-ink-muted 2xl:block">{user.name}</p>
 
           {/* Same control as the public pages: the theme belongs to the
               browser, so it must be reachable from inside the product too
               rather than only from the landing page. */}
-          <ThemeToggle className="hidden sm:inline-flex" />
+          <ThemeToggle className="hidden xl:inline-flex" />
 
           <button
             type="button"
             onClick={handleLogout}
             disabled={isLoggingOut}
             aria-busy={isLoggingOut}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:text-ink-muted"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text disabled:cursor-not-allowed disabled:text-ink-muted"
           >
             {isLoggingOut ? 'Signing out…' : 'Log out'}
           </button>
@@ -103,7 +103,7 @@ export function AppNav() {
             onClick={() => setIsOpen((open) => !open)}
             aria-expanded={isOpen}
             aria-controls="app-nav-panel"
-            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text sm:hidden"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-orange-200 px-3 py-1.5 text-sm font-semibold text-ink transition-colors duration-200 hover:border-brand hover:text-brand-text xl:hidden"
           >
             Menu
           </button>
@@ -116,9 +116,9 @@ export function AppNav() {
         id="app-nav-panel"
         aria-label="Main"
         hidden={!isOpen}
-        className="border-t border-orange-100 sm:hidden"
+        className="border-t border-orange-100 xl:hidden"
       >
-        <ul className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-5 py-3">
+        <ul className="mx-auto flex w-full max-w-7xl flex-col gap-1 px-5 py-3">
           {DESTINATIONS.map((destination) => (
             <li key={destination.to}>
               <NavItem destination={destination} block />
@@ -129,7 +129,7 @@ export function AppNav() {
         {/* The switcher is hidden beside the logout button at this width, so
             it lives here instead — otherwise the theme would be unreachable
             from inside the product on a phone. */}
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 border-t border-orange-100 px-5 py-3">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 border-t border-orange-100 px-5 py-3">
           <span className="text-xs font-semibold tracking-[0.18em] text-ink-muted uppercase">
             Theme
           </span>
@@ -155,7 +155,7 @@ function NavItem({ destination, block = false }) {
       className={({ isActive }) =>
         [
           block ? 'flex w-full min-h-[44px] items-center' : 'inline-flex min-h-[44px] items-center',
-          'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
+          'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200',
           isActive
             ? 'bg-orange-100 font-semibold text-brand-text'
             : 'text-ink-muted hover:bg-orange-50 hover:text-ink',

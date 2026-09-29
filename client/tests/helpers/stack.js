@@ -174,6 +174,9 @@ function spawnChrome(debugPort, chromeProfile) {
       '--disable-gpu',
       '--no-first-run',
       '--no-default-browser-check',
+      // A real desktop size. Headless Chrome defaults to 800x600, below the
+      // width where the full inline navigation is shown.
+      '--window-size=1440,900',
       `--remote-debugging-port=${debugPort}`,
       `--user-data-dir=${chromeProfile}`,
       'about:blank',
