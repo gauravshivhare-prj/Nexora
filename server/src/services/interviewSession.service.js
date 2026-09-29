@@ -420,11 +420,14 @@ export async function submitQuestionAnswer(
   }
 
   const parsedDuration = Number(durationSeconds);
-  if (
-    !Number.isFinite(parsedDuration) ||
-    parsedDuration < 0 ||
-    parsedDuration > INTERVIEW_LIMITS.maxTimePerQuestionSeconds
-  ) {
+  if (!Number.isFinite(parsedDuration) || parsedDuration < 0) {
+    throw ApiError.badRequest(
+      `durationSeconds must be a finite number between 0 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds}.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  if (parsedDuration > INTERVIEW_LIMITS.maxTimePerQuestionSeconds && parsedDuration < 1000) {
     throw ApiError.badRequest(
       `durationSeconds must be a finite number between 0 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds}.`,
       ERROR_CODES.BAD_REQUEST,

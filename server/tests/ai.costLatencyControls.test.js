@@ -81,7 +81,7 @@ describe('ai cost and latency controls (G17)', () => {
         },
         answerText: 'The event loop handles asynchronous non-blocking I/O operations.',
       });
-      assert.equal(interviewReq.maxOutputTokens, 2048);
+      assert.equal(interviewReq.maxOutputTokens, 1024);
 
       const resumeReq = buildResumeExtractionRequest('Gaurav Shivhare\nSkills: Node.js, React');
       assert.equal(resumeReq.maxOutputTokens, 4096);

@@ -368,7 +368,7 @@ attached to evidence saying where it came from.
 |---|---|---|
 | `claimed` | The student said so | Profile skill entry, resume mention |
 | `supported` | Concrete usage or advisory evaluation | Project technology, certification, advisory AI interview completion |
-| `verified` | An independent check passed | Intermediate/advanced skill assessment pass (>= 70%) or authorized human examiner interview pass (>= 75%) |
+| `verified` | An independent check passed | Passing skill assessments or human-evaluated technical interviews |
 
 A resume is `claimed`, not `supported`: it is a document its subject wrote
 about themselves, and grounding proves the resume says it, not that it is
@@ -482,7 +482,7 @@ it take for Nexora to say you have Docker?".
 | `missing` | Not seen anywhere in the profile or resumes |
 | `claimed` | Listed, but Nexora has not seen it used |
 | `supported` | Backed by a project, certification, or advisory AI interview |
-| `verified` | Independently checked via skill assessment or human-evaluated interview |
+| `verified` | Independently checked via passed assessment or human interview |
 
 `claimed` being its own status — rather than counted as "has the skill" — is
 the point of the feature. A student who typed "Docker, expert" into a form

@@ -61,7 +61,7 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
           const passMark = this.passMark ?? update?.$set?.passMark ?? update?.passMark;
 
           if (val === true) {
-            if (kind === CHECK_KINDS.INTERVIEW && evaluatedBy === 'ai') {
+            if (evaluatedBy === 'ai') {
               return false;
             }
             if (outcome !== CHECK_OUTCOMES.PASS) {
@@ -77,7 +77,7 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
           }
           return true;
         },
-        message: 'Check is not eligible for verified status under institutional evidence policy.',
+        message: 'AI evaluations and non-passing outcomes cannot be eligible for verified evidence.',
       },
     },
     evaluatedBy: { type: String, required: true },

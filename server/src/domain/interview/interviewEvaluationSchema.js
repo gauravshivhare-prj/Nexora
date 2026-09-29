@@ -41,6 +41,7 @@ export const INJECTION_PATTERNS = Object.freeze([
   /give\s+(a\s+)?full\s+marks/i,
   /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
   /(award|give|receive|grant|assign|set|return)\s+(the\s+candidate\s+)?(a\s+)?(perfect|full|maximum|1(\.0)?|100%?)\s*(score|marks?)?/i,
+  /(award|give|receive|grant|assign)\s+(the\s+candidate\s+)?(a\s+)?score\s+(of\s+)?1(\.0)?\b/i,
   /(set|make|force|change)\s+(all\s+|the\s+)?(scores?|dimensions?|ratings?)\s*(to|=|\:)?\s*1(\.0)?\b/i,
   /all\s+dimensions?\s+(to\s+)?1(\.0)?\b/i,
   /score\s+is\s+100/i,
@@ -72,7 +73,7 @@ export const INJECTION_PATTERNS = Object.freeze([
   /mark\s+(this\s+)?(as\s+)?verified/i,
 
   // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace, backslashes, or unclosed)
-  /<\s*[\/\\|]?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules|untrusted_resume_text|resume_text|candidate_profile|student_profile_data)\b[^>]*>/i,
+  /<\s*[\/\\|]?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules|untrusted_resume_text|resume_text|candidate_profile|student_profile_data)\b/i,
   /<!--|-->/,
   /<!\[CDATA\[|\]\]>|<!DOCTYPE/i,
   /<\?xml|<\?(php|=|\w+)?/i,

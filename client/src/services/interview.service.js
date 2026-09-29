@@ -94,8 +94,23 @@ export function toInterviewSession(raw) {
     targetRole: raw.targetRole ?? '',
     targetSkills: Array.isArray(raw.targetSkills)
       ? raw.targetSkills.map((s) => {
-          if (typeof s === 'string') return s;
-          return s?.name ?? s?.key ?? String(s);
+          if (typeof s === 'string') {
+            const canonicalKey = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const obj = { name: s, key: canonicalKey };
+            obj.toString = () => s;
+            return obj;
+          }
+          if (s && typeof s === 'object') {
+            const name = s.name || s.title || s.key || '';
+            const key = s.key || name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const obj = { ...s, name, key };
+            obj.toString = () => name;
+            return obj;
+          }
+          const str = String(s);
+          const obj = { name: str, key: str.toLowerCase().replace(/[^a-z0-9]/g, '') };
+          obj.toString = () => str;
+          return obj;
         })
       : [],
     difficulty: raw.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,

@@ -495,6 +495,10 @@ export function toPublicInterviewQuestion(question) {
         typeof raw.evaluation.compositeScore === 'number'
           ? raw.evaluation.compositeScore
           : (typeof raw.evaluation.score === 'number' ? raw.evaluation.score : null),
+      score:
+        typeof raw.evaluation.score === 'number'
+          ? raw.evaluation.score
+          : (typeof raw.evaluation.compositeScore === 'number' ? raw.evaluation.compositeScore : null),
       feedback: safeFeedback,
       strengths: safeStrengths,
       growthAreas: safeGrowthAreas,

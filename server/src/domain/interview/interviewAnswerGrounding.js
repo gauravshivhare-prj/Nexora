@@ -70,6 +70,12 @@ export function escapeCandidateAnswerForPrompt(text) {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
       // 2. Strip Unicode zero-width and bidirectional formatting characters
       .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+      // 2b. Normalize fullwidth angle brackets and vertical bars
+      .replace(/＜/g, '<')
+      .replace(/＞/g, '>')
+      .replace(/｜/g, '|')
+      // 2c. Neutralize Anthropic Human: and Assistant: turn headers
+      .replace(/(^|\n\s*)(Human|Assistant)\s*:/gi, '$1&#91;$2&#93;:')
       // 3. Neutralize XML comments, CDATA blocks, declarations, and processing instructions
       .replace(/<!--/g, '&lt;!--')
       .replace(/-->/g, '--&gt;')

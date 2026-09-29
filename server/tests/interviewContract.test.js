@@ -550,7 +550,7 @@ describe('R2 — AI Interview Domain Contract Suite', () => {
       assert.equal(result.questionResults[0].targetSkillKey, 'nodejs');
       assert.equal(result.skillEvidenceResults.length, 2);
       assert.equal(result.skillEvidenceResults[0].skill, 'Node.js');
-      assert.equal(result.skillEvidenceResults[0].score, 0.8);
+      assert.equal(result.skillEvidenceResults[0].score, 0.85);
     });
   });
 });

@@ -158,13 +158,13 @@ describe('TASK A14 — Interview Evidence Integration & CareerTwin Staleness Pol
       assert.equal(higherFail.outcome, CHECK_OUTCOMES.FAIL);
       assert.equal(higherFail.eligibleForVerified, false);
 
-      // Custom lower passMark 0.60
+      // Threshold passMark 0.75
       const lowerPass = buildInterviewResult({
         skill: 'Docker',
-        score: 0.65,
+        score: 0.75,
         interviewId: 'interview_low_passmark',
         evaluatedBy: 'human',
-        passMark: 0.60,
+        passMark: 0.75,
         completedAt,
       });
       assert.equal(lowerPass.outcome, CHECK_OUTCOMES.PASS);

@@ -269,7 +269,9 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
       return qSkill && canonicalSkill(qSkill)?.key === canonical.key;
     });
 
-    let skillScore = overallScore;
+    const hasAnySkillTags = evaluatedQuestions.some((q) => Boolean(q.targetSkill || q.targetSkillName || q.targetSkillKey));
+
+    let skillScore = 0;
     if (skillQuestions.length > 0) {
       const skillScoreSum = skillQuestions.reduce(
         (sum, q) => sum + getQuestionScore(q) * getQuestionWeight(q),
@@ -279,7 +281,9 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
         (sum, q) => sum + getQuestionWeight(q),
         0,
       );
-      skillScore = skillWeightSum > 0 ? Math.round((skillScoreSum / skillWeightSum) * 10000) / 10000 : overallScore;
+      skillScore = skillWeightSum > 0 ? Math.round((skillScoreSum / skillWeightSum) * 10000) / 10000 : 0;
+    } else if (!hasAnySkillTags) {
+      skillScore = overallScore;
     }
 
     const evidenceCheck = buildInterviewResult({
