@@ -38,6 +38,9 @@ describe('P19 — interview question runner and safe submission flow', { timeout
     await page.fill('Confirm password', PASSWORD);
     await page.clickText('Create account');
     await page.waitFor('location.pathname === "/app"', { description: 'navigation to /app' });
+    await page.waitFor('document.body?.innerText?.includes("Interviews")', {
+      description: 'nav link to Interviews',
+    });
 
     // Navigate to /interviews
     await page.clickText('Interviews');
