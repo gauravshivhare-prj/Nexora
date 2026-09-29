@@ -505,7 +505,7 @@ export function AssessmentRunnerPage() {
             }
           >
             <div className="flex flex-col gap-5">
-              <p className="text-base font-semibold text-ink break-words">
+              <p id="assessment-question-prompt" className="text-base font-semibold text-ink break-words">
                 {currentQuestion.prompt}
               </p>
 
@@ -522,7 +522,11 @@ export function AssessmentRunnerPage() {
               <div className="mt-2 flex flex-col gap-3">
                 {/* 1. Single Choice */}
                 {currentQuestion.type === QUESTION_TYPES.SINGLE_CHOICE && (
-                  <div className="flex flex-col gap-2.5">
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="assessment-question-prompt"
+                    className="flex flex-col gap-2.5"
+                  >
                     {currentQuestion.options?.map((opt) => {
                       const isSelected = currentAnswer === opt.id;
                       return (
@@ -551,7 +555,11 @@ export function AssessmentRunnerPage() {
 
                 {/* 2. Multiple Choice */}
                 {currentQuestion.type === QUESTION_TYPES.MULTIPLE_CHOICE && (
-                  <div className="flex flex-col gap-2.5">
+                  <div
+                    role="group"
+                    aria-labelledby="assessment-question-prompt"
+                    className="flex flex-col gap-2.5"
+                  >
                     <p className="text-xs text-ink-muted">Select all that apply:</p>
                     {currentQuestion.options?.map((opt) => {
                       const isSelected =
@@ -582,7 +590,7 @@ export function AssessmentRunnerPage() {
                 {currentQuestion.type === QUESTION_TYPES.BOOLEAN && (
                   <div
                     role="radiogroup"
-                    aria-label="True or False"
+                    aria-labelledby="assessment-question-prompt"
                     className="flex gap-4"
                   >
                     {[
