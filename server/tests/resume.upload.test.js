@@ -439,6 +439,50 @@ describe('resume file upload', () => {
     assert.equal(status, 400, 'a malformed document produced a server error');
   });
 
+  it('rejects a .docx that declares a huge uncompressed size, before parsing', async () => {
+    const token = await signUp();
+
+    // A zip bomb in miniature: the central directory claims 3 GB for one
+    // entry. Reading it would exhaust the heap; it must be refused unread.
+    const bomb = buildDocx(RESUME_TEXT);
+    const eocd = bomb.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    const directory = bomb.readUInt32LE(eocd + 16);
+    bomb.writeUInt32LE(3 * 1024 * 1024 * 1024, directory + 24);
+
+    const { status, body } = await uploadWithToken(baseUrl, '/api/resumes/upload', {
+      token,
+      file: { buffer: bomb, filename: 'cv.docx', type: DOCX },
+    });
+
+    assert.equal(status, 400);
+    assert.match(JSON.stringify(body.details), /expands to far more content/);
+  });
+
+  it('rejects a .docx with an implausible number of entries', async () => {
+    const token = await signUp();
+
+    const many = Array.from({ length: 1001 }, (_, i) => ({ name: `x/${i}.xml`, content: '<a/>' }));
+    const { status, body } = await uploadWithToken(baseUrl, '/api/resumes/upload', {
+      token,
+      file: { buffer: zipStored(many), filename: 'cv.docx', type: DOCX },
+    });
+
+    assert.equal(status, 400);
+    assert.match(JSON.stringify(body.details), /too complex/);
+  });
+
+  it('rejects a .docx whose bytes are not a zip archive', async () => {
+    const token = await signUp();
+
+    const { status, body } = await uploadWithToken(baseUrl, '/api/resumes/upload', {
+      token,
+      file: { buffer: Buffer.from('not a word document at all, just text'), filename: 'cv.docx', type: DOCX },
+    });
+
+    assert.equal(status, 400);
+    assert.match(JSON.stringify(body.details), /could not be read/);
+  });
+
   it('rejects an empty file', async () => {
     const token = await signUp();
 
