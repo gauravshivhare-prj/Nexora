@@ -341,7 +341,7 @@ export function InterviewsPage() {
                       </h3>
 
                       <p className="mt-1 text-xs text-brand-text break-words">
-                        Skills: {sess.targetSkills.join(', ')}
+                        Skills: {sess.targetSkills.map((s) => (typeof s === 'string' ? s : (s?.name || s?.key || ''))).filter(Boolean).join(', ')}
                       </p>
 
                       <div className="mt-2 text-xs text-ink-muted">

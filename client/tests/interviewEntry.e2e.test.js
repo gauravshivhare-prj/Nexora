@@ -25,6 +25,7 @@ describe('interview entry and session initiation', { timeout: 180_000 }, () => {
   });
 
   beforeEach(async () => {
+    await page.setViewport({ width: 1280, height: 900 });
     await page.goto(`${stack.appUrl}/`);
     await page.clearStorage();
   });
@@ -50,6 +51,7 @@ describe('interview entry and session initiation', { timeout: 180_000 }, () => {
 
   it('is accessible from top navigation for authenticated students', async () => {
     await signUp();
+    await page.waitFor('document.body.innerText.includes("Interviews")');
     await page.clickText('Interviews');
     await page.waitFor('location.pathname === "/interviews"', {
       description: 'navigation to /interviews',

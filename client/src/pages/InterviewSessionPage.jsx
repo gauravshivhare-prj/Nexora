@@ -191,6 +191,13 @@ export function InterviewSessionPage() {
   const isInProgress = session.status === SESSION_STATUS.IN_PROGRESS;
   const isCompleted = session.status === SESSION_STATUS.COMPLETED;
 
+  const targetSkillsText = Array.isArray(session.targetSkills)
+    ? session.targetSkills
+        .map((s) => (typeof s === 'string' ? s : (s?.name || s?.key || '')))
+        .filter(Boolean)
+        .join(', ')
+    : '';
+
   const questions = session.questions || [];
   const currentQIndex = Math.min(activeQuestionIndex, Math.max(0, questions.length - 1));
   const currentQuestion = questions[currentQIndex] || null;
@@ -275,7 +282,7 @@ export function InterviewSessionPage() {
                 </span>
               </div>
               <p className="mt-1 text-xs text-ink-muted">
-                Focal Skills: <strong className="text-ink">{session.targetSkills.join(', ')}</strong>
+                Focal Skills: <strong className="text-ink">{targetSkillsText}</strong>
               </p>
             </div>
 
@@ -325,11 +332,11 @@ export function InterviewSessionPage() {
 
         {/* Initialized State Preview */}
         {isInitialized && (
-          <Card title="Session Ready">
+          <Card title="Ready to Start">
             <div className="flex flex-col gap-4">
               <p className="text-sm text-ink leading-relaxed">
                 Your session has been prepared with {session.questions.length} tailored interview questions covering{' '}
-                {session.targetSkills.join(', ')}. When you click &ldquo;Begin Interview Session&rdquo;, the timer begins and you can submit structured responses for each prompt.
+                {targetSkillsText}. When you click &ldquo;Begin Interview Session&rdquo;, the timer begins and you can submit structured responses for each prompt.
               </p>
 
               <div className="rounded-xl border border-orange-100 bg-surface p-4">
@@ -707,7 +714,7 @@ export function InterviewSessionPage() {
 
                 <p className="mt-3 max-w-lg text-sm text-ink-muted leading-relaxed">
                   Results computed across {evaluatedQuestions.length} answered questions targeting{' '}
-                  <strong className="text-ink">{session.targetSkills.join(', ')}</strong>.
+                  <strong className="text-ink">{targetSkillsText}</strong>.
                 </p>
 
                 <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -731,30 +738,34 @@ export function InterviewSessionPage() {
             <Card title="Skill Evidence Status" description="Evaluation authority and verified credential eligibility">
               <div className="flex flex-col gap-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {session.targetSkills.map((skill) => (
-                    <div
-                      key={skill}
-                      className="flex flex-col justify-between rounded-xl border border-orange-100 bg-orange-50/20 p-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-ink text-sm">{skill}</span>
-                        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                          session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
-                            ? 'border-green-200 bg-green-50 text-green-800'
-                            : 'border-amber-200 bg-amber-50 text-amber-800'
-                        }`}>
+                  {session.targetSkills.map((skill, idx) => {
+                    const skillName = typeof skill === 'string' ? skill : (skill?.name || skill?.key || '');
+                    const skillKey = typeof skill === 'string' ? skill : (skill?.key || skill?.name || idx);
+                    return (
+                      <div
+                        key={skillKey}
+                        className="flex flex-col justify-between rounded-xl border border-orange-100 bg-orange-50/20 p-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-ink text-sm">{skillName}</span>
+                          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                            session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
+                              ? 'border-green-200 bg-green-50 text-green-800'
+                              : 'border-amber-200 bg-amber-50 text-amber-800'
+                          }`}>
+                            {session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
+                              ? 'Verified Credential'
+                              : 'Formative Evidence'}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-ink-muted leading-relaxed">
                           {session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
-                            ? 'Verified Credential'
-                            : 'Formative Evidence'}
-                        </span>
+                            ? 'Evidence granted with institutional verified credential status.'
+                            : 'Recorded as formative interview practice. Institutional verification requires human evaluator sign-off.'}
+                        </p>
                       </div>
-                      <p className="mt-2 text-xs text-ink-muted leading-relaxed">
-                        {session.evaluatorType === 'human' && (session.overallScore ?? 0) >= 0.7
-                          ? 'Evidence granted with institutional verified credential status.'
-                          : 'Recorded as formative interview practice. Institutional verification requires human evaluator sign-off.'}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {session.evidenceCheck ? (
@@ -829,7 +840,7 @@ export function InterviewSessionPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-ink text-sm">Question {idx + 1}</span>
                         <span className="rounded-full border border-orange-200 bg-orange-50/50 px-2 py-0.5 text-[11px] font-medium text-ink">
-                          {q.targetSkill}
+                          {typeof q.targetSkill === 'string' ? q.targetSkill : (q.targetSkill?.name || q.targetSkill?.key || '')}
                         </span>
                       </div>
                       {q.evaluation?.compositeScore !== null && q.evaluation?.compositeScore !== undefined ? (
