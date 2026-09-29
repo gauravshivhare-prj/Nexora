@@ -7,6 +7,7 @@ import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
 import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
 import { evaluationLimiter, sessionWriteLimiter } from '../../src/routes/interview.routes.js';
+import { clearInFlightEvaluations } from '../../src/services/interviewSession.service.js';
 
 /**
  * Integration-test harness.
@@ -71,6 +72,7 @@ export function resetRateLimiters() {
   assessmentSubmitLimiter.reset();
   evaluationLimiter.reset();
   sessionWriteLimiter.reset();
+  clearInFlightEvaluations();
 }
 
 /**
@@ -218,7 +220,7 @@ export function sendWithToken(baseUrl, path, { method, token }) {
  * Sends a JSON body with a Bearer token, for the authenticated write
  * endpoints. `token` may be omitted to exercise the unauthenticated path.
  *
- * @returns {Promise<{ status: number, body: unknown }>}
+ * @returns {Promise<{ status: number, headers: Headers, body: unknown }>}
  */
 export async function sendJsonWithToken(baseUrl, path, { method, token, payload }) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -238,7 +240,7 @@ export async function sendJsonWithToken(baseUrl, path, { method, token, payload 
     body = text;
   }
 
-  return { status: response.status, body };
+  return { status: response.status, headers: response.headers, body };
 }
 
 

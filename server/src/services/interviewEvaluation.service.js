@@ -9,12 +9,17 @@ import {
 import {
   INTERVIEW_CONTRACT_VERSION,
   INTERVIEW_PASS_MARK,
+  INTERVIEW_LIMITS,
 } from '../domain/interview/interviewContract.js';
 import {
   buildInterviewEvaluationRequest,
   groundAnswerEvaluation,
 } from '../domain/interview/interviewAnswerGrounding.js';
 import { validateAiEvaluationJson, hasInjectionContent } from '../domain/interview/interviewEvaluationSchema.js';
+import {
+  redactProviderErrors,
+  redactSensitiveSecrets,
+} from '../domain/interview/interviewFeedbackSafety.js';
 import { buildInterviewResult } from '../domain/evidence/skillEvidenceCheck.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
 
@@ -51,9 +56,32 @@ export async function evaluateQuestionAnswer({
     throw ApiError.badRequest('Question definition is required for evaluation.');
   }
 
-  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
+  if (typeof answerText !== 'string' || answerText.trim().length < INTERVIEW_LIMITS.studentAnswer.min) {
     throw ApiError.badRequest(
-      'Candidate answer text is too short to evaluate (minimum 5 characters).',
+      `Candidate answer text is too short to evaluate (minimum ${INTERVIEW_LIMITS.studentAnswer.min} characters).`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
+    throw ApiError.badRequest(
+      `Candidate answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const effectiveSkill = question.targetSkill;
+  if (!effectiveSkill || !canonicalSkill(effectiveSkill)) {
+    throw ApiError.badRequest(
+      `Question has invalid or missing target skill: "${effectiveSkill}".`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const promptText = question.prompt || question.intent?.prompt;
+  if (!promptText || typeof promptText !== 'string' || promptText.trim().length === 0) {
+    throw ApiError.badRequest(
+      'Question prompt is missing or empty.',
       ERROR_CODES.BAD_REQUEST,
     );
   }
@@ -91,8 +119,17 @@ export async function evaluateQuestionAnswer({
         ERROR_CODES.AI_PROVIDER_FAILED,
       );
     }
-    // Re-throw operational ApiErrors (e.g. 503 AI_PROVIDER_FAILED)
-    throw error;
+    // Redact secrets and provider error traces from operational ApiErrors
+    if (error instanceof ApiError) {
+      error.message = redactProviderErrors(redactSensitiveSecrets(error.message).text).text;
+      throw error;
+    }
+    // Generic unexpected exceptions: never expose internal stack or message to caller
+    logger.error(`AI evaluation unexpected failure: ${error?.name || 'Error'}`);
+    throw ApiError.serviceUnavailable(
+      'The AI evaluation service encountered an error. Please try again in a moment.',
+      ERROR_CODES.AI_PROVIDER_FAILED,
+    );
   }
 
   // Check if signal aborted during processing
@@ -108,16 +145,19 @@ export async function evaluateQuestionAnswer({
 
   const latencyMs = Date.now() - startTime;
 
-  // Step 3: Validate AI response against strict JSON schema
+  // Step 3: Validate AI response against schema (bounding feedback and handling injection echo)
   const validated = validateAiEvaluationJson(completion.text, {
     strict: false,
+    boundFeedback: true,
     allowInjectionEcho: hasInjectionContent(answerText),
   });
   if (!validated.isValid) {
     logger.warn(`AI evaluation schema rejected output from ${provider.name}: ${validated.errors.join(' ')}`);
+    const rawFirstError = validated.errors[0] || 'Invalid evaluation format.';
+    const safeError = redactProviderErrors(redactSensitiveSecrets(rawFirstError).text).text;
     throw new ApiError(
       502,
-      `The AI service returned an unusable evaluation response. ${validated.errors[0]}`,
+      `The AI service returned an unusable evaluation response. ${safeError}`,
       ERROR_CODES.AI_OUTPUT_INVALID,
     );
   }
@@ -175,9 +215,13 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
 
   const normalizedEvaluator = evaluatorType === 'human' ? 'human' : 'ai';
   const questions = Array.isArray(rawSession.questions) ? rawSession.questions : [];
-  const evaluatedQuestions = questions.filter(
-    (q) => q.evaluation && (typeof q.evaluation.compositeScore === 'number' || typeof q.evaluation.score === 'number'),
-  );
+  const evaluatedQuestions = questions.filter((q) => {
+    if (!q || !q.evaluation) return false;
+    const scoreVal = typeof q.evaluation.compositeScore === 'number'
+      ? q.evaluation.compositeScore
+      : (typeof q.evaluation.score === 'number' ? q.evaluation.score : null);
+    return scoreVal !== null && Number.isFinite(scoreVal);
+  });
 
   if (evaluatedQuestions.length === 0) {
     throw ApiError.badRequest(
@@ -204,7 +248,9 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
     (sum, q) => sum + getQuestionWeight(q),
     0,
   );
-  const overallScore = totalWeight > 0 ? Math.round((totalScore / totalWeight) * 10000) / 10000 : 0;
+  const overallScore = totalWeight > 0
+    ? Math.max(0, Math.min(1, Math.round((totalScore / totalWeight) * 10000) / 10000))
+    : 0;
 
   const targetSkills = Array.isArray(rawSession.targetSkills) ? rawSession.targetSkills : [];
   const interviewId = String(rawSession._id ?? rawSession.id ?? session._id ?? session.id ?? 'interview-session');
@@ -213,13 +259,15 @@ export function evaluateSessionResults({ session, evaluatorType = 'ai' }) {
   // Evaluate evidence for each target skill
   const evidenceResults = [];
   for (const rawSkill of targetSkills) {
-    const canonical = canonicalSkill(rawSkill);
+    const skillName = typeof rawSkill === 'string' ? rawSkill : (rawSkill?.name || rawSkill?.key || '');
+    const canonical = canonicalSkill(skillName);
     if (!canonical) continue;
 
     // Filter questions specific to this skill
-    const skillQuestions = evaluatedQuestions.filter(
-      (q) => q.targetSkill && canonicalSkill(q.targetSkill)?.key === canonical.key,
-    );
+    const skillQuestions = evaluatedQuestions.filter((q) => {
+      const qSkill = q.targetSkill || q.targetSkillName || q.targetSkillKey;
+      return qSkill && canonicalSkill(qSkill)?.key === canonical.key;
+    });
 
     let skillScore = overallScore;
     if (skillQuestions.length > 0) {

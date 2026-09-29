@@ -8,6 +8,7 @@ import {
   parseAndValidateAiEvaluation,
   validateAiEvaluationJson,
 } from '../src/domain/interview/interviewEvaluationSchema.js';
+import { calculateCompositeQuestionScore } from '../src/domain/interview/interviewContract.js';
 
 describe('R5 — Strict AI Evaluation JSON & Security Suite', () => {
   const validPayload = {
@@ -39,6 +40,7 @@ describe('R5 — Strict AI Evaluation JSON & Security Suite', () => {
 
       // Expected composite score: 0.85*0.35 + 0.80*0.30 + 0.90*0.20 + 0.95*0.15 = 0.2975 + 0.24 + 0.18 + 0.1425 = 0.86
       assert.equal(result.data.compositeScore, 0.86);
+      assert.equal(result.data.score, 0.86);
       assert.deepEqual(result.data.dimensions, validPayload.dimensions);
       assert.equal(result.data.feedback, validPayload.feedback);
       assert.deepEqual(result.data.strengths, validPayload.strengths);
@@ -152,6 +154,32 @@ describe('R5 — Strict AI Evaluation JSON & Security Suite', () => {
       assert.equal(validateAiEvaluationJson(textDim).isValid, false);
     });
 
+    it('rejects empty string or whitespace dimension values', () => {
+      const emptyDim = {
+        ...validPayload,
+        dimensions: { ...validPayload.dimensions, accuracy: '' },
+      };
+      const resEmpty = validateAiEvaluationJson(emptyDim);
+      assert.equal(resEmpty.isValid, false);
+      assert.ok(
+        resEmpty.errors.some((e) =>
+          e.includes('Dimension "accuracy" must be a numeric value'),
+        ),
+      );
+
+      const whitespaceDim = {
+        ...validPayload,
+        dimensions: { ...validPayload.dimensions, depth: '   ' },
+      };
+      const resWhitespace = validateAiEvaluationJson(whitespaceDim);
+      assert.equal(resWhitespace.isValid, false);
+      assert.ok(
+        resWhitespace.errors.some((e) =>
+          e.includes('Dimension "depth" must be a numeric value'),
+        ),
+      );
+    });
+
     it('rejects non-string feedback or non-array strengths/growthAreas', () => {
       const numberFeedback = { ...validPayload, feedback: 1234567890 };
       assert.equal(validateAiEvaluationJson(numberFeedback).isValid, false);
@@ -263,6 +291,28 @@ describe('R5 — Strict AI Evaluation JSON & Security Suite', () => {
         assert.equal(result.isValid, false);
         assert.ok(result.errors.some((e) => e.includes('Security violation')));
       }
+    });
+
+    it('rejects prototype pollution attempts (__proto__, constructor, prototype)', () => {
+      const parsedProto = validateAiEvaluationJson(
+        '{"questionId":"iq-node-001","dimensions":{"accuracy":0.85,"depth":0.8,"clarity":0.9,"relevance":0.95},"feedback":"Valid feedback summary text.","__proto__":{"admin":true}}',
+      );
+      assert.equal(parsedProto.isValid, false);
+      assert.ok(parsedProto.errors.some((e) => e.includes('Security violation')));
+
+      const constructorPayload = {
+        ...validPayload,
+        constructor: { admin: true },
+      };
+      const resConstructor = validateAiEvaluationJson(constructorPayload);
+      assert.equal(resConstructor.isValid, false);
+      assert.ok(resConstructor.errors.some((e) => e.includes('Security violation')));
+
+      const parsedProtoDim = validateAiEvaluationJson(
+        '{"questionId":"iq-node-001","dimensions":{"accuracy":0.85,"depth":0.8,"clarity":0.9,"relevance":0.95,"__proto__":1},"feedback":"Valid feedback summary text."}',
+      );
+      assert.equal(parsedProtoDim.isValid, false);
+      assert.ok(parsedProtoDim.errors.some((e) => e.includes('Security violation')));
     });
 
     it('rejects unexpected dimension keys inside dimensions object', () => {
@@ -382,6 +432,31 @@ describe('R5 — Strict AI Evaluation JSON & Security Suite', () => {
             dimensions: { ...validPayload.dimensions, accuracy: 2.0 },
           }),
         /Security violation.*out of range/,
+      );
+    });
+
+    it('calculateCompositeQuestionScore safely handles non-finite, null, or empty inputs without producing NaN', () => {
+      assert.equal(calculateCompositeQuestionScore(null), 0);
+      assert.equal(calculateCompositeQuestionScore(undefined), 0);
+      assert.equal(calculateCompositeQuestionScore('invalid'), 0);
+      assert.equal(calculateCompositeQuestionScore({}), 0);
+      assert.equal(
+        calculateCompositeQuestionScore({
+          accuracy: Number.NaN,
+          depth: Number.POSITIVE_INFINITY,
+          clarity: 'invalid',
+          relevance: null,
+        }),
+        0,
+      );
+      assert.equal(
+        calculateCompositeQuestionScore({
+          accuracy: 1.0,
+          depth: 1.0,
+          clarity: 1.0,
+          relevance: 1.0,
+        }),
+        1.0,
       );
     });
   });

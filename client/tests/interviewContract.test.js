@@ -2,334 +2,281 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import {
+  ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession,
+  isSessionActive,
+  isSessionExpired,
+  canStartSession,
+  canAnswerSession,
+  canCompleteSession,
+  canAbandonSession,
+  isSessionPassed,
+  EVALUATOR_TYPES,
+  EVALUATOR_TYPE_LABELS,
+  INTERVIEW_CONTRACT_VERSION,
   INTERVIEW_DIFFICULTY,
+  INTERVIEW_DIFFICULTY_LEVELS,
   INTERVIEW_DIFFICULTY_ORDER,
   INTERVIEW_DIFFICULTY_PRESENTATION,
+  INTERVIEW_ERROR_CODES,
+  INTERVIEW_ERROR_PRESENTATION,
+  resolveInterviewError,
+  INTERVIEW_EVIDENCE_STATUS,
+  INTERVIEW_EVIDENCE_STATUS_PRESENTATION,
+  resolveInterviewEvidenceStatus,
   INTERVIEW_LIMITS,
+  INTERVIEW_PASS_MARK,
+  INTERVIEW_QUESTION_TYPES,
+  INTERVIEW_QUESTION_TYPE_LABELS,
+  RUBRIC_DIMENSIONS,
+  RUBRIC_DIMENSION_LABELS,
+  RUBRIC_DIMENSION_WEIGHTS,
   SESSION_STATUS,
   SESSION_STATUS_PRESENTATION,
 } from '../src/constants/interviewOptions.js';
 
 import {
+  abandonInterviewSession,
   completeInterviewSession,
   createInterviewSession,
   fetchInterviewSessionById,
   fetchInterviewSessions,
   startInterviewSession,
+  submitInterviewAnswer,
   submitInterviewQuestionAnswer,
+  toInterviewEvaluation,
+  toInterviewEvidenceCheck,
+  toInterviewEvidenceResult,
+  toInterviewQuestion,
   toInterviewSession,
+  TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus,
 } from '../src/services/interview.service.js';
 
 import {
-  INTERVIEW_DIFFICULTY as SERVER_DIFFICULTY,
-  INTERVIEW_LIMITS as SERVER_LIMITS,
-  SESSION_STATUS as SERVER_STATUS,
+  ALLOWED_SESSION_TRANSITIONS as SERVER_ALLOWED_SESSION_TRANSITIONS,
+  canTransitionSession as serverCanTransitionSession,
+  EVALUATOR_TYPES as SERVER_EVALUATOR_TYPES,
+  INTERVIEW_CONTRACT_VERSION as SERVER_CONTRACT_VERSION,
+  INTERVIEW_DIFFICULTY as SERVER_INTERVIEW_DIFFICULTY,
+  INTERVIEW_ERROR_CODES as SERVER_INTERVIEW_ERROR_CODES,
+  INTERVIEW_LIMITS as SERVER_INTERVIEW_LIMITS,
+  INTERVIEW_PASS_MARK as SERVER_INTERVIEW_PASS_MARK,
+  INTERVIEW_QUESTION_TYPES as SERVER_INTERVIEW_QUESTION_TYPES,
+  RUBRIC_DIMENSIONS as SERVER_RUBRIC_DIMENSIONS,
+  RUBRIC_DIMENSION_WEIGHTS as SERVER_RUBRIC_DIMENSION_WEIGHTS,
+  SESSION_STATUS as SERVER_SESSION_STATUS,
+  TERMINAL_SESSION_STATUSES as SERVER_TERMINAL_SESSION_STATUSES,
+  isTerminalSessionStatus as serverIsTerminalSessionStatus,
 } from '../../server/src/domain/interview/interviewContract.js';
 
-describe('P19 — Interview Frontend Contract & Parity Suite', () => {
+describe('R01/R19 — Interview Frontend Contract & Parity Suite', () => {
   describe('1. Constant & Policy Parity with Backend Domain', () => {
-    it('difficulty levels match exactly', () => {
-      assert.deepEqual(INTERVIEW_DIFFICULTY, SERVER_DIFFICULTY, 'INTERVIEW_DIFFICULTY drifted');
+    it('contract version and pass mark match server values', () => {
+      assert.equal(INTERVIEW_CONTRACT_VERSION, SERVER_CONTRACT_VERSION, 'Contract version mismatch');
+      assert.equal(INTERVIEW_PASS_MARK, SERVER_INTERVIEW_PASS_MARK, 'Pass mark threshold mismatch');
+      assert.equal(INTERVIEW_PASS_MARK, 0.75, 'Expected 75% pass mark threshold');
+    });
+
+    it('session lifecycle statuses match server constants exactly', () => {
+      assert.deepEqual(SESSION_STATUS, SERVER_SESSION_STATUS, 'SESSION_STATUS drifted between client and server');
+      for (const status of Object.values(SESSION_STATUS)) {
+        assert.ok(SESSION_STATUS_PRESENTATION[status], `Missing UI presentation for session status "${status}"`);
+        assert.ok(SESSION_STATUS_PRESENTATION[status].label, `Missing label for session status "${status}"`);
+        assert.ok(SESSION_STATUS_PRESENTATION[status].badgeClass, `Missing badgeClass for session status "${status}"`);
+      }
+    });
+
+    it('identifies terminal session statuses correctly', () => {
+      assert.deepEqual(TERMINAL_SESSION_STATUSES, SERVER_TERMINAL_SESSION_STATUSES, 'Terminal statuses drifted from server');
+      assert.deepEqual(TERMINAL_SESSION_STATUSES, [
+        SESSION_STATUS.COMPLETED,
+        SESSION_STATUS.TIMED_OUT,
+        SESSION_STATUS.ABANDONED,
+        SESSION_STATUS.FAILED,
+      ]);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.INITIALIZED), false);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.IN_PROGRESS), false);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.COMPLETED), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.ABANDONED), true);
+      assert.equal(isTerminalSessionStatus(SESSION_STATUS.FAILED), true);
+
+      assert.equal(serverIsTerminalSessionStatus(SESSION_STATUS.INITIALIZED), false);
+      assert.equal(serverIsTerminalSessionStatus(SESSION_STATUS.COMPLETED), true);
+    });
+
+    it('difficulty levels and order match server definition', () => {
+      assert.deepEqual(INTERVIEW_DIFFICULTY, SERVER_INTERVIEW_DIFFICULTY, 'INTERVIEW_DIFFICULTY drifted');
+      assert.deepEqual(INTERVIEW_DIFFICULTY_LEVELS, SERVER_INTERVIEW_DIFFICULTY, 'INTERVIEW_DIFFICULTY_LEVELS alias drifted');
       assert.deepEqual(
         INTERVIEW_DIFFICULTY_ORDER,
-        [SERVER_DIFFICULTY.BEGINNER, SERVER_DIFFICULTY.INTERMEDIATE, SERVER_DIFFICULTY.ADVANCED],
+        [SERVER_INTERVIEW_DIFFICULTY.BEGINNER, SERVER_INTERVIEW_DIFFICULTY.INTERMEDIATE, SERVER_INTERVIEW_DIFFICULTY.ADVANCED],
+        'Difficulty order does not match progressive hierarchy',
       );
-      for (const diff of Object.values(INTERVIEW_DIFFICULTY)) {
-        assert.ok(INTERVIEW_DIFFICULTY_PRESENTATION[diff], `Missing presentation for ${diff}`);
-        assert.ok(INTERVIEW_DIFFICULTY_PRESENTATION[diff].label, `Missing label for ${diff}`);
+      for (const level of Object.values(INTERVIEW_DIFFICULTY)) {
+        assert.ok(INTERVIEW_DIFFICULTY_PRESENTATION[level], `Missing UI presentation for difficulty "${level}"`);
+        assert.ok(INTERVIEW_DIFFICULTY_PRESENTATION[level].label, `Missing label for difficulty "${level}"`);
       }
     });
 
-    it('session statuses match server lifecycle states', () => {
-      assert.deepEqual(SESSION_STATUS, SERVER_STATUS, 'SESSION_STATUS drifted');
-      for (const status of Object.values(SESSION_STATUS)) {
-        assert.ok(SESSION_STATUS_PRESENTATION[status], `Missing presentation for ${status}`);
-        assert.ok(SESSION_STATUS_PRESENTATION[status].label, `Missing label for ${status}`);
+    it('question types match server archetypes with human-readable labels', () => {
+      assert.deepEqual(INTERVIEW_QUESTION_TYPES, SERVER_INTERVIEW_QUESTION_TYPES, 'INTERVIEW_QUESTION_TYPES drifted');
+      for (const type of Object.values(INTERVIEW_QUESTION_TYPES)) {
+        assert.ok(INTERVIEW_QUESTION_TYPE_LABELS[type], `Missing label for question type "${type}"`);
       }
     });
 
-    it('interview character limits match server limits', () => {
-      assert.equal(INTERVIEW_LIMITS.studentAnswer.min, SERVER_LIMITS.studentAnswer.min, 'min student answer drifted');
-      assert.equal(INTERVIEW_LIMITS.studentAnswer.max, SERVER_LIMITS.studentAnswer.max, 'max student answer drifted');
-      assert.equal(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, SERVER_LIMITS.maxTimePerQuestionSeconds, 'max time drifted');
+    it('evaluator types match server authority specification', () => {
+      assert.deepEqual(EVALUATOR_TYPES, SERVER_EVALUATOR_TYPES, 'EVALUATOR_TYPES drifted');
+      for (const evalType of Object.values(EVALUATOR_TYPES)) {
+        assert.ok(EVALUATOR_TYPE_LABELS[evalType], `Missing label for evaluator type "${evalType}"`);
+      }
+    });
+
+    it('rubric dimensions and weights match server formula', () => {
+      assert.deepEqual(RUBRIC_DIMENSIONS, SERVER_RUBRIC_DIMENSIONS, 'RUBRIC_DIMENSIONS drifted');
+      assert.deepEqual(RUBRIC_DIMENSION_WEIGHTS, SERVER_RUBRIC_DIMENSION_WEIGHTS, 'RUBRIC_DIMENSION_WEIGHTS drifted');
+
+      let sum = 0;
+      for (const [key, weight] of Object.entries(RUBRIC_DIMENSION_WEIGHTS)) {
+        assert.ok(RUBRIC_DIMENSION_LABELS[key], `Missing label for rubric dimension "${key}"`);
+        sum += weight;
+      }
+      assert.equal(Math.round(sum * 100) / 100, 1.0, 'Rubric dimension weights must sum to exactly 1.0');
+    });
+
+    it('interview limits match server validation boundaries', () => {
+      assert.equal(INTERVIEW_LIMITS.minQuestions, SERVER_INTERVIEW_LIMITS.minQuestions);
+      assert.equal(INTERVIEW_LIMITS.maxQuestions, SERVER_INTERVIEW_LIMITS.maxQuestions);
+      assert.equal(INTERVIEW_LIMITS.maxTargetSkills, SERVER_INTERVIEW_LIMITS.maxTargetSkills);
+      assert.equal(INTERVIEW_LIMITS.studentAnswer.min, SERVER_INTERVIEW_LIMITS.studentAnswer.min);
+      assert.equal(INTERVIEW_LIMITS.studentAnswer.max, SERVER_INTERVIEW_LIMITS.studentAnswer.max);
+      assert.equal(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, SERVER_INTERVIEW_LIMITS.maxTimePerQuestionSeconds);
+      assert.equal(INTERVIEW_LIMITS.maxSessionMinutes, SERVER_INTERVIEW_LIMITS.maxSessionMinutes);
     });
   });
 
-  describe('2. Normalizer & Safety Contracts', () => {
-    it('toInterviewSession normalizes valid session payload', () => {
-      const raw = {
-        _id: 'sess-123',
+  describe('2. Normalizer & Secret Stripping Contracts', () => {
+    it('toInterviewSession normalizes valid backend payloads and strips internal/user fields', () => {
+      const serverPayload = {
+        _id: '6ab6ba1aa278c6e17a603503',
+        user: '6ab6ba1aa278c6e17a603500',
+        __v: 0,
         status: 'in_progress',
         targetRole: 'backend-developer',
-        targetSkills: ['JavaScript', 'Node.js'],
+        targetSkills: [{ key: 'nodejs', name: 'Node.js' }],
         difficulty: 'intermediate',
-        questionCount: 2,
+        questionCount: 3,
         currentQuestionIndex: 1,
+        attemptCount: 1,
+        maxAttemptsTotal: 10,
+        attemptLimitPerQuestion: 1,
         questions: [
           {
-            questionId: 'q-1',
+            questionId: 'iq-node-001',
             order: 1,
             type: 'conceptual',
-            prompt: 'Explain the event loop.',
+            prompt: 'Explain the Node.js event loop phases in detail.',
             targetSkill: 'Node.js',
             difficulty: 'intermediate',
-            rubricCriteria: ['Technical accuracy', 'Depth of explanation'],
+            rubricCriteria: ['Mentions microtask queues', 'Describes libuv threadpool'],
             answer: {
-              answerText: 'The event loop processes microtasks and macrotasks...',
-              submittedAt: '2026-09-26T20:00:00.000Z',
-              durationSeconds: 45,
+              answerText: 'The Node.js event loop consists of timers, pending callbacks, poll, check, and close callbacks.',
+              submittedAt: '2026-09-25T18:00:00.000Z',
+              durationSeconds: 120,
               attemptNumber: 1,
             },
             evaluation: {
-              dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.9, relevance: 0.95 },
-              compositeScore: 0.89,
-              feedback: 'Thorough explanation of queue prioritization.',
-              strengths: ['Clear explanation of phases'],
-              growthAreas: ['Could elaborate on setImmediate vs process.nextTick'],
+              dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.95, relevance: 0.9 },
+              compositeScore: 0.895,
+              feedback: 'Thorough explanation of libuv mechanics.',
+              strengths: ['Clear phase explanation'],
+              growthAreas: ['Could elaborate on process.nextTick priority'],
               groundedSkills: ['Node.js'],
+              evaluatedAt: '2026-09-25T18:02:00.000Z',
             },
           },
         ],
+        overallScore: null,
+        evaluatorType: 'ai',
+        evidenceCheck: null,
+        providerMetadata: {
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+          latencyMs: 1420,
+          contractVersion: 1,
+        },
+        startedAt: '2026-09-25T17:58:00.000Z',
+        createdAt: '2026-09-25T17:55:00.000Z',
       };
 
-      const normalized = toInterviewSession(raw);
-      assert.equal(normalized.id, 'sess-123');
+      const normalized = toInterviewSession(serverPayload);
+
+      assert.equal(normalized.id, '6ab6ba1aa278c6e17a603503');
+      assert.equal(normalized.sessionId, '6ab6ba1aa278c6e17a603503');
       assert.equal(normalized.status, 'in_progress');
       assert.equal(normalized.targetRole, 'backend-developer');
+      assert.equal(normalized.timeLimitMinutes, 30, 'Default timeLimitMinutes should be 30');
+      assert.equal(normalized.user, undefined, 'Owner user ID must be stripped from client session DTO');
+      assert.equal(normalized.__v, undefined, 'Mongoose version key must be stripped');
       assert.equal(normalized.questions.length, 1);
-      assert.equal(normalized.questions[0].questionId, 'q-1');
-      assert.equal(normalized.questions[0].answer.attemptNumber, 1);
-      assert.equal(normalized.questions[0].evaluation.compositeScore, 0.89);
+
+      const customPayload = { ...serverPayload, timeLimitMinutes: 45 };
+      assert.equal(toInterviewSession(customPayload).timeLimitMinutes, 45);
+
+      const q = normalized.questions[0];
+      assert.equal(q.id, 'iq-node-001');
+      assert.equal(q.questionId, 'iq-node-001');
+      assert.equal(q.order, 1);
+      assert.equal(q.answer.durationSeconds, 120);
+      assert.equal(q.evaluation.compositeScore, 0.895);
+      assert.equal(q.evaluation.dimensions.accuracy, 0.9);
+      assert.deepEqual(q.evaluation.groundedSkills, ['Node.js']);
+      assert.equal(normalized.providerMetadata.provider, 'gemini');
     });
 
-    it('toInterviewSession throws for non-object payloads', () => {
-      assert.throws(() => toInterviewSession(null), /expected an object/i);
-      assert.throws(() => toInterviewSession('invalid'), /expected an object/i);
-    });
-  });
-
-  describe('3. Service Endpoints & Validation', () => {
-    let originalFetch;
-    let originalApiUrl;
-    let recordedRequests = [];
-
-    beforeEach(() => {
-      originalApiUrl = process.env.VITE_API_URL;
-      process.env.VITE_API_URL = 'http://localhost:5000';
-      recordedRequests = [];
-      originalFetch = globalThis.fetch;
-    });
-
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-      process.env.VITE_API_URL = originalApiUrl;
-    });
-
-
-    it('submitInterviewQuestionAnswer validates parameters before calling endpoint', async () => {
-      await assert.rejects(
-        () => submitInterviewQuestionAnswer('', 'q-1', { answerText: 'Valid text here' }),
-        /sessionId is required/i,
-      );
-      await assert.rejects(
-        () => submitInterviewQuestionAnswer('sess-1', '', { answerText: 'Valid text here' }),
-        /questionId is required/i,
-      );
-      await assert.rejects(
-        () => submitInterviewQuestionAnswer('sess-1', 'q-1', null),
-        /answer text is required/i,
-      );
-    });
-
-    it('submitInterviewQuestionAnswer sends correct payload and normalizes response', async () => {
-      globalThis.fetch = async (url, opts) => {
-        recordedRequests.push({ url: String(url), method: opts.method, body: JSON.parse(opts.body) });
-        return {
-          ok: true,
-          status: 200,
-          headers: new Headers({ 'content-type': 'application/json' }),
-          json: async () => ({
-            success: true,
-            data: {
-              session: {
-                id: 'sess-1',
-                status: 'in_progress',
-                targetRole: 'backend-developer',
-                targetSkills: ['Node.js'],
-                questions: [
-                  {
-                    questionId: 'q-1',
-                    order: 1,
-                    prompt: 'Explain Node.js event loop.',
-                    targetSkill: 'Node.js',
-                    answer: {
-                      answerText: 'An asynchronous event-driven architecture...',
-                      submittedAt: new Date().toISOString(),
-                      durationSeconds: 30,
-                      attemptNumber: 1,
-                    },
-                    evaluation: {
-                      compositeScore: 0.85,
-                      dimensions: { accuracy: 0.85, depth: 0.8, clarity: 0.9, relevance: 0.85 },
-                      feedback: 'Solid understanding demonstrated.',
-                      strengths: ['Clear terminology'],
-                      growthAreas: [],
-                    },
-                  },
-                ],
-              },
-              evaluatedQuestion: {
-                questionId: 'q-1',
-                order: 1,
-                answer: { answerText: 'An asynchronous event-driven architecture...' },
-              },
-            },
-          }),
-        };
+    it('toInterviewQuestion normalizes question structures with null fallbacks', () => {
+      const bareQuestion = {
+        questionId: 'iq-react-002',
+        prompt: 'Describe the virtual DOM and fiber reconciler.',
+        targetSkill: 'React',
       };
 
-      const result = await submitInterviewQuestionAnswer('sess-1', 'q-1', {
-        answerText: 'An asynchronous event-driven architecture...',
-        durationSeconds: 30,
-      });
+      const normalized = toInterviewQuestion(bareQuestion);
 
-      assert.equal(recordedRequests.length, 1);
-      assert.match(recordedRequests[0].url, /\/api\/interviews\/sessions\/sess-1\/questions\/q-1\/answers$/);
-      assert.equal(recordedRequests[0].method, 'POST');
-      assert.equal(recordedRequests[0].body.answerText, 'An asynchronous event-driven architecture...');
-      assert.equal(recordedRequests[0].body.durationSeconds, 30);
-
-      assert.equal(result.session.id, 'sess-1');
-      assert.equal(result.session.questions[0].answer.attemptNumber, 1);
-      assert.equal(result.session.questions[0].evaluation.compositeScore, 0.85);
+      assert.equal(normalized.id, 'iq-react-002');
+      assert.equal(normalized.questionId, 'iq-react-002');
+      assert.equal(normalized.order, 1);
+      assert.equal(normalized.type, 'conceptual');
+      assert.equal(normalized.difficulty, 'intermediate');
+      assert.deepEqual(normalized.rubricCriteria, []);
+      assert.equal(normalized.answer, null);
+      assert.equal(normalized.evaluation, null);
     });
 
-    it('completeInterviewSession posts to complete endpoint and normalizes result', async () => {
-      globalThis.fetch = async (url, opts) => {
-        recordedRequests.push({ url: String(url), method: opts.method });
-        return {
-          ok: true,
-          status: 200,
-          headers: new Headers({ 'content-type': 'application/json' }),
-          json: async () => ({
-            success: true,
-            data: {
-              session: {
-                id: 'sess-1',
-                status: 'completed',
-                targetRole: 'backend-developer',
-                overallScore: 0.88,
-                questions: [],
-              },
-              overallScore: 0.88,
-              eligibleForVerified: false,
-              evidenceResults: [],
-              evidenceChecks: [],
-            },
-          }),
-        };
+    it('toInterviewEvaluation normalizes dimensions and lists safely', () => {
+      const rawEval = {
+        dimensions: { accuracy: 0.8, depth: 0.7, clarity: 0.9, relevance: 0.85 },
+        compositeScore: 0.7975,
+        feedback: 'Solid foundational answer.',
+        strengths: ['Good communication'],
+        growthAreas: ['More depth on concurrency'],
       };
 
+      const normalized = toInterviewEvaluation(rawEval);
 
-      const result = await completeInterviewSession('sess-1');
-      assert.equal(recordedRequests.length, 1);
-      assert.match(recordedRequests[0].url, /\/api\/interviews\/sessions\/sess-1\/complete$/);
-      assert.equal(result.session.status, 'completed');
-      assert.equal(result.overallScore, 0.88);
-      assert.equal(result.eligibleForVerified, false);
-    });
-  });
-
-  describe('4. Results & Truthful Evidence Contracts', () => {
-    it('normalizes result with verified evidence when human-evaluated and passing', () => {
-      const humanPassedSession = {
-        id: 'sess-human-1',
-        status: SESSION_STATUS.COMPLETED,
-        targetRole: 'backend-developer',
-        targetSkills: ['Node.js', 'REST APIs'],
-        evaluatorType: 'human',
-        overallScore: 0.85,
-        evidenceCheck: 'ev-check-999',
-        questions: [
-          {
-            questionId: 'q-1',
-            order: 1,
-            prompt: 'Design a resilient rate limiter in Node.js.',
-            targetSkill: 'Node.js',
-            evaluation: {
-              compositeScore: 0.85,
-              dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.8, relevance: 0.85 },
-              feedback: 'Demonstrated solid Redis token bucket pattern.',
-              strengths: ['Clear concurrency awareness'],
-              growthAreas: ['Consider distributed clock drift'],
-            },
-          },
-        ],
-      };
-
-      const normalized = toInterviewSession(humanPassedSession);
-      assert.equal(normalized.status, 'completed');
-      assert.equal(normalized.evaluatorType, 'human');
-      assert.equal(normalized.overallScore, 0.85);
-      assert.equal(normalized.evidenceCheck, 'ev-check-999');
-      assert.ok(normalized.overallScore >= 0.7, 'Human evaluated session meets pass mark');
+      assert.equal(normalized.compositeScore, 0.7975);
+      assert.equal(normalized.dimensions.accuracy, 0.8);
+      assert.deepEqual(normalized.strengths, ['Good communication']);
+      assert.deepEqual(normalized.groundedSkills, []);
     });
 
-    it('normalizes result without verified evidence when evaluated by AI (formative practice)', () => {
-      const aiSession = {
-        id: 'sess-ai-1',
-        status: SESSION_STATUS.COMPLETED,
-        targetRole: 'backend-developer',
-        targetSkills: ['Node.js'],
-        evaluatorType: 'ai',
-        overallScore: 0.92,
-        questions: [
-          {
-            questionId: 'q-1',
-            order: 1,
-            prompt: 'Explain asynchronous event loop execution.',
-            targetSkill: 'Node.js',
-            evaluation: {
-              compositeScore: 0.92,
-              dimensions: { accuracy: 0.95, depth: 0.9, clarity: 0.9, relevance: 0.95 },
-              feedback: 'Comprehensive breakdown of microtask and macrotask queues.',
-              strengths: ['Deep architecture understanding'],
-              growthAreas: [],
-            },
-          },
-        ],
-      };
-
-      const normalized = toInterviewSession(aiSession);
-      assert.equal(normalized.status, 'completed');
-      assert.equal(normalized.evaluatorType, 'ai');
-      assert.equal(normalized.overallScore, 0.92);
-      // AI interviews provide formative practice and are not verified credentials
-      assert.notEqual(normalized.evaluatorType, 'human');
-    });
-
-    it('gracefully handles pending evaluation state with null overallScore', () => {
-      const pendingSession = {
-        id: 'sess-pending-1',
-        status: SESSION_STATUS.IN_PROGRESS,
-        targetRole: 'frontend-developer',
-        targetSkills: ['React'],
-        overallScore: null,
-        questions: [
-          {
-            questionId: 'q-1',
-            order: 1,
-            prompt: 'Explain React reconciliation and the virtual DOM diffing algorithm.',
-            targetSkill: 'React',
-            evaluation: null,
-          },
-        ],
-      };
-
-      const normalized = toInterviewSession(pendingSession);
-      assert.equal(normalized.status, 'in_progress');
-      assert.equal(normalized.overallScore, null);
-      assert.equal(normalized.questions[0].evaluation, null);
+    it('normalizers throw on invalid or non-object payloads', () => {
+      assert.throws(() => toInterviewSession(null), /Invalid interview session data/);
+      assert.throws(() => toInterviewSession([1, 2, 3]), /Invalid interview session data/);
+      assert.throws(() => toInterviewQuestion(undefined), /Invalid interview question data/);
+      assert.throws(() => toInterviewEvaluation('string'), /Invalid interview evaluation data/);
     });
 
     it('security: verifies prompt templates, model system prompts, or scoring weights are never exposed', () => {
@@ -357,6 +304,564 @@ describe('P19 — Interview Frontend Contract & Parity Suite', () => {
       assert.equal(normalized.systemPrompt, undefined, 'systemPrompt must not be exposed');
       assert.equal(normalized.scoringFormula, undefined, 'scoringFormula must not be exposed');
       assert.equal(normalized.questions[0].internalRubricWeights, undefined, 'internalRubricWeights must not be exposed');
+    });
+  });
+
+  describe('3. Service Endpoints & Request/Response Contracts', () => {
+    const originalFetch = globalThis.fetch;
+    const originalApiUrl = process.env.VITE_API_URL;
+    let lastRequest = null;
+    let mockResponse = null;
+
+    beforeEach(() => {
+      process.env.VITE_API_URL = 'http://localhost:5000';
+      lastRequest = null;
+      mockResponse = {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ success: true, message: 'OK', data: {} }),
+      };
+
+      globalThis.fetch = async (url, options = {}) => {
+        lastRequest = { url, options };
+        return {
+          ...mockResponse,
+          json: async () => mockResponse.body,
+        };
+      };
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      process.env.VITE_API_URL = originalApiUrl;
+    });
+
+    it('submitInterviewQuestionAnswer validates parameters before calling endpoint', async () => {
+      await assert.rejects(
+        () => submitInterviewQuestionAnswer('', 'q-1', { answerText: 'Valid text here' }),
+        /sessionId is required/i,
+      );
+      await assert.rejects(
+        () => submitInterviewQuestionAnswer('sess-1', '', { answerText: 'Valid text here' }),
+        /questionId is required/i,
+      );
+      await assert.rejects(
+        () => submitInterviewQuestionAnswer('sess-1', 'q-1', null),
+        /answer text is required/i,
+      );
+    });
+
+    it('createInterviewSession posts payload and normalizes initialized session', async () => {
+      mockResponse.status = 201;
+      mockResponse.body = {
+        success: true,
+        message: 'Interview session initialized',
+        data: {
+          session: {
+            id: 'sess_123',
+            status: 'initialized',
+            targetRole: 'backend-developer',
+            targetSkills: [{ key: 'nodejs', name: 'Node.js' }],
+            difficulty: 'intermediate',
+            questionCount: 3,
+            questions: [],
+          },
+        },
+      };
+
+      const payload = {
+        targetRole: 'backend-developer',
+        targetSkills: ['Node.js'],
+        difficulty: 'intermediate',
+        questionCount: 3,
+      };
+
+      const result = await createInterviewSession(payload);
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions'));
+      assert.equal(lastRequest.options.method, 'POST');
+      const sentBody = JSON.parse(lastRequest.options.body);
+      assert.equal(sentBody.targetRole, 'backend-developer');
+      assert.equal(result.session.id, 'sess_123');
+      assert.equal(result.session.status, 'initialized');
+    });
+
+    it('fetchInterviewSessions retrieves and normalizes session list with count', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Interview sessions retrieved',
+        data: {
+          sessions: [
+            {
+              id: 'sess_1',
+              status: 'completed',
+              targetRole: 'backend-developer',
+              targetSkills: [{ key: 'nodejs', name: 'Node.js' }],
+              overallScore: 0.85,
+            },
+          ],
+          count: 1,
+        },
+      };
+
+      const result = await fetchInterviewSessions();
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions'));
+      assert.equal(result.sessions.length, 1);
+      assert.equal(result.count, 1);
+      assert.equal(result.sessions[0].id, 'sess_1');
+      assert.equal(result.sessions[0].overallScore, 0.85);
+    });
+
+    it('fetchInterviewSessionById retrieves a single session by ID', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Interview session retrieved',
+        data: {
+          session: {
+            id: 'sess_abc',
+            status: 'in_progress',
+            targetRole: 'frontend-developer',
+            targetSkills: [{ key: 'react', name: 'React' }],
+            questions: [],
+          },
+        },
+      };
+
+      const result = await fetchInterviewSessionById('sess_abc');
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions/sess_abc'));
+      assert.equal(result.session.id, 'sess_abc');
+      assert.equal(result.session.status, 'in_progress');
+    });
+
+    it('startInterviewSession posts to /api/interviews/sessions/:sessionId/start', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Interview session started',
+        data: {
+          session: {
+            id: 'sess_start_test',
+            status: 'in_progress',
+            targetRole: 'backend-developer',
+            questions: [],
+          },
+        },
+      };
+
+      const result = await startInterviewSession('sess_start_test');
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions/sess_start_test/start'));
+      assert.equal(lastRequest.options.method, 'POST');
+      assert.equal(result.session.status, 'in_progress');
+    });
+
+    it('submitInterviewAnswer submits candidate answer and returns evaluated question', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Answer submitted and evaluated',
+        data: {
+          session: {
+            id: 'sess_answer_test',
+            status: 'in_progress',
+            currentQuestionIndex: 2,
+            questions: [],
+          },
+          evaluatedQuestion: {
+            questionId: 'iq-node-001',
+            order: 1,
+            answer: { answerText: 'Valid technical explanation', durationSeconds: 45 },
+            evaluation: {
+              compositeScore: 0.88,
+              dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.9, relevance: 0.9 },
+              feedback: 'Well articulated.',
+            },
+          },
+          warnings: [],
+        },
+      };
+
+      const result = await submitInterviewAnswer('sess_answer_test', 'iq-node-001', {
+        answerText: 'Valid technical explanation',
+        durationSeconds: 45,
+      });
+
+      assert.ok(
+        lastRequest.url.endsWith('/api/interviews/sessions/sess_answer_test/questions/iq-node-001/answers'),
+      );
+      assert.equal(lastRequest.options.method, 'POST');
+      assert.equal(result.session.currentQuestionIndex, 2);
+      assert.equal(result.evaluatedQuestion.questionId, 'iq-node-001');
+      assert.equal(result.evaluatedQuestion.evaluation.compositeScore, 0.88);
+    });
+
+    it('completeInterviewSession posts to complete and returns evidence verification result', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Interview session completed',
+        data: {
+          session: {
+            id: 'sess_complete_test',
+            status: 'completed',
+            overallScore: 0.82,
+            evaluatorType: 'ai',
+          },
+          overallScore: 0.82,
+          eligibleForVerified: false,
+          evidenceResults: [
+            {
+              skill: 'Node.js',
+              score: 0.82,
+              status: 'supported',
+              evidenceStrength: 'supported',
+            },
+          ],
+          evidenceChecks: [
+            {
+              id: 'ev_001',
+              skillKey: 'nodejs',
+              outcome: 'supported',
+            },
+          ],
+        },
+      };
+
+      const result = await completeInterviewSession('sess_complete_test');
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions/sess_complete_test/complete'));
+      assert.equal(result.session.status, 'completed');
+      assert.equal(result.overallScore, 0.82);
+      assert.equal(result.eligibleForVerified, false);
+      assert.equal(result.evidenceResults.length, 1);
+      assert.equal(result.evidenceChecks.length, 1);
+      assert.equal(result.evidenceChecks[0].id, 'ev_001');
+    });
+
+    it('abandonInterviewSession posts to abandon and updates status', async () => {
+      mockResponse.body = {
+        success: true,
+        message: 'Interview session abandoned',
+        data: {
+          session: {
+            id: 'sess_abandon_test',
+            status: 'abandoned',
+          },
+        },
+      };
+
+      const result = await abandonInterviewSession('sess_abandon_test');
+
+      assert.ok(lastRequest.url.endsWith('/api/interviews/sessions/sess_abandon_test/abandon'));
+      assert.equal(result.session.status, 'abandoned');
+    });
+  });
+
+  describe('4. State Transitions and UI Guard Predicates', () => {
+    it('allowed session transitions match backend matrix exactly', () => {
+      assert.deepEqual(
+        ALLOWED_SESSION_TRANSITIONS,
+        SERVER_ALLOWED_SESSION_TRANSITIONS,
+        'ALLOWED_SESSION_TRANSITIONS drifted between client and server',
+      );
+
+      for (const [from, allowedList] of Object.entries(ALLOWED_SESSION_TRANSITIONS)) {
+        for (const to of Object.values(SESSION_STATUS)) {
+          const clientAllowed = canTransitionSession(from, to);
+          const serverAllowed = serverCanTransitionSession(from, to);
+          assert.equal(
+            clientAllowed,
+            serverAllowed,
+            `Transition parity failed from ${from} to ${to}: client=${clientAllowed}, server=${serverAllowed}`,
+          );
+        }
+      }
+    });
+
+    it('canTransitionSession permits valid progression and rejects invalid regressions', () => {
+      // Valid transitions
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.ABANDONED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.FAILED), true);
+
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.COMPLETED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.ABANDONED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.TIMED_OUT), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.FAILED), true);
+
+      // Terminal states cannot transition to anything
+      for (const terminal of TERMINAL_SESSION_STATUSES) {
+        for (const target of Object.values(SESSION_STATUS)) {
+          assert.equal(
+            canTransitionSession(terminal, target),
+            false,
+            `Terminal state ${terminal} must not transition to ${target}`,
+          );
+        }
+      }
+
+      // Edge inputs
+      assert.equal(canTransitionSession(null, SESSION_STATUS.IN_PROGRESS), false);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, null), false);
+      assert.equal(canTransitionSession('invalid_status', SESSION_STATUS.IN_PROGRESS), false);
+    });
+
+    it('isSessionActive and isSessionExpired correctly evaluate status and deadlines', () => {
+      const futureDate = new Date(Date.now() + 60000).toISOString();
+      const pastDate = new Date(Date.now() - 60000).toISOString();
+
+      const activeSession = { status: SESSION_STATUS.IN_PROGRESS, expiresAt: futureDate };
+      assert.equal(isSessionActive(activeSession), true);
+      assert.equal(isSessionExpired(activeSession), false);
+
+      const expiredSession = { status: SESSION_STATUS.IN_PROGRESS, expiresAt: pastDate };
+      assert.equal(isSessionActive(expiredSession), false);
+      assert.equal(isSessionExpired(expiredSession), true);
+
+      const timedOutSession = { status: SESSION_STATUS.TIMED_OUT, expiresAt: futureDate };
+      assert.equal(isSessionActive(timedOutSession), false);
+      assert.equal(isSessionExpired(timedOutSession), true);
+
+      const completedSession = { status: SESSION_STATUS.COMPLETED, expiresAt: futureDate };
+      assert.equal(isSessionActive(completedSession), false);
+      assert.equal(isSessionExpired(completedSession), false);
+
+      assert.equal(isSessionActive(null), false);
+      assert.equal(isSessionExpired(null), false);
+    });
+
+    it('UI state guard helpers accurately gate start, answer, complete, and abandon', () => {
+      const initializedSession = { status: SESSION_STATUS.INITIALIZED };
+      assert.equal(canStartSession(initializedSession), true);
+      assert.equal(canAnswerSession(initializedSession), false);
+      assert.equal(canCompleteSession(initializedSession), false);
+      assert.equal(canAbandonSession(initializedSession), true);
+
+      const activeSession = {
+        status: SESSION_STATUS.IN_PROGRESS,
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        attemptCount: 2,
+        maxAttemptsTotal: 10,
+        attemptLimitPerQuestion: 1,
+        questions: [
+          { questionId: 'q1', answer: { attemptNumber: 1 } },
+          { questionId: 'q2', answer: null },
+        ],
+      };
+      assert.equal(canStartSession(activeSession), false);
+      assert.equal(canCompleteSession(activeSession), true);
+      assert.equal(canAbandonSession(activeSession), true);
+
+      // Question attempt limits
+      assert.equal(canAnswerSession(activeSession, 'q2'), true);
+      assert.equal(canAnswerSession(activeSession, 'q1'), false, 'Question 1 already reached attemptLimitPerQuestion=1');
+
+      // Total attempt limit reached
+      const maxedSession = { ...activeSession, attemptCount: 10, maxAttemptsTotal: 10 };
+      assert.equal(canAnswerSession(maxedSession, 'q2'), false);
+
+      // Terminal sessions cannot be abandoned or completed
+      const doneSession = {
+        status: SESSION_STATUS.COMPLETED,
+        overallScore: 0.85,
+      };
+      assert.equal(canStartSession(doneSession), false);
+      assert.equal(canCompleteSession(doneSession), false);
+      assert.equal(canAbandonSession(doneSession), false);
+      assert.equal(isSessionPassed(doneSession), true);
+
+      const failedPassingCheck = {
+        status: SESSION_STATUS.COMPLETED,
+        overallScore: 0.70,
+      };
+      assert.equal(isSessionPassed(failedPassingCheck), false);
+    });
+  });
+
+  describe('5. Canonical Error Semantics and UI Presentation Resolution', () => {
+    it('canonical error codes match server contract constants', () => {
+      assert.deepEqual(
+        INTERVIEW_ERROR_CODES,
+        SERVER_INTERVIEW_ERROR_CODES,
+        'INTERVIEW_ERROR_CODES drifted between client and server',
+      );
+
+      for (const [codeKey, codeVal] of Object.entries(INTERVIEW_ERROR_CODES)) {
+        assert.equal(codeKey, codeVal, `Error code enum key ${codeKey} must match value ${codeVal}`);
+        const presentation = INTERVIEW_ERROR_PRESENTATION[codeVal];
+        assert.ok(presentation, `Missing UI presentation for canonical error code ${codeVal}`);
+        assert.ok(presentation.title, `Missing title for error code ${codeVal}`);
+        assert.ok(presentation.message, `Missing message for error code ${codeVal}`);
+        assert.ok(presentation.userAction, `Missing userAction for error code ${codeVal}`);
+        assert.equal(typeof presentation.retryable, 'boolean', `Missing boolean retryable for ${codeVal}`);
+      }
+    });
+
+    it('resolveInterviewError resolves known error codes with friendly presentation', () => {
+      const err = {
+        errorCode: INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+        message: 'Custom expired message',
+        status: 400,
+      };
+
+      const resolved = resolveInterviewError(err);
+      assert.equal(resolved.code, INTERVIEW_ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+      assert.equal(resolved.title, 'Session Expired');
+      assert.equal(resolved.message, 'Custom expired message');
+      assert.equal(resolved.retryable, false);
+      assert.equal(resolved.status, 400);
+      assert.ok(resolved.userAction.length > 0);
+    });
+
+    it('resolveInterviewError handles retryable errors appropriately', () => {
+      const retryableError = {
+        errorCode: INTERVIEW_ERROR_CODES.AI_PROVIDER_FAILED,
+        status: 502,
+      };
+
+      const resolved = resolveInterviewError(retryableError);
+      assert.equal(resolved.code, INTERVIEW_ERROR_CODES.AI_PROVIDER_FAILED);
+      assert.equal(resolved.title, 'Service Interruption');
+      assert.equal(resolved.retryable, true);
+      assert.equal(resolved.status, 502);
+    });
+
+    it('resolveInterviewError gracefully falls back on unknown or generic exceptions', () => {
+      const genericError = new Error('Database connection reset');
+      const resolved = resolveInterviewError(genericError);
+
+      assert.equal(resolved.code, 'UNKNOWN_ERROR');
+      assert.equal(resolved.title, 'Unexpected Error');
+      assert.equal(resolved.message, 'Database connection reset');
+      assert.equal(resolved.retryable, true);
+      assert.equal(resolved.status, 500);
+
+      const nullResolved = resolveInterviewError(null);
+      assert.equal(nullResolved.code, 'UNKNOWN_ERROR');
+      assert.equal(nullResolved.status, 500);
+    });
+  });
+
+  describe('6. Institutional Evidence Status and Presentation Mapping', () => {
+    it('advisory supported status resolved for passing AI interview', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.82,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.ADVISORY_SUPPORTED);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, true);
+      assert.equal(result.isPassing, true);
+      assert.ok(result.label.includes('Advisory Supported'));
+      assert.ok(result.badgeClass.includes('amber'));
+    });
+
+    it('institutionally verified status resolved for passing human examiner interview', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.88,
+        evaluatorType: EVALUATOR_TYPES.HUMAN,
+        eligibleForVerified: true,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.VERIFIED);
+      assert.equal(result.isVerified, true);
+      assert.equal(result.isSupported, true);
+      assert.equal(result.isPassing, true);
+      assert.ok(result.label.includes('Institutionally Verified'));
+      assert.ok(result.badgeClass.includes('emerald'));
+    });
+
+    it('unverified below pass status resolved for failing evaluation', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: 0.65,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.COMPLETED,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.UNVERIFIED_BELOW_PASS);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, false);
+      assert.equal(result.isPassing, false);
+      assert.ok(result.badgeClass.includes('rose'));
+    });
+
+    it('pending status resolved for incomplete or in-progress session', () => {
+      const result = resolveInterviewEvidenceStatus({
+        overallScore: null,
+        evaluatorType: EVALUATOR_TYPES.AI,
+        eligibleForVerified: false,
+        status: SESSION_STATUS.IN_PROGRESS,
+      });
+
+      assert.equal(result.statusKey, INTERVIEW_EVIDENCE_STATUS.PENDING);
+      assert.equal(result.isVerified, false);
+      assert.equal(result.isSupported, false);
+      assert.equal(result.isPassing, false);
+      assert.ok(result.label.includes('Pending'));
+    });
+  });
+
+  describe('7. Evidence DTO Normalizers and Contract Safety', () => {
+    it('toInterviewEvidenceCheck normalizes check DTO and provides safe defaults', () => {
+      const rawCheck = {
+        _id: 'chk_6ab6ba1aa278c6e17a603509',
+        kind: 'interview',
+        skillKey: 'nodejs',
+        skillName: 'Node.js',
+        score: 0.85,
+        passMark: 0.75,
+        outcome: 'uncertain',
+        eligibleForVerified: false,
+        evaluatedBy: 'ai',
+        reference: 'sess_123',
+        completedAt: '2026-09-25T18:00:00.000Z',
+      };
+
+      const normalized = toInterviewEvidenceCheck(rawCheck);
+      assert.equal(normalized.id, 'chk_6ab6ba1aa278c6e17a603509');
+      assert.equal(normalized.kind, 'interview');
+      assert.equal(normalized.skillKey, 'nodejs');
+      assert.equal(normalized.skillName, 'Node.js');
+      assert.equal(normalized.score, 0.85);
+      assert.equal(normalized.passMark, 0.75);
+      assert.equal(normalized.outcome, 'uncertain');
+      assert.equal(normalized.eligibleForVerified, false);
+      assert.equal(normalized.evaluatedBy, 'ai');
+      assert.equal(normalized.reference, 'sess_123');
+    });
+
+    it('toInterviewEvidenceResult normalizes evidence result objects', () => {
+      const rawResult = {
+        skillKey: 'react',
+        skillName: 'React',
+        score: 0.90,
+        passMark: 0.75,
+        outcome: 'uncertain',
+        eligibleForVerified: false,
+        evidenceStrength: 'supported',
+        evaluatedBy: 'ai',
+        kind: 'interview',
+      };
+
+      const normalized = toInterviewEvidenceResult(rawResult);
+      assert.equal(normalized.skillKey, 'react');
+      assert.equal(normalized.skillName, 'React');
+      assert.equal(normalized.score, 0.90);
+      assert.equal(normalized.evidenceStrength, 'supported');
+      assert.equal(normalized.eligibleForVerified, false);
+    });
+
+    it('evidence normalizers throw on non-object inputs', () => {
+      assert.throws(() => toInterviewEvidenceCheck(null), /Invalid interview evidence check data/);
+      assert.throws(() => toInterviewEvidenceCheck([1, 2]), /Invalid interview evidence check data/);
+      assert.throws(() => toInterviewEvidenceResult(undefined), /Invalid interview evidence result data/);
+      assert.throws(() => toInterviewEvidenceResult('invalid'), /Invalid interview evidence result data/);
     });
   });
 });

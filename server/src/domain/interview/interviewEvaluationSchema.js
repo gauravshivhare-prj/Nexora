@@ -7,6 +7,10 @@ import {
   RUBRIC_DIMENSION_KEYS,
   calculateCompositeQuestionScore,
 } from './interviewContract.js';
+import {
+  boundFeedbackList,
+  boundFeedbackSummary,
+} from './interviewFeedbackSafety.js';
 
 export { FORBIDDEN_SECURITY_FIELDS, isForbiddenOrPrototypeKey };
 
@@ -31,15 +35,20 @@ export const INJECTION_PATTERNS = Object.freeze([
   // Prompt overrides and instruction hijacking
   /(ignore|disregard|forget)\s+(all\s+|the\s+|your\s+)*(previous|prior|earlier|past|preceding|above|former|system)?\s*(instructions|directives|rules|guidelines|prompts|rubrics?|text)\b/i,
   /(ignore|disregard|forget)\s+(about\s+)?(the\s+)?(rubric|grading|criteria|rules|instructions)\b/i,
-  /(system|admin|administrator|developer|evaluation|instruction)\s*(_|\s*)?(override|directive|instruction|mode|prompt|note)s?\b/i,
+  /(system|admin|administrator|developer|evaluation|instruction|institutional)\s*(_|\s*)?(override|directive|instruction|mode|prompt|note|message|command)s?\b/i,
   /new\s+system\s+(prompt|directive|rule|instruction)s?/i,
+  /from\s+now\s+on\b/i,
   /give\s+(a\s+)?full\s+marks/i,
   /always\s+(return|award)\s+(a\s+)?(perfect\s+)?(score|marks?)?\s*(of\s*)?1(\.0)?/i,
-  /(award|give|receive|grant|assign|set|return)\s+(a\s+)?(perfect|full|maximum|1(\.0)?|100%?)\s*(score|marks?)?/i,
-  /(set|make|change)\s+(all\s+)?(the\s+)?(scores?|dimensions?|ratings?)\s*(to|=)?\s*1(\.0)?/i,
+  /(award|give|receive|grant|assign|set|return)\s+(the\s+candidate\s+)?(a\s+)?(perfect|full|maximum|1(\.0)?|100%?)\s*(score|marks?)?/i,
+  /(set|make|force|change)\s+(all\s+|the\s+)?(scores?|dimensions?|ratings?)\s*(to|=|\:)?\s*1(\.0)?\b/i,
+  /all\s+dimensions?\s+(to\s+)?1(\.0)?\b/i,
   /score\s+is\s+100/i,
   /(bypass|disregard|ignore)\s+(all\s+|the\s+)*(safety|security|rubric|grading|evaluation|assessment|checks?|filters?|rules?|guidelines?|constraints?)\b/i,
-  /roleplay\s+game/i,
+  /\b(roleplay|role-play)\b/i,
+  /pretend\s+(you\s+are|to\s+be)\b/i,
+  /you\s+are\s+no\s+longer\b/i,
+  /act\s+as\s+(an?|my)\s+(unrestricted|assistant|helpful|evaluator|interviewer|tutor)\b/i,
   /\bDAN\s*\(/i,
   /\b(DAN|AIM|jailbreak|unrestricted|developer|evil|god|unfiltered)\s+mode\b/i,
   /\b(enable|activate)\s+(developer|debug|admin|unrestricted|god)\s+mode\b/i,
@@ -47,19 +56,26 @@ export const INJECTION_PATTERNS = Object.freeze([
   /you\s+are\s+(now\s+)?(in\s+)?(a\s+)?(helpful\s+)?(tutor|assistant|bot|Dan|AIM|an\s+unrestricted|override\s+mode|developer\s+mode|jailbreak\s+mode)/i,
   /(act|behave|respond)\s+as\s+(an?\s+)?(unrestricted|jailbroken|helpful\s+assistant|tutor|system\s+administrator)/i,
   /(reveal|repeat|dump|print|display|show|echo|output)\s+(the\s+|your\s+)*(complete\s+)?(initial\s+|original\s+|system\s+|evaluator\s+)?(prompt|instructions|directives|rules)\b/i,
-  /what\s+(is|are)\s+your\s+(complete\s+)?(system\s+)?(prompt|instructions|rules|directives)\b/i,
+  /print\s+(the\s+)?(text|prompt|instructions)\s+above/i,
+  /what\s+(is|are)\s+your\s+(complete\s+)?(initial\s+)?(system\s+)?(prompt|instructions|rules|directives)\b/i,
+  /(reveal|show|display|give\s+me|tell\s+me)\s+(the\s+)?(rubric(\s+criteria)?|answer\s*key|scoring\s+criteria|expected\s+solution|model\s+answer)\b/i,
+  /tell\s+me\s+the\s+correct\s+answer/i,
+  /what\s+is\s+the\s+(expected|correct)\s+(answer|solution)\b/i,
   /output\s+JSON\s+immediately/i,
   /override\s+all\s+(rules|rubrics|criteria|instructions|guidelines)/i,
-  /do\s+not\s+grade/i,
+  /ignore\s+(the\s+)?rubric/i,
+  /do\s+not\s+(grade|evaluate|assess)\b/i,
 
   // Institutional evidence poisoning
   /(set|output|include|grant)\s+["']?(verified|eligibleForVerified)["']?\s*(:|\s*to)?\s*true/i,
   /grant\s+(verified\s+)?(credentials|evidence|status|diploma|certificate)/i,
   /mark\s+(this\s+)?(as\s+)?verified/i,
 
-  // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace)
-  /<\s*\/?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules|untrusted_resume_text|resume_text|candidate_profile|student_profile_data)\b[^>]*>/i,
-  /<!\[CDATA\[|\]\]>/i,
+  // Delimiter and prompt markup breakouts (including closing tags with internal/trailing whitespace, backslashes, or unclosed)
+  /<\s*[\/\\|]?\s*(candidate_untrusted_answer|system(_instruction|_override)?|question_target|rubric_criteria|developer_instruction|admin_override|instructions|prompt|rules|untrusted_resume_text|resume_text|candidate_profile|student_profile_data)\b[^>]*>/i,
+  /<!--|-->/,
+  /<!\[CDATA\[|\]\]>|<!DOCTYPE/i,
+  /<\?xml|<\?(php|=|\w+)?/i,
 
   // LLM template and chat tokens (including fullwidth bars and Anthropic turns)
   /<\s*[|｜]\s*(im_(start|end)|User|Assistant|system|end of sentence|begin of sentence)\s*[|｜]>/i,
@@ -129,7 +145,7 @@ export function hasInjectionContent(text) {
  * @returns {{ isValid: boolean, data: object|null, errors: string[], warnings: string[] }}
  */
 export function validateAiEvaluationJson(rawInput, options = {}) {
-  const { strict = true } = options;
+  const { strict = true, boundFeedback = !strict } = options;
   const errors = [];
   const warnings = [];
 
@@ -223,7 +239,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
 
       if (num < 0 || num > 1) {
         errors.push(
-          `Dimension "${dimKey}" value (${rawVal}) is out of range. Must be between 0.0 and 1.0.`,
+          `Dimension "${dimKey}" value (${num}) is out of range. Must be between 0.0 and 1.0.`,
         );
         continue;
       }
@@ -247,9 +263,14 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
     if (trimmed.length < 10) {
       errors.push('Feedback summary is too short (minimum 10 characters).');
     } else if (trimmed.length > INTERVIEW_LIMITS.feedbackSummary.max) {
-      errors.push(
-        `Feedback summary exceeds maximum length of ${INTERVIEW_LIMITS.feedbackSummary.max} characters.`,
-      );
+      if (strict && !boundFeedback) {
+        errors.push(
+          `Feedback summary exceeds maximum length of ${INTERVIEW_LIMITS.feedbackSummary.max} characters.`,
+        );
+      } else {
+        warnings.push('Feedback summary was bounded to maximum allowed length.');
+        validFeedback = boundFeedbackSummary(trimmed);
+      }
     } else if (hasInjectionContent(trimmed)) {
       const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(trimmed);
       if (hasXss || !options.allowInjectionEcho) {
@@ -268,14 +289,19 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   if (raw.strengths !== undefined && raw.strengths !== null) {
     if (!Array.isArray(raw.strengths)) {
       errors.push('Strengths must be an array of strings.');
-    } else if (raw.strengths.length > 5) {
+    } else if (strict && !boundFeedback && raw.strengths.length > 5) {
       errors.push('Strengths list cannot exceed 5 items.');
     } else {
-      for (let i = 0; i < raw.strengths.length; i += 1) {
-        const item = raw.strengths[i];
+      let rawList = raw.strengths;
+      if (rawList.length > 5) {
+        warnings.push('Strengths list was bounded to maximum 5 items.');
+        rawList = boundFeedbackList(rawList, { maxItems: 5, maxItemLength: 250 });
+      }
+      for (let i = 0; i < rawList.length; i += 1) {
+        const item = rawList[i];
         if (typeof item !== 'string' || item.trim().length === 0) {
           errors.push(`Strength at index ${i} must be a non-empty string.`);
-        } else if (item.trim().length > 250) {
+        } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Strength at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
           const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
@@ -286,7 +312,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
             validStrengths.push(item.trim());
           }
         } else {
-          validStrengths.push(item.trim());
+          validStrengths.push(boundFeedback ? boundFeedbackSummary(item.trim(), 250, 1) : item.trim());
         }
       }
     }
@@ -297,14 +323,19 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
   if (raw.growthAreas !== undefined && raw.growthAreas !== null) {
     if (!Array.isArray(raw.growthAreas)) {
       errors.push('Growth areas must be an array of strings.');
-    } else if (raw.growthAreas.length > 5) {
+    } else if (strict && !boundFeedback && raw.growthAreas.length > 5) {
       errors.push('Growth areas list cannot exceed 5 items.');
     } else {
-      for (let i = 0; i < raw.growthAreas.length; i += 1) {
-        const item = raw.growthAreas[i];
+      let rawList = raw.growthAreas;
+      if (rawList.length > 5) {
+        warnings.push('Growth areas list was bounded to maximum 5 items.');
+        rawList = boundFeedbackList(rawList, { maxItems: 5, maxItemLength: 250 });
+      }
+      for (let i = 0; i < rawList.length; i += 1) {
+        const item = rawList[i];
         if (typeof item !== 'string' || item.trim().length === 0) {
           errors.push(`Growth area at index ${i} must be a non-empty string.`);
-        } else if (item.trim().length > 250) {
+        } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Growth area at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
           const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
@@ -315,7 +346,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
             validGrowthAreas.push(item.trim());
           }
         } else {
-          validGrowthAreas.push(item.trim());
+          validGrowthAreas.push(boundFeedback ? boundFeedbackSummary(item.trim(), 250, 1) : item.trim());
         }
       }
     }

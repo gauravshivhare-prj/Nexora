@@ -220,6 +220,11 @@ export function isCareerTwinStale(
     reasons.push('A resume has been analysed again since this was generated.');
   }
 
+  const storedEvidenceCount =
+    typeof twin.sources?.verifiedEvidenceCount === 'number'
+      ? twin.sources.verifiedEvidenceCount
+      : 0;
+
   if (
     latestEvidenceAt &&
     twin.generatedAt &&
@@ -228,10 +233,7 @@ export function isCareerTwinStale(
     reasons.push('New skill evidence has been recorded since this was generated.');
   } else if (
     typeof verifiedEvidenceCount === 'number' &&
-    verifiedEvidenceCount !==
-      (typeof twin.sources?.verifiedEvidenceCount === 'number'
-        ? twin.sources.verifiedEvidenceCount
-        : 0)
+    verifiedEvidenceCount !== storedEvidenceCount
   ) {
     reasons.push('New skill evidence has been recorded since this was generated.');
   }

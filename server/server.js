@@ -3,6 +3,7 @@ import { connectDatabase, disconnectDatabase } from './src/config/database.js';
 import { env } from './src/config/env.js';
 import { ensureModelIndexes } from './src/models/index.js';
 import { createGeminiProvider } from './src/services/ai/geminiProvider.js';
+import { createDemoProvider } from './src/services/ai/demoProvider.js';
 import { registerAiProvider } from './src/services/ai/aiProvider.js';
 import { logger } from './src/utils/logger.js';
 
@@ -27,6 +28,10 @@ function registerProviders() {
     });
     registerAiProvider(provider);
     logger.info(`AI provider "${provider.name}" registered for model "${env.geminiModel}"`);
+  } else if (env.aiProviderName === 'demo') {
+    const provider = createDemoProvider();
+    registerAiProvider(provider);
+    logger.info(`AI provider "${provider.name}" registered for deterministic demo mode`);
   }
 }
 

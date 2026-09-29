@@ -73,6 +73,7 @@ describe('R2 — AI Interview Domain Contract Suite', () => {
     it('allows valid lifecycle transitions', () => {
       assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS), true);
       assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.ABANDONED), true);
+      assert.equal(canTransitionSession(SESSION_STATUS.INITIALIZED, SESSION_STATUS.FAILED), true);
       assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.COMPLETED), true);
       assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.TIMED_OUT), true);
       assert.equal(canTransitionSession(SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.ABANDONED), true);
@@ -201,6 +202,23 @@ describe('R2 — AI Interview Domain Contract Suite', () => {
         () => validateInterviewQuestion({ ...validQuestion, prompt: 'short' }, 0),
         /Question prompt must be at least 10 characters/,
       );
+    });
+
+    it('accepts questionId polymorphically and populates id, questionId, and canonical targetSkill', () => {
+      const qWithQuestionId = {
+        questionId: 'iq-node-async-001',
+        type: INTERVIEW_QUESTION_TYPES.SCENARIO,
+        targetSkill: 'Node.js',
+        prompt: 'How would you debug an unhandled promise rejection in production?',
+      };
+
+      const validated = validateInterviewQuestion(qWithQuestionId, 0);
+
+      assert.equal(validated.id, 'iq-node-async-001');
+      assert.equal(validated.questionId, 'iq-node-async-001');
+      assert.equal(validated.targetSkill, 'Node.js');
+      assert.equal(validated.targetSkillName, 'Node.js');
+      assert.equal(validated.targetSkillKey, 'nodejs');
     });
 
     it('rejects non-canonical target skill in question', () => {
@@ -484,6 +502,55 @@ describe('R2 — AI Interview Domain Contract Suite', () => {
       assert.equal(result.overallScore, 0.55);
       assert.equal(result.outcome, CHECK_OUTCOMES.FAIL);
       assert.equal(result.eligibleForVerified, false);
+    });
+
+    it('evaluates Mongoose-shaped session with questionId, q.evaluation, and string targetSkills', () => {
+      const mongooseSession = {
+        _id: '6ab6ba1aa278c6e17a603503',
+        user: '6ab6ba1aa278c6e17a603500',
+        targetRole: 'backend-developer',
+        roleTitle: 'Backend Developer',
+        roleSlug: 'backend-developer',
+        difficulty: INTERVIEW_DIFFICULTY.INTERMEDIATE,
+        targetSkills: ['Node.js', 'PostgreSQL'],
+        questions: [
+          {
+            questionId: 'iq-node-001',
+            order: 1,
+            targetSkill: 'Node.js',
+            weight: 1,
+            evaluation: {
+              compositeScore: 0.85,
+              dimensions: { accuracy: 0.85, depth: 0.85, clarity: 0.85, relevance: 0.85 },
+            },
+          },
+          {
+            questionId: 'iq-pg-002',
+            order: 2,
+            targetSkill: 'PostgreSQL',
+            weight: 1,
+            evaluation: {
+              compositeScore: 0.75,
+              dimensions: { accuracy: 0.75, depth: 0.75, clarity: 0.75, relevance: 0.75 },
+            },
+          },
+        ],
+      };
+
+      const result = evaluateInterviewSession(mongooseSession, {
+        evaluatedBy: EVALUATOR_TYPES.AI,
+      });
+
+      assert.equal(result.sessionId, '6ab6ba1aa278c6e17a603503');
+      assert.equal(result.studentId, '6ab6ba1aa278c6e17a603500');
+      assert.equal(result.overallScore, 0.8);
+      assert.equal(result.questionResults.length, 2);
+      assert.equal(result.questionResults[0].questionId, 'iq-node-001');
+      assert.equal(result.questionResults[0].targetSkillName, 'Node.js');
+      assert.equal(result.questionResults[0].targetSkillKey, 'nodejs');
+      assert.equal(result.skillEvidenceResults.length, 2);
+      assert.equal(result.skillEvidenceResults[0].skill, 'Node.js');
+      assert.equal(result.skillEvidenceResults[0].score, 0.8);
     });
   });
 });

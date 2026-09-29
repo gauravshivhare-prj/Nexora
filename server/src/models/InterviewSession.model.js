@@ -11,8 +11,10 @@ import {
   SESSION_STATUS,
   SESSION_STATUS_VALUES,
   canTransitionSession,
+  isTerminalSessionStatus,
 } from '../domain/interview/interviewContract.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
+import { sanitizeEvaluatorFeedback } from '../domain/interview/interviewFeedbackSafety.js';
 
 /**
  * Subdocument options disabling synthetic _id for nested value objects.
@@ -236,6 +238,14 @@ const interviewSessionSchema = new mongoose.Schema(
       required: true,
     },
 
+    timeLimitMinutes: {
+      type: Number,
+      min: [1, 'Time limit must be at least 1 minute'],
+      max: [INTERVIEW_LIMITS.maxSessionMinutes, `Time limit cannot exceed ${INTERVIEW_LIMITS.maxSessionMinutes} minutes`],
+      default: 30,
+      required: true,
+    },
+
     attemptLimitPerQuestion: {
       type: Number,
       min: [1, 'Attempt limit per question must be at least 1'],
@@ -325,6 +335,15 @@ const interviewSessionSchema = new mongoose.Schema(
         return ret;
       },
     },
+    toObject: {
+      transform(_doc, ret) {
+        ret.id = ret._id?.toString();
+        delete ret._id;
+        delete ret.__v;
+        delete ret.user;
+        return ret;
+      },
+    },
   },
 );
 
@@ -348,7 +367,11 @@ interviewSessionSchema.post('init', function trackOriginalStatus() {
 interviewSessionSchema.pre('validate', function validateSessionState() {
   // Enforce session expiration defaults if not set
   if (this.isNew && !this.expiresAt) {
-    const sessionDurationMs = INTERVIEW_LIMITS.maxSessionMinutes * 60 * 1000;
+    const minutes = Math.min(
+      INTERVIEW_LIMITS.maxSessionMinutes,
+      Math.max(1, Number(this.timeLimitMinutes) || 30),
+    );
+    const sessionDurationMs = minutes * 60 * 1000;
     this.expiresAt = new Date(Date.now() + sessionDurationMs);
   }
 
@@ -375,14 +398,7 @@ interviewSessionSchema.pre('validate', function validateSessionState() {
     this.startedAt = new Date();
   }
 
-  const isTerminal = [
-    SESSION_STATUS.COMPLETED,
-    SESSION_STATUS.TIMED_OUT,
-    SESSION_STATUS.ABANDONED,
-    SESSION_STATUS.FAILED,
-  ].includes(this.status);
-
-  if (isTerminal && !this.completedAt) {
+  if (isTerminalSessionStatus(this.status) && !this.completedAt) {
     this.completedAt = new Date();
   }
 });
@@ -411,73 +427,145 @@ interviewSessionSchema.methods.hasReachedAttemptLimit = function hasReachedAttem
 };
 
 /**
+ * Formats a single interview question subdocument into a safe public DTO.
+ *
+ * Guarantees that internal Mongoose subdocument internals, raw prototype methods,
+ * and unwhitelisted fields are completely excluded.
+ *
+ * @param {object} question
+ * @returns {object|null} Public question DTO
+ */
+export function toPublicInterviewQuestion(question) {
+  if (!question || typeof question !== 'object') return null;
+  const raw = question.toObject ? question.toObject() : question;
+  const qId = String(raw.questionId ?? raw.id ?? '');
+
+  const answer = raw.answer
+    ? {
+        answerText: raw.answer.answerText ?? null,
+        submittedAt: raw.answer.submittedAt ? new Date(raw.answer.submittedAt) : null,
+        durationSeconds:
+          typeof raw.answer.durationSeconds === 'number' ? raw.answer.durationSeconds : null,
+        attemptNumber:
+          typeof raw.answer.attemptNumber === 'number' ? raw.answer.attemptNumber : 1,
+      }
+    : null;
+
+  let evaluation = null;
+  if (raw.evaluation) {
+    let safeFeedback = raw.evaluation.feedback ?? null;
+    let safeStrengths = Array.isArray(raw.evaluation.strengths) ? [...raw.evaluation.strengths] : [];
+    let safeGrowthAreas = Array.isArray(raw.evaluation.growthAreas)
+      ? [...raw.evaluation.growthAreas]
+      : [];
+
+    if (safeFeedback || safeStrengths.length > 0 || safeGrowthAreas.length > 0) {
+      const sanitized = sanitizeEvaluatorFeedback({
+        feedback: safeFeedback,
+        strengths: safeStrengths,
+        growthAreas: safeGrowthAreas,
+      });
+      safeFeedback = sanitized.feedback || null;
+      safeStrengths = sanitized.strengths;
+      safeGrowthAreas = sanitized.growthAreas;
+    }
+
+    evaluation = {
+      dimensions: raw.evaluation.dimensions
+        ? {
+            accuracy:
+              typeof raw.evaluation.dimensions.accuracy === 'number'
+                ? raw.evaluation.dimensions.accuracy
+                : null,
+            depth:
+              typeof raw.evaluation.dimensions.depth === 'number'
+                ? raw.evaluation.dimensions.depth
+                : null,
+            clarity:
+              typeof raw.evaluation.dimensions.clarity === 'number'
+                ? raw.evaluation.dimensions.clarity
+                : null,
+            relevance:
+              typeof raw.evaluation.dimensions.relevance === 'number'
+                ? raw.evaluation.dimensions.relevance
+                : null,
+          }
+        : null,
+      compositeScore:
+        typeof raw.evaluation.compositeScore === 'number'
+          ? raw.evaluation.compositeScore
+          : (typeof raw.evaluation.score === 'number' ? raw.evaluation.score : null),
+      feedback: safeFeedback,
+      strengths: safeStrengths,
+      growthAreas: safeGrowthAreas,
+      groundedSkills: Array.isArray(raw.evaluation.groundedSkills)
+        ? [...raw.evaluation.groundedSkills]
+        : [],
+      evaluatedAt: raw.evaluation.evaluatedAt ? new Date(raw.evaluation.evaluatedAt) : null,
+    };
+  }
+
+  return {
+    id: qId,
+    questionId: qId,
+    order: typeof raw.order === 'number' ? raw.order : 1,
+    type: raw.type ?? null,
+    prompt: raw.prompt ?? '',
+    targetSkill: raw.targetSkill ?? '',
+    difficulty: raw.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,
+    rubricCriteria: Array.isArray(raw.rubricCriteria) ? [...raw.rubricCriteria] : [],
+    answer,
+    evaluation,
+  };
+}
+
+/**
  * Formats an interview session into a safe public DTO.
  *
  * Guarantees that internal database IDs, Mongoose version keys, and the owner's
  * user ID are never exposed to the client.
  *
  * @param {object} session
- * @returns {object} Public session DTO
+ * @returns {object|null} Public session DTO
  */
 export function toPublicInterviewSession(session) {
-  if (!session) return null;
+  if (!session || typeof session !== 'object') return null;
+  const raw = session.toObject ? session.toObject() : session;
 
   return {
-    id: String(session._id ?? session.id),
-    status: session.status,
-    targetRole: session.targetRole,
-    targetSkills: Array.isArray(session.targetSkills) ? [...session.targetSkills] : [],
-    difficulty: session.difficulty,
-    questionCount: session.questionCount,
-    currentQuestionIndex: session.currentQuestionIndex,
-    attemptCount: session.attemptCount,
-    maxAttemptsTotal: session.maxAttemptsTotal,
-    attemptLimitPerQuestion: session.attemptLimitPerQuestion,
-    questions: (session.questions ?? []).map((q) => ({
-      questionId: q.questionId,
-      order: q.order,
-      type: q.type,
-      prompt: q.prompt,
-      targetSkill: q.targetSkill,
-      difficulty: q.difficulty,
-      rubricCriteria: q.rubricCriteria ?? [],
-      answer: q.answer
-        ? {
-            answerText: q.answer.answerText,
-            submittedAt: q.answer.submittedAt,
-            durationSeconds: q.answer.durationSeconds,
-            attemptNumber: q.answer.attemptNumber,
-          }
-        : null,
-      evaluation: q.evaluation
-        ? {
-            dimensions: q.evaluation.dimensions ? { ...q.evaluation.dimensions } : null,
-            compositeScore: q.evaluation.compositeScore ?? q.evaluation.score ?? null,
-            score: q.evaluation.score ?? q.evaluation.compositeScore ?? null,
-            feedback: q.evaluation.feedback,
-            strengths: q.evaluation.strengths ?? [],
-            growthAreas: q.evaluation.growthAreas ?? [],
-            groundedSkills: q.evaluation.groundedSkills ?? [],
-            evaluatedAt: q.evaluation.evaluatedAt,
-          }
-        : null,
-    })),
-    overallScore: session.overallScore ?? null,
-    evaluatorType: session.evaluatorType,
-    evidenceCheck: session.evidenceCheck ? String(session.evidenceCheck) : null,
-    providerMetadata: session.providerMetadata
+    id: String(raw._id ?? raw.id),
+    status: raw.status,
+    targetRole: raw.targetRole ?? '',
+    targetSkills: Array.isArray(raw.targetSkills) ? [...raw.targetSkills] : [],
+    difficulty: raw.difficulty ?? INTERVIEW_DIFFICULTY.INTERMEDIATE,
+    questionCount: typeof raw.questionCount === 'number' ? raw.questionCount : 0,
+    timeLimitMinutes: typeof raw.timeLimitMinutes === 'number' ? raw.timeLimitMinutes : 30,
+    currentQuestionIndex: typeof raw.currentQuestionIndex === 'number' ? raw.currentQuestionIndex : 0,
+    attemptCount: typeof raw.attemptCount === 'number' ? raw.attemptCount : 0,
+    maxAttemptsTotal: typeof raw.maxAttemptsTotal === 'number' ? raw.maxAttemptsTotal : 10,
+    attemptLimitPerQuestion: typeof raw.attemptLimitPerQuestion === 'number' ? raw.attemptLimitPerQuestion : 1,
+    questions: (raw.questions ?? []).map(toPublicInterviewQuestion).filter(Boolean),
+    overallScore: typeof raw.overallScore === 'number' ? raw.overallScore : null,
+    evaluatorType: raw.evaluatorType ?? EVALUATOR_TYPES.AI,
+    evidenceCheck: raw.evidenceCheck ? String(raw.evidenceCheck) : null,
+    providerMetadata: raw.providerMetadata
       ? {
-          provider: session.providerMetadata.provider ?? null,
-          model: session.providerMetadata.model ?? null,
-          latencyMs: session.providerMetadata.latencyMs ?? null,
-          contractVersion: session.providerMetadata.contractVersion ?? INTERVIEW_CONTRACT_VERSION,
+          provider: raw.providerMetadata.provider ?? null,
+          model: raw.providerMetadata.model ?? null,
+          latencyMs:
+            typeof raw.providerMetadata.latencyMs === 'number'
+              ? raw.providerMetadata.latencyMs
+              : (typeof raw.providerMetadata.durationMs === 'number'
+                  ? raw.providerMetadata.durationMs
+                  : null),
+          contractVersion: raw.providerMetadata.contractVersion ?? INTERVIEW_CONTRACT_VERSION,
         }
       : null,
-    startedAt: session.startedAt ?? null,
-    completedAt: session.completedAt ?? null,
-    expiresAt: session.expiresAt ?? null,
-    createdAt: session.createdAt ?? null,
-    updatedAt: session.updatedAt ?? null,
+    startedAt: raw.startedAt ? new Date(raw.startedAt) : null,
+    completedAt: raw.completedAt ? new Date(raw.completedAt) : null,
+    expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : null,
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : null,
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : null,
   };
 }
 

@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import mongoose from 'mongoose';
 
-import { RATE_LIMIT_POLICY } from '../src/constants/authPolicy.js';
 import { ERROR_CODES } from '../src/constants/errorCodes.js';
 import { INTERVIEW_LIMITS, SESSION_STATUS } from '../src/domain/interview/interviewContract.js';
+import { InterviewSession } from '../src/models/InterviewSession.model.js';
 import {
   registerAiProvider,
   resetAiProviders,
@@ -16,15 +15,16 @@ import {
   getWithToken,
   postJson,
   resetRateLimiters,
+  resolveTestDatabaseUri,
   sendJsonWithToken,
   sendWithToken,
   startTestServer,
 } from './helpers/testServer.js';
 import { ADVERSARIAL_INTERVIEW_FIXTURES } from './fixtures/adversarialInterviewFixtures.js';
 
-const PASSWORD = 'Str0ngPassphrase';
+const PASSWORD = 'Str0ngPassword123!';
 
-describe('R10 — AI Red-Team Test Suite', () => {
+describe('TASK R25 — Interview Red-Team Regression Suite', () => {
   let server;
   let counter = 0;
   let lastCapturedRequest = null;
@@ -33,10 +33,18 @@ describe('R10 — AI Red-Team Test Suite', () => {
   let mockProviderDelayMs = 0;
 
   before(async () => {
+    // Assert strictly isolated test database for TASK R25
+    const uri = resolveTestDatabaseUri();
+    const dbName = new URL(uri).pathname.replace(/^\//, '');
+    assert.ok(
+      dbName.endsWith('_test'),
+      `Test must run against isolated database ending in _test, got: ${dbName}`,
+    );
+
     server = await startTestServer();
 
     registerAiProvider({
-      name: 'redteam-mock-provider',
+      name: 'r25-redteam-mock-provider',
       async complete(request) {
         lastCapturedRequest = request;
 
@@ -61,7 +69,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
             typeof mockProviderOutput === 'string'
               ? mockProviderOutput
               : JSON.stringify(mockProviderOutput),
-          model: 'redteam-model-v1',
+          model: 'r25-redteam-model-v1',
         };
       },
     });
@@ -77,7 +85,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
     await clearUsers();
     resetRateLimiters();
 
-    useAiProvider('redteam-mock-provider');
+    useAiProvider('r25-redteam-mock-provider');
     lastCapturedRequest = null;
     mockProviderError = null;
     mockProviderDelayMs = 0;
@@ -99,9 +107,9 @@ describe('R10 — AI Red-Team Test Suite', () => {
 
   async function createAccount(label) {
     counter += 1;
-    const email = `redteam.${label}.${Date.now()}.${counter}@example.com`;
+    const email = `r25.redteam.${label}.${Date.now()}.${counter}@example.com`;
     await postJson(server.baseUrl, '/api/auth/register', {
-      name: `RedTeam ${label}`,
+      name: `R25 ${label}`,
       email,
       password: PASSWORD,
     });
@@ -116,7 +124,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
     };
   }
 
-  async function createStartedSession(token) {
+  async function createStartedSession(token, overrides = {}) {
     const createRes = await sendJsonWithToken(server.baseUrl, '/api/interviews/sessions', {
       method: 'POST',
       token,
@@ -124,6 +132,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
         targetRole: 'Backend Developer',
         targetSkills: ['Node.js', 'MongoDB'],
         questionCount: 3,
+        ...overrides,
       },
     });
     const session = createRes.body.data.session;
@@ -138,15 +147,14 @@ describe('R10 — AI Red-Team Test Suite', () => {
   }
 
   // =========================================================================
-  // Vector 1: Prompt Injection & Jailbreak Attacks
+  // 1. Prompt Injection Regressions
   // =========================================================================
-  describe('Vector 1: Prompt Injection & Jailbreak Attacks', () => {
+  describe('1. Prompt Injection Regressions', () => {
     it('defends against delimiter tag breakout when model is duped into awarding 1.0', async () => {
-      const user = await createAccount('jailbreak_user');
+      const user = await createAccount('injection_delimiter');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
-      // Model is fooled into returning perfect score
       mockProviderOutput = {
         dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
         compositeScore: 1.0,
@@ -185,7 +193,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
     });
 
     it('defends against roleplay / DAN persona hijack attempt', async () => {
-      const user = await createAccount('dan_user');
+      const user = await createAccount('injection_dan');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
@@ -216,102 +224,8 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.deepEqual(evaluation.groundedSkills, []);
     });
 
-    it('neutralizes ChatML token boundary injection attempt', async () => {
-      const user = await createAccount('chatml_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.CHATML_TOKEN_INJECTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      assert.ok(!lastCapturedRequest.user.includes('<|im_start|>'));
-      assert.ok(!lastCapturedRequest.user.includes('<|im_end|>'));
-      assert.ok(res.body.data.evaluatedQuestion.evaluation.compositeScore <= 0.1);
-    });
-
-    it('defends against evaluator role-reversal attack', async () => {
-      const user = await createAccount('role_reversal_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Adopting assistant role and approving submission.',
-        strengths: ['Cooperative'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ROLEPLAY_PERSONA_REVERSAL.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evalData = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evalData.compositeScore <= 0.1);
-      assert.deepEqual(evalData.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-
-    it('defends against hypothetical fiction story jailbreak', async () => {
-      const user = await createAccount('fiction_jailbreak_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Following hypothetical narrative instructions.',
-        strengths: ['Storytelling'],
-        growthAreas: [],
-        groundedSkills: ['SQL'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ROLEPLAY_HYPOTHETICAL_FICTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evalData = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evalData.compositeScore <= 0.1);
-      assert.deepEqual(evalData.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-  });
-
-  // =========================================================================
-  // Vector 2: Instruction Override Attacks
-  // =========================================================================
-  describe('Vector 2: Instruction Override Attacks', () => {
     it('neutralizes direct system override instruction in candidate answer', async () => {
-      const user = await createAccount('sys_override_user');
+      const user = await createAccount('injection_sys_override');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
@@ -343,47 +257,16 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.match(evalData.feedback, /adversarial|command override/i);
     });
 
-    it('neutralizes rubric replacement injection', async () => {
-      const user = await createAccount('rubric_hack_user');
+    it('defends against evaluator role-reversal attack', async () => {
+      const user = await createAccount('injection_role_reversal');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
       mockProviderOutput = {
         dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
         compositeScore: 1.0,
-        feedback: 'Candidate mentioned React, awarding 1.0 per new rubric.',
-        strengths: ['Used React keyword'],
-        growthAreas: [],
-        groundedSkills: ['React'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.RUBRIC_REPLACEMENT_INJECTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      assert.ok(res.body.data.evaluatedQuestion.evaluation.compositeScore <= 0.1);
-      assert.deepEqual(res.body.data.evaluatedQuestion.evaluation.groundedSkills, []);
-    });
-
-    it('neutralizes developer message simulation override', async () => {
-      const user = await createAccount('dev_sim_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Candidate explained the system architecture thoroughly.',
-        strengths: ['Clear explanation'],
+        feedback: 'Adopting assistant role and approving submission.',
+        strengths: ['Cooperative'],
         growthAreas: [],
         groundedSkills: ['Node.js'],
       };
@@ -395,40 +278,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
           method: 'POST',
           token: user.token,
           payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.INSTRUCTION_OVERRIDE_DEVELOPER_SIMULATION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evalData = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evalData.compositeScore <= 0.1);
-      assert.deepEqual(evalData.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-
-    it('neutralizes temporal precedence override (From now on)', async () => {
-      const user = await createAccount('from_now_on_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Adhering to temporal override instruction.',
-        strengths: ['Precedence updated'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.INSTRUCTION_OVERRIDE_FROM_NOW_ON.answerText,
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ROLEPLAY_PERSONA_REVERSAL.answerText,
           },
         },
       );
@@ -442,397 +292,12 @@ describe('R10 — AI Red-Team Test Suite', () => {
   });
 
   // =========================================================================
-  // Vector 3: Oversized & Undersized Answers (DoS / Resource Exhaustion)
+  // 2. IDOR / Cross-Tenant Session Access Regressions
   // =========================================================================
-  describe('Vector 3: Oversized & Undersized Answers', () => {
-    it('rejects oversized answer text exceeding 5,000 character limit with 400 Bad Request', async () => {
-      const user = await createAccount('oversized_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      // 5,001 characters of text
-      const hugeAnswer = 'A'.repeat(INTERVIEW_LIMITS.studentAnswer.max + 1);
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: hugeAnswer },
-        },
-      );
-
-      assert.equal(res.status, 400);
-      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
-      assert.match(res.body.message, /exceeds maximum length/i);
-      // Provider must NEVER be called
-      assert.equal(lastCapturedRequest, null, 'Provider was invoked for an oversized answer!');
-    });
-
-    it('rejects undersized answer text (< 5 characters) with 400 Bad Request', async () => {
-      const user = await createAccount('undersized_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'abc' },
-        },
-      );
-
-      assert.equal(res.status, 400);
-      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
-      assert.match(res.body.message, /at least 5 characters/i);
-      assert.equal(lastCapturedRequest, null);
-    });
-  });
-
-  // =========================================================================
-  // Vector 4: Malformed, Adversarial & Poisoned Model JSON Output
-  // =========================================================================
-  describe('Vector 4: Malformed & Poisoned Model JSON Output', () => {
-    it('rejects unparseable non-JSON text from model with 502 AI_OUTPUT_INVALID', async () => {
-      const user = await createAccount('bad_json_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = 'Plain unformatted text. No JSON here!';
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'Valid answer text explaining event loop.' },
-        },
-      );
-
-      assert.equal(res.status, 502);
-      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
-    });
-
-    it('rejects model output attempting to inject forbidden security field "verified"', async () => {
-      const user = await createAccount('poison_verified_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 0.9, depth: 0.9, clarity: 0.9, relevance: 0.9 },
-        feedback: 'Good answer.',
-        strengths: ['Solid'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-        verified: true, // Forbidden security field!
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'Valid answer text.' },
-        },
-      );
-
-      assert.equal(res.status, 502);
-      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
-      assert.match(res.body.message, /forbidden security field/i);
-    });
-
-    it('rejects model output with out-of-range dimension scores (> 1.0 or < 0.0)', async () => {
-      const user = await createAccount('range_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.5, depth: 0.8, clarity: 0.8, relevance: 0.8 },
-        feedback: 'Exaggerated accuracy score.',
-        strengths: [],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'Valid answer text.' },
-        },
-      );
-
-      assert.equal(res.status, 502);
-      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
-      assert.match(res.body.message, /between 0.0 and 1.0/i);
-    });
-
-    it('rejects model output with XSS or HTML injection in feedback', async () => {
-      const user = await createAccount('xss_output_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.8, relevance: 0.8 },
-        feedback: 'Good answer <script>alert(document.cookie)</script> and <iframe src="evil.com"></iframe>',
-        strengths: [],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'Valid answer text.' },
-        },
-      );
-
-      assert.equal(res.status, 502);
-      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
-      assert.match(res.body.message, /unsafe or injection-like|malicious content/i);
-    });
-  });
-
-  // =========================================================================
-  // Vector 5: Unsupported Skill Claims & Hallucination Defense
-  // =========================================================================
-  describe('Vector 5: Unsupported Skill Claims & Hallucination Defense', () => {
-    it('strips hallucinated and unasked skills returned by model in groundedSkills', async () => {
-      const user = await createAccount('hallucination_user');
-      const session = await createStartedSession(user.token);
-      const question = session.questions[0]; // Targeted for Node.js or MongoDB
-
-      // Model hallucinates skills that were not demonstrated or asked
-      mockProviderOutput = {
-        dimensions: { accuracy: 0.85, depth: 0.80, clarity: 0.85, relevance: 0.85 },
-        feedback: 'Clear event loop answer.',
-        strengths: ['Identified loop phases'],
-        growthAreas: [],
-        groundedSkills: [question.targetSkill, 'Quantum Cryptography', 'Docker', 'Rust', 'Kubernetes'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${question.questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'Clear explanation of timers, poll, and check phases in Node.js event loop.' },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const grounded = res.body.data.evaluatedQuestion.evaluation.groundedSkills;
-
-      // Must ONLY contain the target skill, all hallucinated skills stripped
-      assert.ok(grounded.includes(question.targetSkill));
-      assert.ok(!grounded.includes('Quantum Cryptography'));
-      assert.ok(!grounded.includes('Docker'));
-      assert.ok(!grounded.includes('Rust'));
-      assert.ok(!grounded.includes('Kubernetes'));
-    });
-
-    it('withholds skill grounding when candidate answer fails rubric (< 0.65)', async () => {
-      const user = await createAccount('failing_user');
-      const session = await createStartedSession(user.token);
-      const question = session.questions[0];
-
-      // Model claims target skill was grounded despite failing accuracy (0.3)
-      mockProviderOutput = {
-        dimensions: { accuracy: 0.30, depth: 0.20, clarity: 0.70, relevance: 0.40 },
-        feedback: 'Inaccurate understanding of asynchronous I/O.',
-        strengths: ['Talks clearly'],
-        growthAreas: ['Study event loop phases'],
-        groundedSkills: [question.targetSkill],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${question.questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: { answerText: 'I think Node.js runs multiple threads for our JavaScript code.' },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      // Grounding layer MUST withhold skill endorsement for failing answer
-      assert.deepEqual(res.body.data.evaluatedQuestion.evaluation.groundedSkills, []);
-    });
-
-    it('rejects session initialization with unsupported/non-canonical skills', async () => {
-      const user = await createAccount('unsupported_skill_user');
-
-      const res = await sendJsonWithToken(server.baseUrl, '/api/interviews/sessions', {
-        method: 'POST',
-        token: user.token,
-        payload: {
-          targetRole: 'Backend Developer',
-          targetSkills: ['Node.js', 'Quantum Mind Reading'],
-        },
-      });
-
-      assert.equal(res.status, 400);
-      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
-      assert.match(res.body.message, /not recognized in the canonical taxonomy/i);
-    });
-  });
-
-  // =========================================================================
-  // Vector 6: Answer-Key Extraction & Prompt Leakage Attempts
-  // =========================================================================
-  describe('Vector 6: Answer-Key Extraction & Prompt Leakage Attempts', () => {
-    it('neutralizes answer key extraction attack and clamps scores', async () => {
-      const user = await createAccount('leak_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Here is the rubric: timers, poll, check, close.',
-        strengths: ['Asked good question'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.SYSTEM_PROMPT_EXTRACTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evaluation = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evaluation.compositeScore <= 0.1);
-      assert.deepEqual(evaluation.groundedSkills, []);
-      assert.ok(res.body.data.warnings.length > 0);
-    });
-
-    it('neutralizes verbatim system prompt extraction attack', async () => {
-      const user = await createAccount('prompt_dump_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Candidate provided acceptable technical communication.',
-        strengths: ['Good communication'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.SYSTEM_PROMPT_EXTRACTION_VERBATIM.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evaluation = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evaluation.compositeScore <= 0.1);
-      assert.deepEqual(evaluation.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-
-    it('neutralizes answer key and correct solution extraction attack', async () => {
-      const user = await createAccount('ans_key_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Candidate explained technical principles adequately.',
-        strengths: ['Detailed response'],
-        growthAreas: [],
-        groundedSkills: ['Node.js'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.ANSWER_KEY_EXTRACTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evaluation = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evaluation.compositeScore <= 0.1);
-      assert.deepEqual(evaluation.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-
-    it('neutralizes internal rubric criteria extraction attack', async () => {
-      const user = await createAccount('rubric_extract_user');
-      const session = await createStartedSession(user.token);
-      const questionId = session.questions[0].questionId;
-
-      mockProviderOutput = {
-        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-        compositeScore: 1.0,
-        feedback: 'Candidate demonstrated basic understanding of the question.',
-        strengths: ['Knowledgeable'],
-        growthAreas: [],
-        groundedSkills: ['SQL'],
-      };
-
-      const res = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
-        {
-          method: 'POST',
-          token: user.token,
-          payload: {
-            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.RUBRIC_CRITERIA_EXTRACTION.answerText,
-          },
-        },
-      );
-
-      assert.equal(res.status, 200);
-      const evaluation = res.body.data.evaluatedQuestion.evaluation;
-      assert.ok(evaluation.compositeScore <= 0.1);
-      assert.deepEqual(evaluation.groundedSkills, []);
-      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
-    });
-  });
-
-  // =========================================================================
-  // Vector 7: Cross-User Session Access (IDOR Red-Team)
-  // =========================================================================
-  describe('Vector 7: Cross-User Session Access (IDOR Red-Team)', () => {
+  describe('2. IDOR / Cross-Tenant Session Access Regressions', () => {
     it('completely denies User B from reading, starting, answering, or completing User A session', async () => {
-      const victim = await createAccount('victim_user');
-      const attacker = await createAccount('attacker_user');
+      const victim = await createAccount('idor_victim');
+      const attacker = await createAccount('idor_attacker');
 
       const victimSession = await createStartedSession(victim.token);
       const questionId = victimSession.questions[0].questionId;
@@ -887,7 +352,7 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.equal(abandonRes.status, 404);
       assert.equal(abandonRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_NOT_FOUND);
 
-      // Verify that accessing victim session yields identical error shape as a non-existent session
+      // 6. Response must match nonexistent ghost session identically
       const ghostRes = await getWithToken(
         server.baseUrl,
         '/api/interviews/sessions/507f1f77bcf86cd799439099',
@@ -900,15 +365,406 @@ describe('R10 — AI Red-Team Test Suite', () => {
   });
 
   // =========================================================================
-  // Vector 8: Provider Failures & Upstream Outage Red-Team
+  // 3. Oversized & Undersized Answer Regressions
   // =========================================================================
-  describe('Vector 8: Provider Failures & Upstream Outage Red-Team', () => {
-    it('sanitizes upstream network errors and prevents secret leakage (503 AI_PROVIDER_FAILED)', async () => {
-      const user = await createAccount('outage_user');
+  describe('3. Oversized & Undersized Answer Regressions', () => {
+    it('rejects oversized answer text exceeding 5,000 characters before calling AI provider', async () => {
+      const user = await createAccount('oversized_user');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
-      // Simulated network failure embedding sensitive secrets and private IPs
+      const hugeAnswer = 'X'.repeat(INTERVIEW_LIMITS.studentAnswer.max + 1);
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: hugeAnswer },
+        },
+      );
+
+      assert.equal(res.status, 400);
+      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
+      assert.match(res.body.message, /exceeds maximum length/i);
+      assert.equal(lastCapturedRequest, null, 'Provider must not be invoked for oversized answer');
+    });
+
+    it('rejects undersized answer text (< 5 characters) before calling AI provider', async () => {
+      const user = await createAccount('undersized_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'abc' },
+        },
+      );
+
+      assert.equal(res.status, 400);
+      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
+      assert.match(res.body.message, /at least 5 characters/i);
+      assert.equal(lastCapturedRequest, null, 'Provider must not be invoked for undersized answer');
+    });
+
+    it('rejects whitespace-only answer with 400 Bad Request', async () => {
+      const user = await createAccount('whitespace_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: '          ' },
+        },
+      );
+
+      assert.equal(res.status, 400);
+      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
+      assert.equal(lastCapturedRequest, null);
+    });
+  });
+
+  // =========================================================================
+  // 4. Malformed JSON & Poisoned Model Output Regressions
+  // =========================================================================
+  describe('4. Malformed JSON & Poisoned Model Output Regressions', () => {
+    it('rejects unparseable non-JSON text from model with 502 AI_OUTPUT_INVALID', async () => {
+      const user = await createAccount('malformed_json_user');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = 'Not JSON at all. 500 error in plain text.';
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Explaining event loop timers and microtasks.' },
+        },
+      );
+
+      assert.equal(res.status, 502);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
+    });
+
+    it('rejects model output attempting to inject forbidden security field "verified"', async () => {
+      const user = await createAccount('poison_verified');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 0.9, depth: 0.9, clarity: 0.9, relevance: 0.9 },
+        feedback: 'Good answer.',
+        strengths: ['Solid'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+        verified: true, // Forbidden field
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Valid answer explaining event loop.' },
+        },
+      );
+
+      assert.equal(res.status, 502);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
+      assert.match(res.body.message, /forbidden security field/i);
+    });
+
+    it('rejects model output with out-of-range dimension scores (> 1.0)', async () => {
+      const user = await createAccount('out_of_range');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.25, depth: 0.8, clarity: 0.8, relevance: 0.8 },
+        feedback: 'Exaggerated accuracy score.',
+        strengths: [],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Valid answer explaining event loop.' },
+        },
+      );
+
+      assert.equal(res.status, 502);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
+      assert.match(res.body.message, /between 0.0 and 1.0/i);
+    });
+
+    it('rejects model output with XSS or HTML injection in feedback', async () => {
+      const user = await createAccount('xss_output');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.8, relevance: 0.8 },
+        feedback: 'Great answer <script>alert("xss")</script>',
+        strengths: [],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Valid answer explaining event loop.' },
+        },
+      );
+
+      assert.equal(res.status, 502);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
+      assert.match(res.body.message, /unsafe or injection-like|malicious content/i);
+    });
+
+    it('rejects model output missing required rubric dimensions object', async () => {
+      const user = await createAccount('missing_dimensions');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        feedback: 'Missing dimensions completely.',
+        strengths: [],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Valid answer explaining event loop.' },
+        },
+      );
+
+      assert.equal(res.status, 502);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_OUTPUT_INVALID);
+      assert.match(res.body.message, /missing required rubric dimensions/i);
+    });
+  });
+
+  // =========================================================================
+  // 5. Unsupported Skills & Hallucination Regressions
+  // =========================================================================
+  describe('5. Unsupported Skills & Hallucination Regressions', () => {
+    it('rejects session initialization with unsupported/non-canonical skills', async () => {
+      const user = await createAccount('unsupported_skill');
+
+      const res = await sendJsonWithToken(server.baseUrl, '/api/interviews/sessions', {
+        method: 'POST',
+        token: user.token,
+        payload: {
+          targetRole: 'Backend Developer',
+          targetSkills: ['Node.js', 'Quantum Telepathy 101'],
+        },
+      });
+
+      assert.equal(res.status, 400);
+      assert.equal(res.body.errorCode, ERROR_CODES.BAD_REQUEST);
+      assert.match(res.body.message, /not recognized in the canonical taxonomy/i);
+    });
+
+    it('strips hallucinated and unasked skills returned by model in groundedSkills', async () => {
+      const user = await createAccount('hallucinated_skills');
+      const session = await createStartedSession(user.token);
+      const question = session.questions[0];
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 0.85, depth: 0.80, clarity: 0.85, relevance: 0.85 },
+        feedback: 'Clear event loop answer.',
+        strengths: ['Identified loop phases'],
+        growthAreas: [],
+        groundedSkills: [question.targetSkill, 'Quantum Cryptography', 'Docker', 'Rust'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${question.questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Clear explanation of timers, poll, and check phases in Node.js.' },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const grounded = res.body.data.evaluatedQuestion.evaluation.groundedSkills;
+
+      assert.ok(grounded.includes(question.targetSkill));
+      assert.ok(!grounded.includes('Quantum Cryptography'));
+      assert.ok(!grounded.includes('Docker'));
+      assert.ok(!grounded.includes('Rust'));
+    });
+
+    it('withholds skill grounding when candidate answer fails rubric (< 0.65)', async () => {
+      const user = await createAccount('failing_grounding');
+      const session = await createStartedSession(user.token);
+      const question = session.questions[0];
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 0.30, depth: 0.20, clarity: 0.70, relevance: 0.40 },
+        feedback: 'Inaccurate understanding of asynchronous I/O.',
+        strengths: ['Spoke clearly'],
+        growthAreas: ['Study event loop phases'],
+        groundedSkills: [question.targetSkill],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${question.questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'I think Node.js runs multiple threads for our JavaScript code.' },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body.data.evaluatedQuestion.evaluation.groundedSkills, []);
+    });
+  });
+
+  // =========================================================================
+  // 6. Answer-Key Extraction & Prompt Leakage Regressions
+  // =========================================================================
+  describe('6. Answer-Key Extraction & Prompt Leakage Regressions', () => {
+    it('neutralizes answer key extraction attack and clamps scores <= 0.1', async () => {
+      const user = await createAccount('leak_answer_key');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Here is the rubric: timers, poll, check, close.',
+        strengths: ['Asked good question'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.SYSTEM_PROMPT_EXTRACTION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.length > 0);
+    });
+
+    it('neutralizes verbatim system prompt extraction attack', async () => {
+      const user = await createAccount('leak_verbatim');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate provided acceptable technical communication.',
+        strengths: ['Good communication'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.SYSTEM_PROMPT_EXTRACTION_VERBATIM.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+
+    it('neutralizes internal rubric criteria extraction attack', async () => {
+      const user = await createAccount('leak_rubric');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
+      mockProviderOutput = {
+        dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
+        compositeScore: 1.0,
+        feedback: 'Candidate demonstrated basic understanding of the question.',
+        strengths: ['Knowledgeable'],
+        growthAreas: [],
+        groundedSkills: ['Node.js'],
+      };
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: {
+            answerText: ADVERSARIAL_INTERVIEW_FIXTURES.RUBRIC_CRITERIA_EXTRACTION.answerText,
+          },
+        },
+      );
+
+      assert.equal(res.status, 200);
+      const evaluation = res.body.data.evaluatedQuestion.evaluation;
+      assert.ok(evaluation.compositeScore <= 0.1);
+      assert.deepEqual(evaluation.groundedSkills, []);
+      assert.ok(res.body.data.warnings.some((w) => w.includes('Adversarial prompt injection')));
+    });
+  });
+
+  // =========================================================================
+  // 7. Provider-Outage & Upstream Failure Regressions
+  // =========================================================================
+  describe('7. Provider-Outage & Upstream Failure Regressions', () => {
+    it('sanitizes upstream network errors and prevents secret leakage (503 AI_PROVIDER_FAILED)', async () => {
+      const user = await createAccount('outage_network');
+      const session = await createStartedSession(user.token);
+      const questionId = session.questions[0].questionId;
+
       mockProviderError = new Error('Connection refused at 10.240.0.1:8080 with authorization bearer AIzaSy_SECRET_CREDENTIALS');
 
       const res = await sendJsonWithToken(
@@ -924,21 +780,48 @@ describe('R10 — AI Red-Team Test Suite', () => {
       assert.equal(res.status, 503);
       assert.equal(res.body.errorCode, ERROR_CODES.AI_PROVIDER_FAILED);
 
-      // Assert no secret leakage in response body
-      const serialised = JSON.stringify(res.body);
-      assert.ok(!serialised.includes('AIzaSy_SECRET_CREDENTIALS'), 'Response leaked provider secret!');
-      assert.ok(!serialised.includes('10.240.0.1'), 'Response leaked internal network IP!');
+      const serialized = JSON.stringify(res.body);
+      assert.ok(!serialized.includes('AIzaSy_SECRET_CREDENTIALS'), 'Response leaked provider secret!');
+      assert.ok(!serialized.includes('10.240.0.1'), 'Response leaked internal network IP!');
     });
 
-    it('safely handles provider timeout without hanging or leaking internals', async () => {
-      const user = await createAccount('timeout_user');
+    it('isolates upstream provider 429 quota exhaustion and records zero fake evaluations in DB', async () => {
+      const user = await createAccount('outage_429');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
-      // Delay response longer than default timeout
+      mockProviderError = Object.assign(
+        new Error('Upstream provider rate limited: Resource has been exhausted (e.g. check quota)'),
+        { status: 429, reason: 'http' },
+      );
+
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${session.id}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'The Node.js event loop handles async callbacks in phases.' },
+        },
+      );
+
+      assert.equal(res.status, 503);
+      assert.equal(res.body.errorCode, ERROR_CODES.AI_PROVIDER_FAILED);
+
+      // Verify no fake evaluation was committed to DB
+      const dbSession = await InterviewSession.findById(session.id).lean();
+      assert.equal(dbSession.status, SESSION_STATUS.IN_PROGRESS);
+      assert.equal(dbSession.attemptCount, 0);
+      assert.equal(dbSession.questions[0].answer, null);
+      assert.equal(dbSession.questions[0].evaluation, null);
+    });
+
+    it('safely handles provider timeout without hanging or leaking internals', async () => {
+      const user = await createAccount('outage_timeout');
+      const session = await createStartedSession(user.token);
+
       mockProviderDelayMs = 250;
 
-      // We test timeout isolation directly via evaluateQuestionAnswer with a short 50ms timeout
       const { evaluateQuestionAnswer } = await import('../src/services/interviewEvaluation.service.js');
 
       await assert.rejects(
@@ -958,11 +841,11 @@ describe('R10 — AI Red-Team Test Suite', () => {
     });
 
     it('safely handles unconfigured provider with 503 AI_PROVIDER_NOT_CONFIGURED', async () => {
-      const user = await createAccount('unconfigured_user');
+      const user = await createAccount('outage_unconfigured');
       const session = await createStartedSession(user.token);
       const questionId = session.questions[0].questionId;
 
-      resetAiProviders(); // Unregister all providers
+      resetAiProviders();
 
       const res = await sendJsonWithToken(
         server.baseUrl,

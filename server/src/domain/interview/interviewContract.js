@@ -58,6 +58,26 @@ export const SESSION_STATUS_VALUES = Object.freeze(
 );
 
 /**
+ * Terminal session lifecycle states.
+ */
+export const TERMINAL_SESSION_STATUSES = Object.freeze([
+  SESSION_STATUS.COMPLETED,
+  SESSION_STATUS.TIMED_OUT,
+  SESSION_STATUS.ABANDONED,
+  SESSION_STATUS.FAILED,
+]);
+
+/**
+ * Checks whether a session status is in a terminal state.
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isTerminalSessionStatus(status) {
+  return TERMINAL_SESSION_STATUSES.includes(status);
+}
+
+/**
  * Evaluator authority types.
  */
 export const EVALUATOR_TYPES = Object.freeze({
@@ -158,12 +178,57 @@ export const INTERVIEW_LIMITS = Object.freeze({
 });
 
 /**
+ * Canonical interview error codes returned by the API.
+ */
+export const INTERVIEW_ERROR_CODES = Object.freeze({
+  INTERVIEW_SESSION_NOT_FOUND: 'INTERVIEW_SESSION_NOT_FOUND',
+  INTERVIEW_SESSION_EXPIRED: 'INTERVIEW_SESSION_EXPIRED',
+  INTERVIEW_INVALID_STATE: 'INTERVIEW_INVALID_STATE',
+  INTERVIEW_ATTEMPT_LIMIT_REACHED: 'INTERVIEW_ATTEMPT_LIMIT_REACHED',
+  INTERVIEW_EVALUATION_FAILED: 'INTERVIEW_EVALUATION_FAILED',
+  AI_PROVIDER_NOT_CONFIGURED: 'AI_PROVIDER_NOT_CONFIGURED',
+  AI_PROVIDER_FAILED: 'AI_PROVIDER_FAILED',
+  AI_OUTPUT_INVALID: 'AI_OUTPUT_INVALID',
+  CAREER_ROLE_NOT_FOUND: 'CAREER_ROLE_NOT_FOUND',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  CONFLICT: 'CONFLICT',
+  BAD_REQUEST: 'BAD_REQUEST',
+});
+
+/**
+ * Allowed lifecycle transitions map (object representation for contract parity).
+ */
+export const ALLOWED_SESSION_TRANSITIONS = Object.freeze({
+  [SESSION_STATUS.INITIALIZED]: Object.freeze([
+    SESSION_STATUS.IN_PROGRESS,
+    SESSION_STATUS.ABANDONED,
+    SESSION_STATUS.TIMED_OUT,
+    SESSION_STATUS.FAILED,
+  ]),
+  [SESSION_STATUS.IN_PROGRESS]: Object.freeze([
+    SESSION_STATUS.COMPLETED,
+    SESSION_STATUS.TIMED_OUT,
+    SESSION_STATUS.ABANDONED,
+    SESSION_STATUS.FAILED,
+  ]),
+  [SESSION_STATUS.COMPLETED]: Object.freeze([]),
+  [SESSION_STATUS.TIMED_OUT]: Object.freeze([]),
+  [SESSION_STATUS.ABANDONED]: Object.freeze([]),
+  [SESSION_STATUS.FAILED]: Object.freeze([]),
+});
+
+/**
  * Allowed lifecycle transitions map.
  */
 const ALLOWED_TRANSITIONS = new Map([
   [
     SESSION_STATUS.INITIALIZED,
-    new Set([SESSION_STATUS.IN_PROGRESS, SESSION_STATUS.ABANDONED, SESSION_STATUS.TIMED_OUT]),
+    new Set([
+      SESSION_STATUS.IN_PROGRESS,
+      SESSION_STATUS.ABANDONED,
+      SESSION_STATUS.TIMED_OUT,
+      SESSION_STATUS.FAILED,
+    ]),
   ],
   [
     SESSION_STATUS.IN_PROGRESS,
@@ -320,11 +385,15 @@ export function validateInterviewQuestion(question, index = 0) {
     }
   }
 
-  const { id, type, targetSkill, prompt, rubricCriteria = [], timeLimitSeconds = 180, weight = 1 } = question;
+  const rawId = typeof question.id === 'string' && question.id.trim()
+    ? question.id.trim()
+    : (typeof question.questionId === 'string' ? question.questionId.trim() : '');
 
-  if (typeof id !== 'string' || id.trim() === '') {
+  if (rawId === '') {
     throw new Error(`Question at index ${index} must have a non-empty id.`);
   }
+
+  const { type, targetSkill, prompt, rubricCriteria = [], timeLimitSeconds = 180, weight = 1 } = question;
 
   if (!INTERVIEW_QUESTION_TYPE_VALUES.includes(type)) {
     throw new Error(
@@ -333,11 +402,11 @@ export function validateInterviewQuestion(question, index = 0) {
   }
 
   if (typeof targetSkill !== 'string' || targetSkill.trim() === '') {
-    throw new Error(`Question "${id}" targetSkill is required.`);
+    throw new Error(`Question "${rawId}" targetSkill is required.`);
   }
   const canonical = canonicalSkill(targetSkill.trim());
   if (!canonical) {
-    throw new Error(`Question "${id}": Unknown canonical skill "${targetSkill}".`);
+    throw new Error(`Question "${rawId}": Unknown canonical skill "${targetSkill}".`);
   }
 
   if (typeof prompt !== 'string' || prompt.trim().length < INTERVIEW_LIMITS.questionPrompt.min) {
@@ -362,8 +431,10 @@ export function validateInterviewQuestion(question, index = 0) {
     : [];
 
   return {
-    id: id.trim(),
+    id: rawId,
+    questionId: rawId,
     type,
+    targetSkill: canonical.name,
     targetSkillKey: canonical.key,
     targetSkillName: canonical.name,
     prompt: prompt.trim(),
@@ -437,9 +508,9 @@ export function calculateCompositeQuestionScore(dimensions) {
   }
   let composite = 0;
   for (const [key, weight] of Object.entries(RUBRIC_DIMENSION_WEIGHTS)) {
-    const rawVal = dimensions[key];
-    const num = typeof rawVal === 'number' && Number.isFinite(rawVal) ? rawVal : 0;
-    const bounded = Math.max(0, Math.min(1, num));
+    const rawVal = Number(dimensions?.[key]);
+    const safeVal = Number.isFinite(rawVal) ? rawVal : 0;
+    const bounded = Math.max(0, Math.min(1, safeVal));
     composite += bounded * weight;
   }
   return Math.round(composite * 10000) / 10000;
@@ -609,18 +680,21 @@ export function evaluateInterviewSession(
   const questionResults = [];
 
   for (const q of questions) {
+    const qId = q.questionId || q.id || '';
     const weight = typeof q.weight === 'number' && Number.isFinite(q.weight) && q.weight > 0 ? q.weight : 1;
     totalWeight += weight;
 
-    const evaluation = evaluations[q.id];
-    const rawScore = evaluation?.compositeScore ?? evaluation?.score ?? 0;
-    const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? Math.max(0, Math.min(1, rawScore)) : 0;
+    const evaluation = evaluations[qId] || (q.id ? evaluations[q.id] : null) || q.evaluation;
+    const rawScore = Number(evaluation?.compositeScore ?? evaluation?.score ?? 0);
+    const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(1, rawScore)) : 0;
     totalWeightedScore += score * weight;
 
+    const canonical = canonicalSkill(q.targetSkill || q.targetSkillName || q.targetSkillKey);
+
     questionResults.push({
-      questionId: q.id,
-      targetSkillKey: q.targetSkillKey,
-      targetSkillName: q.targetSkillName,
+      questionId: qId,
+      targetSkillKey: q.targetSkillKey || canonical?.key || '',
+      targetSkillName: q.targetSkillName || canonical?.name || q.targetSkill || '',
       weight,
       score,
       compositeScore: score,
@@ -631,7 +705,9 @@ export function evaluateInterviewSession(
     });
   }
 
-  const overallScore = totalWeight > 0 ? Math.round((totalWeightedScore / totalWeight) * 10000) / 10000 : 0;
+  const overallScore = totalWeight > 0
+    ? Math.max(0, Math.min(1, Math.round((totalWeightedScore / totalWeight) * 10000) / 10000))
+    : 0;
 
   const isHuman = evaluatedBy === EVALUATOR_TYPES.HUMAN;
   const passed = isHuman && overallScore >= passMark;
@@ -647,11 +723,14 @@ export function evaluateInterviewSession(
     ? EVIDENCE_STRENGTH.VERIFIED
     : EVIDENCE_STRENGTH.SUPPORTED;
 
+  const resolvedSessionId = session.sessionId || String(session._id ?? session.id ?? 'interview-session');
+
   // Build skill evidence checks for each target skill
   const skillEvidenceResults = (session.targetSkills ?? []).map((target) => {
-    const rawSkillName = typeof target === 'string' ? target : (target?.name || target?.key);
+    const rawSkillName = typeof target === 'string' ? target : (target?.name || target?.key || '');
     const canonical = canonicalSkill(rawSkillName);
     const skillKey = canonical?.key;
+    const resolvedName = canonical?.name || rawSkillName;
 
     // Filter questions specific to this skill if present
     const skillQuestions = questionResults.filter((qr) => {
@@ -667,19 +746,24 @@ export function evaluateInterviewSession(
       skillScore = skillWeightSum > 0 ? Math.round((skillScoreSum / skillWeightSum) * 10000) / 10000 : overallScore;
     }
 
-    return buildInterviewResult({
-      skill: canonical?.name || rawSkillName,
+    const result = buildInterviewResult({
+      skill: resolvedName,
       score: skillScore,
-      interviewId: session.sessionId,
+      interviewId: resolvedSessionId,
       evaluatedBy,
       completedAt: new Date(),
       passMark,
     });
+    return {
+      ...result,
+      skill: resolvedName,
+    };
   });
 
   return {
-    sessionId: session.sessionId,
-    studentId: session.studentId,
+    sessionId: resolvedSessionId,
+    id: resolvedSessionId,
+    studentId: session.studentId || String(session.user ?? ''),
     roleTitle: session.roleTitle,
     roleSlug: session.roleSlug,
     difficulty: session.difficulty,

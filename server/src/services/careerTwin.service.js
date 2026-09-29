@@ -79,8 +79,8 @@ async function loadInputs(userId) {
      * When any verified skill evidence check was most recently completed.
      */
     latestEvidenceAt: verifiedEvidence.reduce((latest, item) => {
-      const completedAt = item.completedAt;
-      if (!completedAt) return latest;
+      const completedAt = item.completedAt ? new Date(item.completedAt) : null;
+      if (!completedAt || Number.isNaN(completedAt.getTime())) return latest;
       return !latest || completedAt > latest ? completedAt : latest;
     }, null),
     verifiedEvidenceCount: verifiedEvidence.length,

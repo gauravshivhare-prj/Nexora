@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
 import {
   InterviewSession,
+  toPublicInterviewQuestion,
   toPublicInterviewSession,
 } from '../models/InterviewSession.model.js';
 import {
@@ -28,6 +29,20 @@ import { canonicalSkill } from '../domain/skills/skillKey.js';
 import { findRole, CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
 
 /**
+ * In-flight answer evaluation locks.
+ *
+ * Prevents concurrency double-spend and token exhaustion: if concurrent
+ * requests arrive for the same question attempt, only the first request enters
+ * the expensive AI provider evaluation. Concurrent duplicates are immediately
+ * rejected with 409 CONFLICT before calling the upstream model.
+ */
+const inFlightEvaluations = new Set();
+
+export function clearInFlightEvaluations() {
+  inFlightEvaluations.clear();
+}
+
+/**
  * Loads an interview session scoped strictly to its owner.
  *
  * Prevents IDOR by design: a query for another student's session returns the
@@ -39,7 +54,7 @@ import { findRole, CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
  * @throws {ApiError} 404 if not found or not owned by caller
  */
 async function findOwnedSession(userId, sessionId) {
-  if (!mongoose.isValidObjectId(sessionId)) {
+  if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(sessionId)) {
     throw sessionNotFound();
   }
 
@@ -70,11 +85,16 @@ function sessionNotFound() {
  * @returns {Promise<object>} Public interview session DTO
  */
 export async function createSession(userId, input = {}) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw ApiError.unauthorized('Authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+
   const targetRole = input.targetRole || input.targetRoleId;
   const targetSkills = input.targetSkills || input.skills;
   const {
     difficulty = INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount = 5,
+    timeLimitMinutes = 30,
   } = input;
 
   if (typeof targetRole !== 'string' || targetRole.trim() === '') {
@@ -160,6 +180,10 @@ export async function createSession(userId, input = {}) {
     targetSkills: canonicalTargets,
     difficulty,
     questionCount: selectedQuestions.length,
+    timeLimitMinutes: Math.min(
+      INTERVIEW_LIMITS.maxSessionMinutes,
+      Math.max(1, Number(timeLimitMinutes) || 30),
+    ),
     questions: selectedQuestions,
   });
 
@@ -176,7 +200,27 @@ export async function createSession(userId, input = {}) {
  * @returns {Promise<Array<object>>}
  */
 export async function listSessions(userId) {
+  if (!mongoose.isValidObjectId(userId)) {
+    return [];
+  }
+
+  const now = new Date();
+  await InterviewSession.updateMany(
+    {
+      user: userId,
+      status: { $in: [SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS] },
+      expiresAt: { $lt: now },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.TIMED_OUT,
+        completedAt: now,
+      },
+    },
+  );
+
   const sessions = await InterviewSession.find({ user: userId })
+    .select('-user -__v')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -197,6 +241,7 @@ export async function getSession(userId, sessionId) {
     session.isExpired()
   ) {
     session.status = SESSION_STATUS.TIMED_OUT;
+    session.completedAt = session.completedAt || new Date();
     await session.save();
   }
   return toPublicInterviewSession(session);
@@ -212,6 +257,18 @@ export async function getSession(userId, sessionId) {
 export async function startSession(userId, sessionId) {
   const session = await findOwnedSession(userId, sessionId);
 
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session has expired and cannot be started.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
+
   if (session.status !== SESSION_STATUS.INITIALIZED) {
     throw ApiError.badRequest(
       `Cannot start session in status "${session.status}".`,
@@ -219,20 +276,43 @@ export async function startSession(userId, sessionId) {
     );
   }
 
-  if (session.isExpired()) {
-    session.status = SESSION_STATUS.TIMED_OUT;
-    await session.save();
+  const now = new Date();
+  const updated = await InterviewSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: userId,
+      status: SESSION_STATUS.INITIALIZED,
+      expiresAt: { $gt: now },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.IN_PROGRESS,
+        startedAt: now,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!updated) {
+    const current = await findOwnedSession(userId, sessionId);
+    if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
+      if (current.status !== SESSION_STATUS.TIMED_OUT) {
+        current.status = SESSION_STATUS.TIMED_OUT;
+        current.completedAt = current.completedAt || new Date();
+        await current.save();
+      }
+      throw ApiError.badRequest(
+        'Session has expired and cannot be started.',
+        ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+      );
+    }
     throw ApiError.badRequest(
-      'Session has expired and cannot be started.',
-      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+      `Cannot start session in status "${current.status}".`,
+      ERROR_CODES.INTERVIEW_INVALID_STATE,
     );
   }
 
-  session.status = SESSION_STATUS.IN_PROGRESS;
-  session.startedAt = new Date();
-  await session.save();
-
-  return toPublicInterviewSession(session);
+  return toPublicInterviewSession(updated);
 }
 
 /**
@@ -255,21 +335,24 @@ export async function submitQuestionAnswer(
 ) {
   const session = await findOwnedSession(userId, sessionId);
 
+  // Check expiration before checking active status
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
+
   // Status check: Must be in_progress
   if (session.status !== SESSION_STATUS.IN_PROGRESS) {
     throw ApiError.badRequest(
       `Cannot submit answer: session is in "${session.status}" state (must be in_progress).`,
       ERROR_CODES.INTERVIEW_INVALID_STATE,
-    );
-  }
-
-  // Check expiration
-  if (session.isExpired()) {
-    session.status = SESSION_STATUS.TIMED_OUT;
-    await session.save();
-    throw ApiError.badRequest(
-      'Session time limit has expired.',
-      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
     );
   }
 
@@ -285,6 +368,38 @@ export async function submitQuestionAnswer(
   }
 
   const question = session.questions[questionIndex];
+
+  const { answerText, durationSeconds = 30 } = answerData;
+  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
+    throw ApiError.badRequest(
+      'Answer text must be at least 5 characters.',
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
+    throw ApiError.badRequest(
+      `Answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
+      ERROR_CODES.BAD_REQUEST,
+    );
+  }
+
+  const trimmedAnswer = answerText.trim();
+
+  // Deduplicate repeated evaluation calls: If already evaluated with identical answer text, reuse immediately
+  if (
+    question.evaluation?.evaluatedAt &&
+    question.answer?.answerText === trimmedAnswer
+  ) {
+    logger.info(
+      `Reusing existing evaluation for session ${session._id} question ${question.questionId} (identical answer submitted).`,
+    );
+    return {
+      session: toPublicInterviewSession(session),
+      evaluatedQuestion: toPublicInterviewQuestion(question),
+      warnings: ['Identical answer submitted; reused existing evaluation without repeated AI call.'],
+    };
+  }
 
   // Prevent duplicate submissions if question attempt limit reached
   if (question.answer?.submittedAt) {
@@ -304,21 +419,6 @@ export async function submitQuestionAnswer(
     );
   }
 
-  const { answerText, durationSeconds = 30 } = answerData;
-  if (typeof answerText !== 'string' || answerText.trim().length < 5) {
-    throw ApiError.badRequest(
-      'Answer text must be at least 5 characters.',
-      ERROR_CODES.BAD_REQUEST,
-    );
-  }
-
-  if (answerText.trim().length > INTERVIEW_LIMITS.studentAnswer.max) {
-    throw ApiError.badRequest(
-      `Answer text exceeds maximum length of ${INTERVIEW_LIMITS.studentAnswer.max} characters.`,
-      ERROR_CODES.BAD_REQUEST,
-    );
-  }
-
   const parsedDuration = Number(durationSeconds);
   if (
     !Number.isFinite(parsedDuration) ||
@@ -331,79 +431,115 @@ export async function submitQuestionAnswer(
     );
   }
 
-  // Step: Run AI evaluation service
-  const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
-    question,
-    answerText: answerText.trim(),
-    signal: options.signal,
-  });
-
-  // Record answer and evaluation on question subdocument
-  const previousAttemptNumber = question.answer?.attemptNumber || 0;
-  const nextAttemptNumber = previousAttemptNumber + 1;
-  const previousAttemptCount = session.attemptCount || 0;
-  const questionPath = `questions.${questionIndex}`;
-
-  // Written conditionally rather than with save(): the AI call above takes
-  // seconds, and two concurrent submissions for the same question would
-  // otherwise both pass the attempt checks and overwrite each other. The
-  // filter only matches if nothing has been recorded since this request read
-  // the session, so exactly one of them lands and the other gets a 409.
-  const updated = await InterviewSession.findOneAndUpdate(
-    {
-      _id: session._id,
-      user: userId,
-      status: SESSION_STATUS.IN_PROGRESS,
-      attemptCount: previousAttemptCount,
-      [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber || { $exists: false },
-    },
-    {
-      $set: {
-        [`${questionPath}.answer`]: {
-          answerText: answerText.trim(),
-          submittedAt: new Date(),
-          durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
-          attemptNumber: nextAttemptNumber,
-        },
-        [`${questionPath}.evaluation`]: {
-          dimensions: evaluation.dimensions,
-          compositeScore: evaluation.compositeScore,
-          feedback: evaluation.feedback,
-          strengths: evaluation.strengths,
-          growthAreas: evaluation.growthAreas,
-          groundedSkills: evaluation.groundedSkills,
-          evaluatedAt: new Date(),
-        },
-        providerMetadata,
-        attemptCount: previousAttemptCount + 1,
-        currentQuestionIndex: Math.max(
-          session.currentQuestionIndex,
-          Math.min(session.questionCount, questionIndex + 1),
-        ),
-      },
-    },
-    { new: true, runValidators: true },
-  );
-
-  if (!updated) {
+  const inflightKey = `${session._id}:${question.questionId}`;
+  if (inFlightEvaluations.has(inflightKey)) {
     throw ApiError.conflict(
-      'This answer was already recorded by another request. Reload the session and try again.',
+      'An evaluation is already in progress for this question.',
       ERROR_CODES.CONFLICT,
     );
   }
 
-  const recorded = updated.questions[questionIndex];
+  inFlightEvaluations.add(inflightKey);
+  try {
+    // Step: Run AI evaluation service
+    const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
+      question,
+      answerText: answerText.trim(),
+      signal: options.signal,
+      timeoutMs: options.timeoutMs,
+    });
 
-  return {
-    session: toPublicInterviewSession(updated),
-    evaluatedQuestion: {
-      questionId: recorded.questionId,
-      order: recorded.order,
-      answer: recorded.answer,
-      evaluation: recorded.evaluation,
-    },
-    warnings,
-  };
+    // Record answer and evaluation on question subdocument
+    const previousAttemptNumber = question.answer?.attemptNumber || 0;
+    const nextAttemptNumber = previousAttemptNumber + 1;
+    const previousAttemptCount = session.attemptCount || 0;
+    const questionPath = `questions.${questionIndex}`;
+
+    const attemptFilter = previousAttemptNumber === 0
+      ? {
+          $or: [
+            { [`${questionPath}.answer.attemptNumber`]: { $exists: false } },
+            { [`${questionPath}.answer`]: null },
+            { [`${questionPath}.answer`]: { $exists: false } },
+          ],
+        }
+      : { [`${questionPath}.answer.attemptNumber`]: previousAttemptNumber };
+
+    // Atomically update: must still be in_progress, not expired, and attempt not yet recorded
+    const updated = await InterviewSession.findOneAndUpdate(
+      {
+        _id: session._id,
+        user: userId,
+        status: SESSION_STATUS.IN_PROGRESS,
+        expiresAt: { $gt: new Date() },
+        attemptCount: previousAttemptCount,
+        ...attemptFilter,
+      },
+      {
+        $set: {
+          [`${questionPath}.answer`]: {
+            answerText: answerText.trim(),
+            submittedAt: new Date(),
+            durationSeconds: Math.max(0, Math.min(INTERVIEW_LIMITS.maxTimePerQuestionSeconds, Number(durationSeconds) || 0)),
+            attemptNumber: nextAttemptNumber,
+          },
+          [`${questionPath}.evaluation`]: {
+            dimensions: evaluation.dimensions,
+            compositeScore: evaluation.compositeScore,
+            feedback: evaluation.feedback,
+            strengths: evaluation.strengths,
+            growthAreas: evaluation.growthAreas,
+            groundedSkills: evaluation.groundedSkills,
+            evaluatedAt: new Date(),
+          },
+          providerMetadata,
+          attemptCount: previousAttemptCount + 1,
+          currentQuestionIndex: Math.max(
+            session.currentQuestionIndex,
+            Math.min(session.questionCount, questionIndex + 1),
+          ),
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!updated) {
+      const current = await findOwnedSession(userId, sessionId);
+      if (current.status === SESSION_STATUS.TIMED_OUT || current.isExpired()) {
+        if (current.status !== SESSION_STATUS.TIMED_OUT) {
+          current.status = SESSION_STATUS.TIMED_OUT;
+          current.completedAt = current.completedAt || new Date();
+          await current.save();
+        }
+        throw ApiError.badRequest(
+          'Session time limit has expired.',
+          ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+        );
+      }
+
+      if (current.status !== SESSION_STATUS.IN_PROGRESS) {
+        throw ApiError.badRequest(
+          `Cannot submit answer: session is in "${current.status}" state (must be in_progress).`,
+          ERROR_CODES.INTERVIEW_INVALID_STATE,
+        );
+      }
+
+      throw ApiError.conflict(
+        'This answer was already recorded by another request. Reload the session and try again.',
+        ERROR_CODES.CONFLICT,
+      );
+    }
+
+    const recorded = updated.questions[questionIndex];
+
+    return {
+      session: toPublicInterviewSession(updated),
+      evaluatedQuestion: toPublicInterviewQuestion(recorded),
+      warnings,
+    };
+  } finally {
+    inFlightEvaluations.delete(inflightKey);
+  }
 }
 
 /**
@@ -416,6 +552,18 @@ export async function submitQuestionAnswer(
  */
 export async function completeSession(userId, sessionId, options = {}) {
   const session = await findOwnedSession(userId, sessionId);
+
+  if (session.status === SESSION_STATUS.TIMED_OUT || session.isExpired()) {
+    if (session.status !== SESSION_STATUS.TIMED_OUT) {
+      session.status = SESSION_STATUS.TIMED_OUT;
+      session.completedAt = session.completedAt || new Date();
+      await session.save();
+    }
+    throw ApiError.badRequest(
+      'Session time limit has expired.',
+      ERROR_CODES.INTERVIEW_SESSION_EXPIRED,
+    );
+  }
 
   if (session.status !== SESSION_STATUS.IN_PROGRESS) {
     throw ApiError.badRequest(
@@ -451,19 +599,25 @@ export async function completeSession(userId, sessionId, options = {}) {
       evaluatorType,
     });
 
-  session.overallScore = overallScore;
-  session.evaluatorType = evaluatorType;
-  session.status = SESSION_STATUS.COMPLETED;
-  session.completedAt = new Date();
+  const completedAt = new Date();
 
   // Claim the completion atomically before writing any evidence. Two
   // concurrent completes would otherwise both pass the status check above and
   // each insert a full set of evidence records.
-  const claim = await InterviewSession.updateOne(
+  const completedSession = await InterviewSession.findOneAndUpdate(
     { _id: session._id, user: userId, status: SESSION_STATUS.IN_PROGRESS },
-    { $set: { status: SESSION_STATUS.COMPLETED, completedAt: session.completedAt } },
+    {
+      $set: {
+        status: SESSION_STATUS.COMPLETED,
+        completedAt,
+        overallScore,
+        evaluatorType,
+      },
+    },
+    { new: true, runValidators: true },
   );
-  if (claim.modifiedCount === 0) {
+
+  if (!completedSession) {
     throw ApiError.badRequest(
       'Cannot complete session: it is no longer in progress.',
       ERROR_CODES.INTERVIEW_INVALID_STATE,
@@ -484,20 +638,23 @@ export async function completeSession(userId, sessionId, options = {}) {
       eligibleForVerified: ev.eligibleForVerified,
       evaluatedBy: ev.evaluatedBy,
       reference: String(session._id),
-      completedAt: session.completedAt,
+      completedAt,
     });
     savedChecks.push(check);
   }
 
   if (savedChecks.length > 0) {
-    session.evidenceCheck = savedChecks[0]._id;
+    completedSession.evidenceCheck = savedChecks[0]._id;
+    await InterviewSession.updateOne(
+      { _id: completedSession._id, user: userId },
+      { $set: { evidenceCheck: savedChecks[0]._id } },
+    );
   }
 
-  await session.save();
-  logger.info(`Interview session completed: ${session._id} with overall score ${overallScore}`);
+  logger.info(`Interview session completed: ${completedSession._id} with overall score ${overallScore}`);
 
   return {
-    session: toPublicInterviewSession(session),
+    session: toPublicInterviewSession(completedSession),
     overallScore,
     eligibleForVerified,
     evidenceResults,
@@ -522,9 +679,29 @@ export async function abandonSession(userId, sessionId) {
     );
   }
 
-  session.status = SESSION_STATUS.ABANDONED;
-  session.completedAt = new Date();
-  await session.save();
+  const completedAt = new Date();
+  const updated = await InterviewSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: userId,
+      status: { $in: [SESSION_STATUS.INITIALIZED, SESSION_STATUS.IN_PROGRESS] },
+    },
+    {
+      $set: {
+        status: SESSION_STATUS.ABANDONED,
+        completedAt,
+      },
+    },
+    { new: true, runValidators: true },
+  );
 
-  return toPublicInterviewSession(session);
+  if (!updated) {
+    const current = await findOwnedSession(userId, sessionId);
+    throw ApiError.badRequest(
+      `Cannot abandon session in status "${current.status}".`,
+      ERROR_CODES.INTERVIEW_INVALID_STATE,
+    );
+  }
+
+  return toPublicInterviewSession(updated);
 }

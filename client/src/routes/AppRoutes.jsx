@@ -13,9 +13,9 @@ import { RegisterPage } from '../pages/RegisterPage.jsx';
 import { ResumeDetailPage } from '../pages/ResumeDetailPage.jsx';
 import { ResumePage } from '../pages/ResumePage.jsx';
 import { RoadmapPage } from '../pages/RoadmapPage.jsx';
-import { SkillGapPage } from '../pages/SkillGapPage.jsx';
 import { InterviewsPage } from '../pages/InterviewsPage.jsx';
 import { InterviewSessionPage } from '../pages/InterviewSessionPage.jsx';
+import { InterviewPage } from '../pages/InterviewPage.jsx';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage.jsx';
 
 /**
@@ -25,10 +25,6 @@ import { OpportunitiesPage } from '../pages/OpportunitiesPage.jsx';
  * sits inside AppLayout, which carries both the navigation and the auth
  * guard. Nesting the guard means a route added below it is protected
  * because of where it is, not because someone remembered to wrap it.
- *
- * All pages are lazily loaded with React.lazy and wrapped in Suspense so that
- * the initial payload remains lean and users only download code for the views
- * they actually visit.
  */
 export function AppRoutes() {
   return (
@@ -57,6 +53,8 @@ export function AppRoutes() {
         <Route path="/careers/:roleId/roadmap" element={<RoadmapPage />} />
 
         <Route path="/opportunities" element={<OpportunitiesPage />} />
+        <Route path="/interview-flow" element={<InterviewPage />} />
+        <Route path="/interview-flow/:sessionId" element={<InterviewPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

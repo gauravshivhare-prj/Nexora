@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 
+import { env } from '../src/config/env.js';
 import { RATE_LIMIT_POLICY } from '../src/constants/authPolicy.js';
 import { ERROR_CODES } from '../src/constants/errorCodes.js';
 import {
@@ -16,6 +18,7 @@ import {
 } from '../src/services/ai/aiProvider.js';
 import {
   clearInterviewSessions,
+  clearSkillEvidenceChecks,
   clearUsers,
   getWithToken,
   postJson,
@@ -58,6 +61,7 @@ describe('R8 — Interview API & Ownership Suite', () => {
 
   beforeEach(async () => {
     await clearInterviewSessions();
+    await clearSkillEvidenceChecks();
     await clearUsers();
     resetRateLimiters();
 
@@ -117,21 +121,21 @@ describe('R8 — Interview API & Ownership Suite', () => {
     const dummyId = '507f1f77bcf86cd799439011';
     const dummyQuestionId = 'iq-node-001';
 
-    it('rejects unauthenticated requests to all interview endpoints with 401', async () => {
-      const endpoints = [
-        { method: 'GET', path: '/api/interviews/sessions' },
-        { method: 'POST', path: '/api/interviews/sessions', payload: {} },
-        { method: 'GET', path: `/api/interviews/sessions/${dummyId}` },
-        { method: 'POST', path: `/api/interviews/sessions/${dummyId}/start` },
-        {
-          method: 'POST',
-          path: `/api/interviews/sessions/${dummyId}/questions/${dummyQuestionId}/answers`,
-          payload: { answerText: 'Test answer text' },
-        },
-        { method: 'POST', path: `/api/interviews/sessions/${dummyId}/complete` },
-        { method: 'POST', path: `/api/interviews/sessions/${dummyId}/abandon` },
-      ];
+    const endpoints = [
+      { method: 'GET', path: '/api/interviews/sessions' },
+      { method: 'POST', path: '/api/interviews/sessions', payload: { targetRole: 'Backend Developer', targetSkills: ['Node.js'] } },
+      { method: 'GET', path: `/api/interviews/sessions/${dummyId}` },
+      { method: 'POST', path: `/api/interviews/sessions/${dummyId}/start` },
+      {
+        method: 'POST',
+        path: `/api/interviews/sessions/${dummyId}/questions/${dummyQuestionId}/answers`,
+        payload: { answerText: 'Test answer text' },
+      },
+      { method: 'POST', path: `/api/interviews/sessions/${dummyId}/complete` },
+      { method: 'POST', path: `/api/interviews/sessions/${dummyId}/abandon` },
+    ];
 
+    it('rejects unauthenticated requests to all interview endpoints with 401 AUTH_TOKEN_MISSING', async () => {
       for (const endpoint of endpoints) {
         let res;
         if (endpoint.payload) {
@@ -154,10 +158,107 @@ describe('R8 — Interview API & Ownership Suite', () => {
       }
     });
 
-    it('rejects invalid or forged tokens with 401 AUTH_TOKEN_INVALID', async () => {
-      const res = await getWithToken(server.baseUrl, '/api/interviews/sessions', 'forged.invalid.token');
-      assert.equal(res.status, 401);
-      assert.equal(res.body.errorCode, ERROR_CODES.AUTH_TOKEN_INVALID);
+    it('rejects malformed Authorization headers (empty Bearer, Basic, Token) with 401 across all endpoints', async () => {
+      const malformedHeaders = [
+        'Bearer',
+        'Bearer ',
+        'Basic dXNlcjpwYXNz',
+        'Token abcdef123456',
+      ];
+
+      for (const endpoint of endpoints) {
+        for (const authHeader of malformedHeaders) {
+          const res = await fetch(`${server.baseUrl}${endpoint.path}`, {
+            method: endpoint.method,
+            headers: {
+              authorization: authHeader,
+              ...(endpoint.payload ? { 'content-type': 'application/json' } : {}),
+            },
+            ...(endpoint.payload ? { body: JSON.stringify(endpoint.payload) } : {}),
+          });
+          const body = await res.json();
+          assert.equal(
+            res.status,
+            401,
+            `Expected 401 for ${endpoint.method} ${endpoint.path} with header "${authHeader}", got ${res.status}`,
+          );
+          assert.ok(
+            [ERROR_CODES.AUTH_TOKEN_MISSING, ERROR_CODES.AUTH_TOKEN_INVALID].includes(body.errorCode),
+          );
+        }
+      }
+    });
+
+    it('rejects invalid or forged tokens with 401 AUTH_TOKEN_INVALID across all endpoints', async () => {
+      const forgedToken = jwt.sign({}, 'wrong_secret_at_least_32_characters_long_for_test', {
+        subject: new mongoose.Types.ObjectId().toString(),
+        expiresIn: '1h',
+        algorithm: 'HS256',
+        issuer: 'nexora-api',
+        audience: 'nexora-client',
+      });
+
+      for (const endpoint of endpoints) {
+        const res = await sendJsonWithToken(server.baseUrl, endpoint.path, {
+          method: endpoint.method,
+          token: forgedToken,
+          payload: endpoint.payload || undefined,
+        });
+        assert.equal(
+          res.status,
+          401,
+          `Expected 401 for forged token on ${endpoint.method} ${endpoint.path}`,
+        );
+        assert.equal(res.body.errorCode, ERROR_CODES.AUTH_TOKEN_INVALID);
+      }
+    });
+
+    it('rejects expired tokens with 401 AUTH_TOKEN_EXPIRED across all endpoints', async () => {
+      const expiredToken = jwt.sign({}, env.jwtSecret, {
+        subject: new mongoose.Types.ObjectId().toString(),
+        expiresIn: '-1s',
+        algorithm: 'HS256',
+        issuer: 'nexora-api',
+        audience: 'nexora-client',
+      });
+
+      for (const endpoint of endpoints) {
+        const res = await sendJsonWithToken(server.baseUrl, endpoint.path, {
+          method: endpoint.method,
+          token: expiredToken,
+          payload: endpoint.payload || undefined,
+        });
+        assert.equal(
+          res.status,
+          401,
+          `Expected 401 for expired token on ${endpoint.method} ${endpoint.path}`,
+        );
+        assert.equal(res.body.errorCode, ERROR_CODES.AUTH_TOKEN_EXPIRED);
+      }
+    });
+
+    it('rejects tokens where user account does not exist with 401 AUTH_TOKEN_INVALID across endpoints', async () => {
+      const ghostToken = jwt.sign({}, env.jwtSecret, {
+        subject: new mongoose.Types.ObjectId().toString(),
+        expiresIn: '1h',
+        algorithm: 'HS256',
+        issuer: 'nexora-api',
+        audience: 'nexora-client',
+      });
+
+      for (const endpoint of endpoints) {
+        const res = await sendJsonWithToken(server.baseUrl, endpoint.path, {
+          method: endpoint.method,
+          token: ghostToken,
+          payload: endpoint.payload || undefined,
+        });
+        assert.equal(
+          res.status,
+          401,
+          `Expected 401 for ghost token on ${endpoint.method} ${endpoint.path}`,
+        );
+        assert.equal(res.body.errorCode, ERROR_CODES.AUTH_TOKEN_INVALID);
+      }
     });
   });
 
@@ -324,6 +425,224 @@ describe('R8 — Interview API & Ownership Suite', () => {
       assert.equal(otherStudentSessionRes.body.errorCode, nonExistentSessionRes.body.errorCode);
       assert.equal(otherStudentSessionRes.body.message, nonExistentSessionRes.body.message);
       assert.equal(otherStudentSessionRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_NOT_FOUND);
+    });
+
+    it('prevents parameter tampering during session creation from reassigning session owner', async () => {
+      const alice = await createAccount('alice_tamper');
+      const bob = await createAccount('bob_tamper');
+
+      // Alice attempts to create a session specifying Bob as the owner in the request body
+      const res = await sendJsonWithToken(server.baseUrl, '/api/interviews/sessions', {
+        method: 'POST',
+        token: alice.token,
+        payload: {
+          targetRole: 'Backend Developer',
+          targetSkills: ['Node.js'],
+          difficulty: INTERVIEW_DIFFICULTY.INTERMEDIATE,
+          questionCount: 2,
+          user: bob.userId,
+          userId: bob.userId,
+          owner: bob.userId,
+        },
+      });
+
+      assert.equal(res.status, 201);
+      const sessionId = res.body.data.session.id;
+
+      // Alice owns the session and can see it in her list
+      const aliceList = await getWithToken(server.baseUrl, '/api/interviews/sessions', alice.token);
+      assert.equal(aliceList.body.data.count, 1);
+      assert.equal(aliceList.body.data.sessions[0].id, sessionId);
+
+      // Bob does not own the session and cannot see it in his list
+      const bobList = await getWithToken(server.baseUrl, '/api/interviews/sessions', bob.token);
+      assert.equal(bobList.body.data.count, 0);
+
+      // Bob cannot read the session directly (returns 404)
+      const bobGet = await getWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}`,
+        bob.token,
+      );
+      assert.equal(bobGet.status, 404);
+      assert.equal(bobGet.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_NOT_FOUND);
+    });
+
+    it('prevents query parameter injection during session listing from exposing other users sessions', async () => {
+      const alice = await createAccount('alice_query');
+      const bob = await createAccount('bob_query');
+
+      await createTestSession(alice.token);
+      await createTestSession(bob.token);
+
+      // Bob tries to query Alice's sessions using various query parameter injection probes
+      const probeUrls = [
+        `/api/interviews/sessions?user=${alice.userId}`,
+        `/api/interviews/sessions?userId=${alice.userId}`,
+        `/api/interviews/sessions?user[$ne]=${bob.userId}`,
+        `/api/interviews/sessions?user[$exists]=true`,
+      ];
+
+      for (const probeUrl of probeUrls) {
+        const res = await getWithToken(server.baseUrl, probeUrl, bob.token);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.data.count, 1);
+        const ids = res.body.data.sessions.map((s) => s.id);
+        const aliceSession = await InterviewSession.findOne({ user: alice.userId }).lean();
+        assert.ok(!ids.includes(String(aliceSession._id)));
+      }
+    });
+
+    it('prevents cross-session question answer submission', async () => {
+      const alice = await createAccount('alice_crossq');
+      const bob = await createAccount('bob_crossq');
+
+      const aliceSessionRes = await createTestSession(alice.token);
+      const bobSessionRes = await createTestSession(bob.token);
+
+      const aliceSessionId = aliceSessionRes.body.data.session.id;
+
+      // Start Alice's session
+      await sendWithToken(server.baseUrl, `/api/interviews/sessions/${aliceSessionId}/start`, {
+        method: 'POST',
+        token: alice.token,
+      });
+
+      // Alice tries to answer using a questionId not in her session
+      const foreignQuestionId = 'iq-foreign-question-999';
+      const res = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${aliceSessionId}/questions/${foreignQuestionId}/answers`,
+        {
+          method: 'POST',
+          token: alice.token,
+          payload: { answerText: 'Attempting to answer a foreign session question.' },
+        },
+      );
+
+      assert.equal(res.status, 404);
+      assert.equal(res.body.errorCode, ERROR_CODES.NOT_FOUND);
+    });
+
+    it('strictly isolates SkillEvidenceCheck records created upon interview completion', async () => {
+      const alice = await createAccount('alice_ev');
+      const bob = await createAccount('bob_ev');
+
+      const createRes = await createTestSession(alice.token, { questionCount: 1 });
+      const sessionId = createRes.body.data.session.id;
+      const questionId = createRes.body.data.session.questions[0].questionId;
+
+      await sendWithToken(server.baseUrl, `/api/interviews/sessions/${sessionId}/start`, {
+        method: 'POST',
+        token: alice.token,
+      });
+
+      await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: alice.token,
+          payload: { answerText: 'A comprehensive technical answer to ensure evaluation passes.' },
+        },
+      );
+
+      const completeRes = await sendWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/complete`,
+        { method: 'POST', token: alice.token },
+      );
+      assert.equal(completeRes.status, 200);
+
+      // Alice queries /api/skill-evidence -> sees evidence checks referencing her session
+      const aliceEvidence = await getWithToken(server.baseUrl, '/api/skill-evidence', alice.token);
+      assert.equal(aliceEvidence.status, 200);
+      assert.ok(aliceEvidence.body.data.checks.length > 0);
+      for (const check of aliceEvidence.body.data.checks) {
+        assert.equal(check.reference, sessionId);
+      }
+
+      // Bob queries /api/skill-evidence -> sees 0 evidence checks
+      const bobEvidence = await getWithToken(server.baseUrl, '/api/skill-evidence', bob.token);
+      assert.equal(bobEvidence.status, 200);
+      assert.equal(bobEvidence.body.data.checks.length, 0);
+    });
+
+    it('prevents privilege escalation via evaluatorType in complete session payload', async () => {
+      const student = await createAccount('student_escalate');
+      const createRes = await createTestSession(student.token, { questionCount: 1 });
+      const sessionId = createRes.body.data.session.id;
+      const questionId = createRes.body.data.session.questions[0].questionId;
+
+      await sendWithToken(server.baseUrl, `/api/interviews/sessions/${sessionId}/start`, {
+        method: 'POST',
+        token: student.token,
+      });
+
+      await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: student.token,
+          payload: { answerText: 'Valid answer for privilege escalation test.' },
+        },
+      );
+
+      // Student attempts to pass evaluatorType: 'human' to gain verified evidence
+      const completeRes = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/complete`,
+        {
+          method: 'POST',
+          token: student.token,
+          payload: { evaluatorType: 'human' },
+        },
+      );
+
+      assert.equal(completeRes.status, 200);
+      assert.equal(completeRes.body.data.session.evaluatorType, 'ai');
+      assert.equal(completeRes.body.data.eligibleForVerified, false);
+    });
+
+    it('rejects non-ObjectId or malformed session IDs with 404 INTERVIEW_SESSION_NOT_FOUND across all endpoints', async () => {
+      const user = await createAccount('malformed_user');
+      const malformedIds = [
+        'not-an-id',
+        '12345',
+        'null',
+        'undefined',
+        '6ab8c140897f480a6ff4ffb', // 23 chars
+        '6ab8c140897f480a6ff4ffb88', // 25 chars
+      ];
+
+      for (const badId of malformedIds) {
+        const endpointsToTest = [
+          { method: 'GET', path: `/api/interviews/sessions/${badId}` },
+          { method: 'POST', path: `/api/interviews/sessions/${badId}/start` },
+          {
+            method: 'POST',
+            path: `/api/interviews/sessions/${badId}/questions/iq-001/answers`,
+            payload: { answerText: 'Valid answer text' },
+          },
+          { method: 'POST', path: `/api/interviews/sessions/${badId}/complete` },
+          { method: 'POST', path: `/api/interviews/sessions/${badId}/abandon` },
+        ];
+
+        for (const ep of endpointsToTest) {
+          const res = await sendJsonWithToken(server.baseUrl, ep.path, {
+            method: ep.method,
+            token: user.token,
+            payload: ep.payload,
+          });
+          assert.equal(
+            res.status,
+            404,
+            `Expected 404 for badId ${badId} on ${ep.method} ${ep.path}, got ${res.status}`,
+          );
+          assert.equal(res.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_NOT_FOUND);
+        }
+      }
     });
   });
 
@@ -542,6 +861,54 @@ describe('R8 — Interview API & Ownership Suite', () => {
       );
       assert.equal(startRes.status, 400);
       assert.equal(startRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+
+      // Verify answering an expired/timed-out session rejects with INTERVIEW_SESSION_EXPIRED
+      const answerRes = await sendJsonWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}/questions/${questionId}/answers`,
+        {
+          method: 'POST',
+          token: user.token,
+          payload: { answerText: 'Answer to expired session' },
+        },
+      );
+      assert.equal(answerRes.status, 400);
+      assert.equal(answerRes.body.errorCode, ERROR_CODES.INTERVIEW_SESSION_EXPIRED);
+
+      // Verify GET on expired session returns timed_out status with completedAt
+      const getRes = await sendWithToken(
+        server.baseUrl,
+        `/api/interviews/sessions/${sessionId}`,
+        { method: 'GET', token: user.token },
+      );
+      assert.equal(getRes.status, 200);
+      assert.equal(getRes.body.data.session.status, SESSION_STATUS.TIMED_OUT);
+      assert.ok(getRes.body.data.session.completedAt);
+    });
+
+    it('concurrent start requests allow exactly one transition to in_progress', async () => {
+      const user = await createAccount('racing_start_user');
+      const createRes = await createTestSession(user.token);
+      const sessionId = createRes.body.data.session.id;
+
+      const responses = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          sendWithToken(
+            server.baseUrl,
+            `/api/interviews/sessions/${sessionId}/start`,
+            { method: 'POST', token: user.token },
+          ),
+        ),
+      );
+
+      const successful = responses.filter((r) => r.status === 200);
+      const rejected = responses.filter((r) => r.status === 400);
+
+      assert.equal(successful.length, 1);
+      assert.equal(rejected.length, 3);
+      for (const r of rejected) {
+        assert.equal(r.body.errorCode, ERROR_CODES.INTERVIEW_INVALID_STATE);
+      }
     });
   });
 

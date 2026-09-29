@@ -14,7 +14,11 @@ import {
 } from '../src/domain/interview/interviewQuestions.js';
 import { canonicalSkill } from '../src/domain/skills/skillKey.js';
 import { CAREER_ROLES, findRole } from '../src/domain/careers/roleCatalogue.js';
-import { INTERVIEW_DIFFICULTY_VALUES, INTERVIEW_QUESTION_TYPE_VALUES } from '../src/domain/interview/interviewContract.js';
+import {
+  INTERVIEW_DIFFICULTY_VALUES,
+  INTERVIEW_LIMITS,
+  INTERVIEW_QUESTION_TYPE_VALUES,
+} from '../src/domain/interview/interviewContract.js';
 
 describe('R4 — Curated Interview Questions Suite', () => {
   describe('1. Taxonomy & Role Alignment', () => {
@@ -95,6 +99,30 @@ describe('R4 — Curated Interview Questions Suite', () => {
       }
     });
 
+    it('ensures zero duplicate prompts or intent summaries across the entire question bank', () => {
+      const seenPrompts = new Map();
+      const seenSummaries = new Map();
+
+      for (const question of INTERVIEW_QUESTION_BANK) {
+        const normalizedPrompt = question.intent.prompt.trim().toLowerCase();
+        const normalizedSummary = question.intent.summary.trim().toLowerCase();
+
+        assert.equal(
+          seenPrompts.has(normalizedPrompt),
+          false,
+          `Duplicate prompt detected between ${question.id} and ${seenPrompts.get(normalizedPrompt)}`,
+        );
+        seenPrompts.set(normalizedPrompt, question.id);
+
+        assert.equal(
+          seenSummaries.has(normalizedSummary),
+          false,
+          `Duplicate summary detected between ${question.id} and ${seenSummaries.get(normalizedSummary)}`,
+        );
+        seenSummaries.set(normalizedSummary, question.id);
+      }
+    });
+
     it('getQuestionById returns the requested question or null if missing', () => {
       const found = getQuestionById('iq-node-001');
       assert.ok(found);
@@ -144,6 +172,30 @@ describe('R4 — Curated Interview Questions Suite', () => {
           question.evaluationCriteria.scoringGuidelines &&
             typeof question.evaluationCriteria.scoringGuidelines === 'object',
           `Question ${question.id} must have scoringGuidelines`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.accuracy,
+          `Question ${question.id} must have accuracy scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.depth,
+          `Question ${question.id} must have depth scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.clarity,
+          `Question ${question.id} must have clarity scoring guideline`,
+        );
+        assert.ok(
+          question.evaluationCriteria.scoringGuidelines.relevance,
+          `Question ${question.id} must have relevance scoring guideline`,
+        );
+
+        // Time limit bounds
+        assert.equal(typeof question.timeLimitSeconds, 'number');
+        assert.ok(
+          question.timeLimitSeconds > 0 &&
+            question.timeLimitSeconds <= INTERVIEW_LIMITS.maxTimePerQuestionSeconds,
+          `Question ${question.id} time limit must be between 1 and ${INTERVIEW_LIMITS.maxTimePerQuestionSeconds} seconds`,
         );
       }
     });
@@ -205,6 +257,91 @@ describe('R4 — Curated Interview Questions Suite', () => {
 
       assert.equal(byId[0].questionId, byTitle[0].questionId);
     });
+
+    it('ensures zero duplicate questions within a session even when requested count exceeds available bank items', () => {
+      // Node.js has 3 questions; requesting 10 must return only 3 unique questions without repeats
+      const singleSkillResult = selectQuestionsForSession({
+        targetRole: 'backend-developer',
+        targetSkills: ['Node.js'],
+        count: 10,
+      });
+
+      assert.equal(singleSkillResult.length, 3);
+      const singleSkillIds = singleSkillResult.map((q) => q.questionId);
+      assert.equal(new Set(singleSkillIds).size, singleSkillResult.length);
+
+      // Node.js (3) + MongoDB (1) = 4 total; requesting 6 must yield exactly 4 unique questions
+      const multiSkillResult = selectQuestionsForSession({
+        targetRole: 'backend-developer',
+        targetSkills: ['Node.js', 'MongoDB'],
+        count: 6,
+      });
+
+      assert.equal(multiSkillResult.length, 4);
+      const multiSkillIds = multiSkillResult.map((q) => q.questionId);
+      assert.equal(new Set(multiSkillIds).size, multiSkillResult.length);
+    });
+
+    it('enforces target-role relevance by matching questions tagged for the target role', () => {
+      const devopsQuestions = selectQuestionsForSession({
+        targetRole: 'devops-engineer',
+        targetSkills: ['Docker', 'Git', 'Linux'],
+        count: 3,
+      });
+
+      assert.equal(devopsQuestions.length, 3);
+      for (const q of devopsQuestions) {
+        const original = INTERVIEW_QUESTION_BANK.find((orig) => orig.id === q.questionId);
+        assert.ok(original, `Selected question ${q.questionId} must exist in bank`);
+        assert.ok(
+          original.roles.includes('devops-engineer'),
+          `Selected question ${q.questionId} must be mapped to devops-engineer`,
+        );
+      }
+
+      const frontendQuestions = selectQuestionsForSession({
+        targetRole: 'frontend-developer',
+        targetSkills: ['JavaScript', 'React'],
+        count: 2,
+      });
+
+      assert.equal(frontendQuestions.length, 2);
+      for (const q of frontendQuestions) {
+        const original = INTERVIEW_QUESTION_BANK.find((orig) => orig.id === q.questionId);
+        assert.ok(
+          original.roles.includes('frontend-developer'),
+          `Selected question ${q.questionId} must be mapped to frontend-developer`,
+        );
+      }
+    });
+
+    it('guarantees deterministic repeatable ordering across multiple consecutive runs', () => {
+      const params = {
+        targetRole: 'backend-developer',
+        targetSkills: ['JavaScript', 'SQL', 'Node.js'],
+        difficulty: 'intermediate',
+        count: 3,
+      };
+
+      const baseline = selectQuestionsForSession(params);
+      for (let i = 0; i < 5; i += 1) {
+        const comparison = selectQuestionsForSession(params);
+        assert.deepEqual(comparison, baseline, `Run ${i + 1} diverged from baseline deterministic selection`);
+      }
+    });
+
+    it('maintains contiguous 1-based ordering without gaps', () => {
+      const result = selectQuestionsForSession({
+        targetRole: 'full-stack-developer',
+        targetSkills: ['JavaScript', 'React', 'Node.js', 'SQL'],
+        count: 4,
+      });
+
+      assert.equal(result.length, 4);
+      result.forEach((q, idx) => {
+        assert.equal(q.order, idx + 1);
+      });
+    });
   });
 
   describe('5. Unsupported Skills & Error Handling', () => {
@@ -263,6 +400,29 @@ describe('R4 — Curated Interview Questions Suite', () => {
             targetSkills: ['Flutter'],
           }),
         /No curated interview questions are currently available for: "Flutter"/,
+      );
+    });
+
+    it('rejects invalid difficulty values with informative error message', () => {
+      assert.throws(
+        () =>
+          selectQuestionsForSession({
+            targetRole: 'backend-developer',
+            targetSkills: ['Node.js'],
+            difficulty: 'grandmaster',
+          }),
+        /Difficulty "grandmaster" is not a recognized interview difficulty level/,
+      );
+    });
+
+    it('rejects targetSkills when list exceeds maximum allowed target skills', () => {
+      assert.throws(
+        () =>
+          selectQuestionsForSession({
+            targetRole: 'backend-developer',
+            targetSkills: ['Node.js', 'React', 'SQL', 'MongoDB', 'Docker', 'Python'],
+          }),
+        /targetSkills cannot exceed maximum of 5 skills/,
       );
     });
   });
