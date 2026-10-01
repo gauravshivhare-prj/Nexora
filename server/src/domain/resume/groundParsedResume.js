@@ -1,58 +1,45 @@
 import { canonicalSkill } from '../skills/skillKey.js';
+import { resolveCanonicalSkill } from '../skills/skillOntology.js';
 
 /**
- * Business validation for AI-parsed resume data.
+ * Business validation for AI-parsed resume data (Task 05 Grounding & Traceability).
  *
- * Step three of the pipeline: raw text → JSON → schema validation →
- * **business validation** → persistence. Schema validation asked whether the
- * response had the right shape. This asks a harder question: is any of it
- * actually in the resume?
+ * Every value that a later phase may treat as evidence must be found in the
+ * source text. In Task 05, this is enhanced to produce full provenance
+ * traceability: exact offsets in the source text, canonical skill IDs, and
+ * explicit 'claimed' evidence tier attribution.
  *
- * The check is simple and it is the point of the whole module. A model asked
- * to extract skills from a backend CV will sometimes add Docker or Kubernetes
- * because CVs like that usually mention them. That invention would become a
- * skill the student never claimed, feeding a career match, a skill gap and a
- * roadmap built on something that was never true. So every value a later
- * phase may treat as evidence must be found in the source text, and anything
- * that is not is dropped and recorded.
- *
- * What is **not** grounded, and why:
- *
- *  - Descriptions and achievement lines are summaries. A model rewording
- *    three bullet points into one sentence is doing its job, and requiring a
- *    verbatim match would delete every one of them. They are stored as
- *    model-written prose and no later phase may read them as evidence.
- *  - Dates and grades are printed in too many forms ("Jan 2024", "January
- *    2024", "First Class", "8.4/10") for a text match to mean anything.
- *
- * This catches invention, not misreading. A model that attributes a real
- * skill to the wrong project still passes, because every word it used is in
- * the document. Grounding raises the floor; it is not a correctness proof.
- */
-
-/**
  * @param {object} parsed Output of validateParsedResume — already shape-checked.
  * @param {string} sourceText The resume text the analysis ran on.
- * @returns {{ value: object, warnings: string[] }}
+ * @returns {{ value: object, provenanceIndex: Array<object>, warnings: string[] }}
  */
 export function groundParsedResume(parsed, sourceText) {
   const context = buildContext(sourceText);
   const warnings = [];
+  const provenanceIndex = [];
 
   /** Keeps a value only if it appears in the resume. */
-  const keep = (value, path) => {
+  const keep = (value, path, entityType = 'general') => {
     if (value === null || value === undefined) return null;
-    if (isGrounded(value, context)) return value;
+    if (isGrounded(value, context)) {
+      const span = findSpanInText(sourceText, value);
+      provenanceIndex.push({
+        entityType,
+        name: String(value),
+        matchedText: span?.matchedText || String(value),
+        startOffset: span?.startOffset ?? null,
+        endOffset: span?.endOffset ?? null,
+        evidenceTier: 'claimed',
+      });
+      return value;
+    }
 
-    // The dropped value is named because it is the student's own document
-    // talking, it is what makes the warning actionable, and the whole point
-    // is to be able to see what the model invented.
     warnings.push(`Dropped ${path} "${value}": it does not appear in the resume.`);
     return null;
   };
 
-  const keepAll = (values, path) =>
-    values.filter((value, index) => keep(value, `${path}[${index}]`) !== null);
+  const keepAll = (values, path, entityType = 'link') =>
+    values.filter((value, index) => keep(value, `${path}[${index}]`, entityType) !== null);
 
   const keepCanonicalSkill = (value, path) => {
     if (value === null || value === undefined) return null;
@@ -61,8 +48,24 @@ export function groundParsedResume(parsed, sourceText) {
       return null;
     }
 
-    const canonical = canonicalSkill(value);
-    if (canonical) return canonical.name;
+    const canonical = resolveCanonicalSkill(value) || canonicalSkill(value);
+    if (canonical) {
+      const span = findSpanInText(sourceText, value) || findSpanInText(sourceText, canonical.name);
+      provenanceIndex.push({
+        entityType: 'skill',
+        name: canonical.name,
+        canonicalSkillId: canonical.id || null,
+        matchedText: span?.matchedText || value,
+        startOffset: span?.startOffset ?? null,
+        endOffset: span?.endOffset ?? null,
+        evidenceTier: 'claimed',
+      });
+      return {
+        name: canonical.name,
+        canonicalSkillId: canonical.id || null,
+        evidenceTier: 'claimed',
+      };
+    }
 
     warnings.push(`Dropped ${path} "${value}": it is not in the canonical skill taxonomy.`);
     return null;
@@ -70,86 +73,111 @@ export function groundParsedResume(parsed, sourceText) {
 
   const keepCanonicalSkills = (values, path) =>
     values
-      .map((value, index) => keepCanonicalSkill(value, `${path}[${index}]`))
+      .map((value, index) => {
+        const res = keepCanonicalSkill(value, `${path}[${index}]`);
+        return res ? res.name : null;
+      })
       .filter((value) => value !== null);
 
   return {
     value: {
       basics: {
         ...parsed.basics,
-        fullName: keep(parsed.basics.fullName, 'basics.fullName'),
-        email: keep(parsed.basics.email, 'basics.email'),
+        fullName: keep(parsed.basics.fullName, 'basics.fullName', 'basics.fullName'),
+        email: keep(parsed.basics.email, 'basics.email', 'basics.email'),
         phone: groundPhone(parsed.basics.phone, context, warnings),
-        // Location is often normalised by a model ("Bhopal, MP" → "Bhopal,
-        // Madhya Pradesh"), so it is kept as written rather than dropped.
-        links: keepAll(parsed.basics.links, 'basics.links'),
+        links: keepAll(parsed.basics.links, 'basics.links', 'basics.link'),
       },
 
       education: parsed.education.map((entry, index) => ({
         ...entry,
-        institution: keep(entry.institution, `education[${index}].institution`),
+        institution: keep(entry.institution, `education[${index}].institution`, 'education.institution'),
       })),
 
       // The set that matters most: these become claimed skills downstream.
       skills: parsed.skills
         .map((skill, index) => {
-          const name = keepCanonicalSkill(skill.name, `skills[${index}].name`);
-          return name ? { ...skill, name } : null;
+          const res = keepCanonicalSkill(skill.name, `skills[${index}].name`);
+          return res ? { ...skill, name: res.name } : null;
         })
         .filter(Boolean),
 
       projects: parsed.projects.map((entry, index) => ({
         ...entry,
-        title: keep(entry.title, `projects[${index}].title`),
+        title: keep(entry.title, `projects[${index}].title`, 'projects.title'),
         technologies: keepCanonicalSkills(entry.technologies, `projects[${index}].technologies`),
       })),
 
       experience: parsed.experience.map((entry, index) => ({
         ...entry,
-        organisation: keep(entry.organisation, `experience[${index}].organisation`),
+        organisation: keep(entry.organisation, `experience[${index}].organisation`, 'experience.organisation'),
       })),
 
       certifications: parsed.certifications.map((entry, index) => ({
         ...entry,
-        name: keep(entry.name, `certifications[${index}].name`),
+        name: keep(entry.name, `certifications[${index}].name`, 'certifications.name'),
       })),
 
       achievements: parsed.achievements,
     },
+    provenanceIndex,
     warnings,
   };
 }
 
 /**
- * Pre-computes the two views of the resume that matching needs, once per
- * analysis rather than once per value.
+ * Finds the exact text span in sourceText for a given fact/substring.
+ */
+export function findSpanInText(sourceText, targetStr) {
+  if (!sourceText || !targetStr) return null;
+  const rawLower = sourceText.toLowerCase();
+  const targetLower = targetStr.toLowerCase().trim();
+  const idx = rawLower.indexOf(targetLower);
+  if (idx !== -1) {
+    return {
+      matchedText: sourceText.slice(idx, idx + targetLower.length),
+      startOffset: idx,
+      endOffset: idx + targetLower.length,
+    };
+  }
+
+  // Try compact match if target has punctuation or spacing variation (e.g. Node.js vs NodeJS)
+  const targetCompact = targetLower.replace(/[^a-z0-9]/g, '');
+  if (targetCompact.length >= 3) {
+    const rawTokens = sourceText.split(/[\s,;|/]+/);
+    let offset = 0;
+    for (const token of rawTokens) {
+      const tokenPos = sourceText.indexOf(token, offset);
+      if (tokenPos !== -1) {
+        offset = tokenPos + token.length;
+        if (token.toLowerCase().replace(/[^a-z0-9]/g, '') === targetCompact) {
+          return {
+            matchedText: token,
+            startOffset: tokenPos,
+            endOffset: tokenPos + token.length,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Pre-computes the views of the resume that matching needs.
  */
 function buildContext(sourceText) {
   const lowered = String(sourceText ?? '').toLowerCase();
 
   return {
-    /** Letters and digits only, so "Node.js" and "NodeJS" compare equal. */
     compact: compact(lowered),
-
-    /**
-     * Whole words, keeping `+` and `#` so "c++" and "c#" survive as tokens.
-     * Used for very short names, where a substring match is meaningless.
-     */
     tokens: new Set(
       lowered
         .split(/\s+/)
         .map((token) => token.replace(/^[^a-z0-9+#]+|[^a-z0-9+#]+$/g, ''))
         .filter(Boolean),
     ),
-
     digits: lowered.replace(/\D/g, ''),
-
-    /**
-     * Every run of one to four consecutive words, compacted. Skill names are
-     * matched against these rather than the whole text, so "Java" is not
-     * confirmed by "JavaScript" nor "SQL" by "PostgreSQL". Slashes and commas
-     * separate words, so "React/Redux" still confirms "React".
-     */
     phrases: buildPhrases(lowered),
   };
 }
@@ -173,13 +201,6 @@ function buildPhrases(lowered) {
   return phrases;
 }
 
-/**
- * Whether a skill name appears in the resume as whole words.
- *
- * Stricter than `isGrounded`: a substring test would accept a model's "Java"
- * on the strength of "JavaScript", and grounded skills become claimed
- * CareerTwin evidence.
- */
 function isSkillGrounded(value, context) {
   const text = String(value).trim().toLowerCase();
   const compacted = compact(text);
@@ -188,18 +209,6 @@ function isSkillGrounded(value, context) {
   return context.phrases.has(compacted);
 }
 
-/**
- * Whether a value appears in the resume.
- *
- * Two strategies, because one does not fit both ends of the range:
- *
- *  - Three characters or more: compare with punctuation and spacing removed,
- *    so "Node.js" matches "NodeJS" and "React Native" matches "react-native".
- *    A model rewriting a name's punctuation is not inventing it.
- *  - One or two characters: require a whole-word match. "C" and "R" and "Go"
- *    are real skills, and a substring test would find "C" inside "Computer"
- *    and confirm anything.
- */
 function isGrounded(value, context) {
   const text = String(value).trim().toLowerCase();
   if (text === '') return false;
@@ -212,18 +221,10 @@ function isGrounded(value, context) {
   return context.tokens.has(text);
 }
 
-/**
- * A phone number, compared as digits only.
- *
- * "+91 98765 43210" and "+919876543210" are the same number written twice,
- * and a literal match would reject the model for reformatting it.
- */
 function groundPhone(phone, context, warnings) {
   if (!phone) return null;
 
   const digits = phone.replace(/\D/g, '');
-  // Fewer than seven digits is not a phone number, so there is nothing to
-  // confirm; treating it as grounded would let any short string through.
   if (digits.length >= 7 && context.digits.includes(digits)) return phone;
 
   warnings.push(`Dropped basics.phone "${phone}": it does not appear in the resume.`);

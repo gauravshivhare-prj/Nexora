@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'node:crypto';
 
 import {
   ACCEPTED_RESUME_SOURCES,
@@ -9,9 +10,10 @@ import {
   RESUME_SOURCES,
 } from '../constants/resumePolicy.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
-import { Resume, toPublicResume, toResumeSummary } from '../models/index.js';
+import { Resume, StudentProfile, toPublicResume, toResumeSummary } from '../models/index.js';
 import { checkUploadedFile, extractTextFromFile } from '../domain/resume/extractText.js';
 import { groundParsedResume } from '../domain/resume/groundParsedResume.js';
+import { detectResumeConflicts } from '../domain/resume/resumeConflictDetector.js';
 import { validateParsedResume } from '../domain/resume/parsedResumeSchema.js';
 import { buildResumeExtractionRequest } from '../domain/resume/resumePrompt.js';
 import { parseJsonObject } from './ai/aiJson.js';
@@ -110,10 +112,16 @@ export async function createResume(userId, payload) {
     );
   }
 
+  const contentHash = crypto.createHash('sha256').update(text.trim().toLowerCase()).digest('hex');
+  const duplicate = await Resume.findOne({ user: userId, contentHash });
+
   const resume = await Resume.create({
     user: userId,
     label,
     source,
+    contentHash,
+    isDuplicate: Boolean(duplicate),
+    duplicateOf: duplicate?._id || null,
     extractedText: text,
     extraction: {
       status: PROCESSING_STATUS.COMPLETED,
@@ -197,10 +205,19 @@ export async function createResumeFromFile(userId, file, fields = {}) {
     failure.throwIfInvalid();
   }
 
+  const contentHash = crypto
+    .createHash('sha256')
+    .update(extracted.text.trim().toLowerCase())
+    .digest('hex');
+  const duplicate = await Resume.findOne({ user: userId, contentHash });
+
   const resume = await Resume.create({
     user: userId,
     label,
     source: RESUME_SOURCES.FILE_UPLOAD,
+    contentHash,
+    isDuplicate: Boolean(duplicate),
+    duplicateOf: duplicate?._id || null,
     file: {
       originalName: file.originalname,
       mimeType: file.mimetype,
@@ -342,8 +359,18 @@ export async function analyseResume(userId, resumeId, { signal } = {}) {
   try {
     const result = await runAnalysisPipeline(resume.extractedText, provider, signal);
 
+    let conflicts = [];
+    try {
+      const studentProfile = await StudentProfile.findOne({ user: userId });
+      conflicts = detectResumeConflicts(result.parsed, studentProfile);
+    } catch (confError) {
+      logger.warn(`Conflict detection non-fatal error: ${confError.message}`);
+    }
+
     resume.parsed = result.parsed;
     resume.warnings = result.warnings;
+    resume.provenanceIndex = result.provenanceIndex || [];
+    resume.conflicts = conflicts;
     resume.analysedBy = {
       provider: provider.name,
       model: result.model,
@@ -429,7 +456,7 @@ async function runAnalysisPipeline(resumeText, provider, signal) {
     logger.warn(`Resume analysis dropped ${warnings.length} untrusted value(s) from ${provider.name}`);
   }
 
-  return { parsed: grounded.value, warnings, model };
+  return { parsed: grounded.value, provenanceIndex: grounded.provenanceIndex, warnings, model };
 }
 
 /**

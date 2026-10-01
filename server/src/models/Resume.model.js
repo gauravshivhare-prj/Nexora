@@ -224,12 +224,20 @@ const resumeSchema = new mongoose.Schema(
      * know that something was removed from their own document's reading.
      */
     warnings: { type: [String], default: [] },
+
+    // --- Task 05 Grounded Pipeline & Provenance Enhancements ---
+    contentHash: { type: String, default: null, index: true },
+    isDuplicate: { type: Boolean, default: false },
+    duplicateOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Resume', default: null },
+    provenanceIndex: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    conflicts: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   { timestamps: true },
 );
 
 resumeSchema.index({ user: 1, createdAt: -1 });
 resumeSchema.index({ user: 1, 'analysis.status': 1, createdAt: -1 });
+resumeSchema.index({ user: 1, contentHash: 1 });
 
 /**
  * Keeps the denormalised length honest.
@@ -259,6 +267,9 @@ export function toResumeSummary(resume) {
       sizeBytes: resume.file?.sizeBytes ?? null,
     },
     textLength: resume.textLength ?? 0,
+    contentHash: resume.contentHash ?? null,
+    isDuplicate: Boolean(resume.isDuplicate),
+    duplicateOf: resume.duplicateOf ? String(resume.duplicateOf) : null,
     extraction: toProcessing(resume.extraction),
     analysis: toProcessing(resume.analysis),
     hasParsedData: Boolean(resume.parsed),
@@ -278,6 +289,11 @@ export function toPublicResume(resume) {
   return {
     ...toResumeSummary(resume),
     extractedText: resume.extractedText,
+    contentHash: resume.contentHash ?? null,
+    isDuplicate: Boolean(resume.isDuplicate),
+    duplicateOf: resume.duplicateOf ? String(resume.duplicateOf) : null,
+    provenanceIndex: resume.provenanceIndex ?? [],
+    conflicts: resume.conflicts ?? [],
     analysedBy: resume.parsed
       ? {
           provider: resume.analysedBy?.provider ?? null,
