@@ -83,6 +83,38 @@ const skillEvidenceCheckSchema = new mongoose.Schema(
     evaluatedBy: { type: String, required: true },
     reference: { type: String, required: true, maxlength: 200 },
     completedAt: { type: Date, required: true },
+
+    // --- Task 04 Lifecycle & Provenance Enhancements ---
+    canonicalSkillId: { type: String, default: null, trim: true },
+    strength: {
+      type: String,
+      enum: ['claimed', 'supported', 'verified'],
+      default: 'claimed',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'stale', 'disputed', 'invalidated', 'superseded'],
+      default: 'active',
+      index: true,
+    },
+    confidence: { type: Number, min: 0, max: 1, default: 0.35 },
+    detail: { type: String, default: '', maxlength: 500 },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+    isAdvisory: { type: Boolean, default: false },
+    isStale: { type: Boolean, default: false },
+    isDisputed: { type: Boolean, default: false },
+    expiresAt: { type: Date, default: null, index: true },
+    invalidatedAt: { type: Date, default: null },
+    invalidatedBy: { type: String, default: null },
+    invalidationReason: { type: String, default: null, maxlength: 500 },
+    auditTrail: [
+      {
+        action: { type: String, required: true },
+        performedBy: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+        details: { type: String, default: '' },
+      },
+    ],
   },
   { timestamps: true },
 );
@@ -137,24 +169,37 @@ skillEvidenceCheckSchema.pre('validate', function enforceEvidencePolicy() {
   }
 });
 
-// Cover the two read paths, both newest-first per user: the evidence list
-// and the verified-only load that feeds every CareerTwin build.
+// Cover the read paths per user
 skillEvidenceCheckSchema.index({ user: 1, completedAt: -1 });
 skillEvidenceCheckSchema.index({ user: 1, eligibleForVerified: 1, completedAt: -1 });
+skillEvidenceCheckSchema.index({ user: 1, skillKey: 1, status: 1 });
+skillEvidenceCheckSchema.index({ user: 1, status: 1, completedAt: -1 });
 
 export function toPublicSkillEvidenceCheck(check) {
   return {
     id: String(check._id ?? check.id),
     kind: check.kind,
+    canonicalSkillId: check.canonicalSkillId || null,
     skillKey: check.skillKey,
     skillName: check.skillName,
+    strength: check.strength || (check.eligibleForVerified ? 'verified' : 'claimed'),
+    status: check.status || 'active',
+    confidence: check.confidence !== undefined ? check.confidence : (check.eligibleForVerified ? 0.95 : 0.35),
     score: check.score,
     passMark: check.passMark,
     outcome: check.outcome,
     eligibleForVerified: check.eligibleForVerified,
+    isAdvisory: Boolean(check.isAdvisory),
+    isStale: Boolean(check.isStale),
+    isDisputed: Boolean(check.isDisputed),
     evaluatedBy: check.evaluatedBy,
     reference: check.reference,
+    detail: check.detail || '',
     completedAt: check.completedAt,
+    expiresAt: check.expiresAt || null,
+    metadata: check.metadata || {},
+    invalidatedAt: check.invalidatedAt || null,
+    invalidationReason: check.invalidationReason || null,
   };
 }
 

@@ -4,6 +4,12 @@ import { canonicalSkill } from '../skills/skillKey.js';
 export const CHECK_KINDS = {
   ASSESSMENT: 'assessment',
   INTERVIEW: 'interview',
+  SELF_DECLARED: 'self_declared',
+  RESUME: 'resume',
+  PROJECT: 'project',
+  CERTIFICATION: 'certification',
+  INSTITUTIONAL: 'institutional',
+  AI_SUGGESTION: 'ai_suggestion',
 };
 
 export const CHECK_OUTCOMES = {
