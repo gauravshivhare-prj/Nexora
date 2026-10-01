@@ -204,6 +204,7 @@ Copy the `.env.example` files; never commit a real `.env`. Names only below.
 | `GEMINI_MODEL` | No | Gemini model id |
 | `GEMINI_TIMEOUT_MS` | No | Default `60000` |
 | `MONGODB_URI_TEST` | No | Test database override |
+| `DEMO_STUDENT_PASSWORD`, `DEMO_ADMIN_PASSWORD` | For `seed:demo` only | Your own choice; the seed script refuses to run without them |
 
 **`client/.env`**
 
@@ -220,14 +221,36 @@ Copy the `.env.example` files; never commit a real `.env`. Names only below.
 - Tests never use real credentials. Code that detects or redacts secrets is tested with
   the generated fakes in `server/tests/helpers/fakeSecrets.js`; the test database comes
   from `MONGODB_URI_TEST` or a local `_test` database.
-- **Commit protection**: `npm install` in `server/` or `client/` enables the
-  `.githooks/pre-commit` hook, which blocks commits containing credentials or `.env`
-  files. It uses [gitleaks](https://github.com/gitleaks/gitleaks) when installed
-  (recommended) and a built-in check otherwise. To enable it without installing:
-  `git config core.hooksPath .githooks`.
-- **CI**: `.github/workflows/secret-scan.yml` runs gitleaks over the full history on every
-  push and pull request, so a secret that bypasses the hook still fails the build.
-- If a credential is ever committed, treat it as exposed: rotate it first, then remove it.
+### Secret scanning gate
+
+```
+git commit → pre-commit hook → gitleaks (staged changes)   → commit allowed / blocked
+git push   → pre-push hook   → gitleaks (commits being pushed) → push allowed / blocked
+GitHub     → CI workflow     → gitleaks (full history)     → build passes / fails
+```
+
+- **Setup is automatic.** `npm install` in `server/` or `client/` sets
+  `core.hooksPath` to `.githooks` and installs a pinned, checksum-verified
+  [gitleaks](https://github.com/gitleaks/gitleaks) into `.tools/` (git-ignored). If the
+  download failed (e.g. offline), run `node scripts/install-gitleaks.mjs`.
+- **What is scanned**: before a push, every commit that the remote does not already have,
+  using the rules in `.gitleaks.toml` — gitleaks' standard rules (API keys, tokens, JWTs,
+  private keys, cloud credentials) plus credentialed database URIs and hardcoded
+  passwords.
+- **What blocks a push**: any finding, *or* a scan that cannot run (gitleaks missing,
+  broken or misconfigured). The hook fails closed and never prints the matched value,
+  only file, line and rule.
+- **Fixing a detection**: remove the value from the commit that introduced it (amend it,
+  or rewrite your unpushed commits) — a later commit deleting it is not enough, because
+  the pushed history would still contain it. Put real values in `server/.env`, and use
+  `server/tests/helpers/fakeSecrets.js` for test values. If the value really was a
+  credential, rotate it.
+- **Bypassing is not part of the workflow.** Git's `--no-verify` flag skips hooks; it is
+  for emergencies only, requires a manual security review of the pushed commits, and CI
+  scans the full history regardless.
+
+Never commit real credentials — not in code, tests, fixtures, docs, examples or
+`.env.example`. `.env` files are local or set in the host's secret settings only.
 
 ## Deployment
 

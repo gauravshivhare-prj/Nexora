@@ -11,6 +11,7 @@ import {
   ensureModelIndexes,
 } from '../src/models/index.js';
 import { DEMO_EMAILS, DEMO_USERS, seedDemo } from '../src/scripts/seedDemo.js';
+import { fakePassword, fakeSecretValue } from './helpers/fakeSecrets.js';
 import { getWithToken, sendJsonWithToken, startTestServer } from './helpers/testServer.js';
 
 describe('G27 — Safe Demo/Seed Strategy Test Suite', () => {
@@ -18,6 +19,9 @@ describe('G27 — Safe Demo/Seed Strategy Test Suite', () => {
   let nonDemoUser;
 
   before(async () => {
+    // Demo passwords come from the environment; tests supply fakes.
+    process.env.DEMO_STUDENT_PASSWORD = fakePassword();
+    process.env.DEMO_ADMIN_PASSWORD = fakeSecretValue(20);
     server = await startTestServer();
     await ensureModelIndexes();
 
@@ -184,6 +188,27 @@ describe('G27 — Safe Demo/Seed Strategy Test Suite', () => {
       const adminCountAfterThird = await User.countDocuments({ email: DEMO_USERS.ADMIN.email });
       assert.equal(studentCountAfterThird, 1);
       assert.equal(adminCountAfterThird, 1);
+    });
+  });
+
+  describe('demo credentials', () => {
+    it('refuses to seed without demo passwords in the environment, before touching data', async () => {
+      await seedDemo({ silent: true });
+      const before = await User.countDocuments({ email: { $in: DEMO_EMAILS } });
+
+      const saved = process.env.DEMO_ADMIN_PASSWORD;
+      delete process.env.DEMO_ADMIN_PASSWORD;
+      try {
+        await assert.rejects(
+          () => seedDemo({ forceReset: true, silent: true }),
+          /Set DEMO_ADMIN_PASSWORD in server\/\.env/,
+        );
+      } finally {
+        process.env.DEMO_ADMIN_PASSWORD = saved;
+      }
+
+      // forceReset would have deleted the demo accounts; the check runs first.
+      assert.equal(await User.countDocuments({ email: { $in: DEMO_EMAILS } }), before);
     });
   });
 });

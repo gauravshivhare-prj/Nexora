@@ -13,7 +13,7 @@
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "seed:demo": "node src/scripts/seedDemo.js",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks && node ../scripts/install-gitleaks.mjs || true"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

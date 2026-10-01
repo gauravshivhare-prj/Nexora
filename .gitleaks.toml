@@ -1,4 +1,4 @@
-# Secret-scanning rules, used by the pre-commit hook and CI.
+# Secret-scanning rules, used by the git hooks and CI.
 # Starts from gitleaks' built-in rule set and adds what it does not cover.
 
 [extend]
@@ -10,8 +10,37 @@ description = "Database or cache connection string with an embedded username and
 regex = '''(?i)\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis(?:s)?|amqps?)://[^\s:@/"'`<>]+:[^\s@/"'`<>]+@[^\s"'`<>]+'''
 keywords = ["mongodb", "postgres", "mysql", "redis", "amqp"]
 
+[[rules]]
+id = "hardcoded-password"
+description = "Password-named variable or key assigned a literal value"
+regex = '''(?i)[\w.-]*(?:password|passwd|pwd)[\w.-]*["']?\s*[:=]\s*["'`]([^"'`\s$]{8,})["'`]'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["password", "passwd", "pwd"]
+
 [allowlist]
 description = "Local, never-committed environment files, and known non-secret values"
 paths = ['''(^|/)\.env$''']
-# A skill identifier in an assessment validation test, not a credential.
-regexes = ['''^NonExistentSkill_999$''']
+regexes = [
+  # A skill identifier in an assessment validation test, not a credential.
+  '''^NonExistentSkill_999$''',
+  # Exact passwords of throwaway accounts that tests register in _test
+  # databases. Exact values only: any other password literal is reported.
+  '''^Str0ngPassphrase$''',
+  '''^ValidPassword123!$''',
+  '''^Str0ngPassphrase1!$''',
+  '''^AnotherWrongPassword!$''',
+  '''^Wr0ngGuess9$''',
+  '''^ContractPassword123!$''',
+  '''^Password123!Safe$''',
+  '''^StrongTestPassword123!$''',
+  '''^Str0ngPassword123!$''',
+  '''^PerfPassword123!$''',
+  '''^Password123!$''',
+  '''^Wr0ngPassword$''',
+  '''^anything-at-all-1$''',
+  '''^StrongDemoPassword123!$''',
+  '''^RealPassword123!Safe$''',
+  '''^TopSecretPassword!$''',
+  '''^Str0ngPassphrase!$''',
+]

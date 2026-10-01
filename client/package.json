@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks && node ../scripts/install-gitleaks.mjs || true"
   },
   "dependencies": {
     "react": "^19.3.0",

@@ -2,8 +2,14 @@
 # Blocks commits that contain credentials. Enabled automatically by
 # `npm install` in server/ or client/ (git config core.hooksPath .githooks).
 
-if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml || {
+ROOT="$(git rev-parse --show-toplevel)"
+GITLEAKS=""
+for c in "$ROOT/.tools/gitleaks.exe" "$ROOT/.tools/gitleaks" "$(command -v gitleaks 2>/dev/null)"; do
+  if [ -n "$c" ] && [ -x "$c" ]; then GITLEAKS="$c"; break; fi
+done
+
+if [ -n "$GITLEAKS" ]; then
+  "$GITLEAKS" git --pre-commit --staged --redact --no-banner --config "$ROOT/.gitleaks.toml" || {
     echo "Commit blocked: gitleaks found a possible secret in staged changes." >&2
     echo "Move real values to server/.env; use tests/helpers/fakeSecrets.js in tests." >&2
     exit 1

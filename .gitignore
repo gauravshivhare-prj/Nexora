@@ -34,3 +34,6 @@ id_ed25519*
 *service-account*.json
 *credentials*.json
 .npmrc
+
+# Locally installed tools (gitleaks for the git hooks)
+.tools/

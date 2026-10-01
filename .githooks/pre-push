@@ -1,0 +1,73 @@
+#!/bin/sh
+# Blocks any push whose commits contain a possible credential.
+#
+# Scans exactly the commits being pushed with gitleaks and .gitleaks.toml.
+# Fails closed: if the scan cannot run, the push is refused.
+# Enabled automatically by `npm install` in server/ or client/.
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+block() {
+  echo "" >&2
+  echo "PUSH BLOCKED: $1" >&2
+  shift
+  for line in "$@"; do echo "  $line" >&2; done
+  echo "" >&2
+  exit 1
+}
+
+GITLEAKS=""
+for candidate in "$ROOT/.tools/gitleaks.exe" "$ROOT/.tools/gitleaks" "$(command -v gitleaks 2>/dev/null)"; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then GITLEAKS="$candidate"; break; fi
+done
+[ -n "$GITLEAKS" ] || block "the secret scan could not run (gitleaks is not installed)." \
+  "Install it with: node scripts/install-gitleaks.mjs"
+"$GITLEAKS" version >/dev/null 2>&1 || block "the secret scan could not run (gitleaks failed to start)." \
+  "Reinstall it with: node scripts/install-gitleaks.mjs"
+[ -f "$ROOT/.gitleaks.toml" ] || block "the secret scan could not run (.gitleaks.toml is missing)."
+
+REPORT="$(mktemp 2>/dev/null || echo "$ROOT/.tools/pre-push-report.json")"
+trap 'rm -f "$REPORT"' EXIT
+# Node on Windows needs a native path; Git Bash mktemp returns /tmp/...
+REPORT_NODE="$REPORT"
+command -v cygpath >/dev/null 2>&1 && REPORT_NODE="$(cygpath -w "$REPORT")"
+ZERO=0000000000000000000000000000000000000000
+remote="$1"
+scanned=0
+
+# git passes one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue # deleting a remote ref pushes no content
+
+  if [ "$remote_sha" = "$ZERO" ]; then
+    # New remote branch: every commit not already on this remote.
+    range="$local_sha --not --remotes=$remote"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  "$GITLEAKS" git --no-banner --redact --log-level error \
+    --config "$ROOT/.gitleaks.toml" --log-opts="$range" \
+    --exit-code 3 --report-format json --report-path "$REPORT" "$ROOT" >/dev/null 2>&1
+  status=$?
+  scanned=1
+
+  if [ "$status" -eq 3 ]; then
+    findings="$(node -e '
+      const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      for (const f of r) console.log(`${f.File.split(String.fromCharCode(92)).join("/")}:${f.StartLine}  ${f.RuleID}  (commit ${f.Commit.slice(0, 7)})`);
+    ' "$REPORT_NODE" 2>/dev/null)"
+    # shellcheck disable=SC2086
+    block "possible secret in the commits being pushed to $remote_ref (values not shown)." \
+      "$findings" "" \
+      "Fix: remove the value from the commit (amend or rewrite it), keep real credentials in" \
+      "server/.env, and use server/tests/helpers/fakeSecrets.js for test values."
+  elif [ "$status" -ne 0 ]; then
+    block "the secret scan failed to complete (gitleaks exit code $status)." \
+      "The push is refused until the scan succeeds."
+  fi
+done
+
+[ "$scanned" -eq 1 ] || exit 0 # nothing but deletions
+exit 0

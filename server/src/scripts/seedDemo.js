@@ -17,17 +17,34 @@ import { scoringTestAssessment } from '../../tests/fixtures/assessmentScoringFix
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * Demo account passwords come from the environment, never from source:
+ * a password written here would let anyone sign in to any database the
+ * demo was ever seeded into.
+ */
+const DEMO_PASSWORD_VARIABLES = ['DEMO_STUDENT_PASSWORD', 'DEMO_ADMIN_PASSWORD'];
+
+function demoPassword(variable) {
+  const value = process.env[variable]?.trim();
+  if (!value) throw new Error(`Set ${variable} in server/.env before seeding demo accounts.`);
+  return value;
+}
+
 export const DEMO_USERS = Object.freeze({
   STUDENT: {
     name: 'Nexora Demo Student',
     email: 'demo.student@nexora.app',
-    password: 'DemoStudent123!',
+    get password() {
+      return demoPassword('DEMO_STUDENT_PASSWORD');
+    },
     role: 'student',
   },
   ADMIN: {
     name: 'Nexora Demo Admin',
     email: 'demo.admin@nexora.app',
-    password: 'DemoAdmin123!',
+    get password() {
+      return demoPassword('DEMO_ADMIN_PASSWORD');
+    },
     role: 'admin',
   },
 });
@@ -67,6 +84,9 @@ export async function seedDemo(options = {}) {
       'Production seeding is blocked. To proceed in production, explicitly provide allowProduction: true or --allow-production flag.',
     );
   }
+
+  // Checked before anything is deleted or written.
+  for (const variable of DEMO_PASSWORD_VARIABLES) demoPassword(variable);
 
   const log = (msg) => {
     if (!silent) logger.info(`[DemoSeed] ${msg}`);
