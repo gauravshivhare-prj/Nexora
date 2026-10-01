@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { CAREER_ROLES, CATALOGUE_SOURCE, findRole } from '../domain/careers/roleCatalogue.js';
-import { rankRoles, scoreRoleMatch } from '../domain/careers/matchRole.js';
+import { rankRoles, scoreRoleMatch, validateRecommendation } from '../domain/careers/matchRole.js';
 import { DIMENSION_WEIGHTS, WEIGHTS_VERSION } from '../domain/careers/scoring.js';
 import { CareerTwin } from '../models/index.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -129,9 +129,11 @@ export async function scoreAgainstRole(userId, roleId) {
   }
 
   const twin = await loadTwin(userId);
+  const rawMatch = scoreRoleMatch(twin, role);
+  const validatedOutcome = validateRecommendation(rawMatch, twin);
 
   return {
-    match: scoreRoleMatch(twin, role),
+    match: validatedOutcome.validatedMatch || rawMatch,
     basedOn: {
       careerTwinGeneratedAt: twin.generatedAt,
       skillsConsidered: twin.skills.length,

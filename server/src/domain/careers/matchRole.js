@@ -1,4 +1,14 @@
-import { CAREER_ROLES, CATALOGUE_SOURCE, CATALOGUE_VERSION } from './roleCatalogue.js';
+import {
+  CAREER_ROLES,
+  CATALOGUE_SOURCE,
+  CATALOGUE_VERSION,
+  getAuthoritativeRoles,
+} from './roleCatalogue.js';
+import {
+  satisfiesPrerequisite,
+  validateRecommendation,
+  validateRecommendationsList,
+} from './recommendationValidator.js';
 import {
   DIMENSION_WEIGHTS,
   MINIMUM_RECOMMENDABLE_SCORE,
@@ -7,6 +17,12 @@ import {
   bandFor,
 } from './scoring.js';
 import { skillDisplayName, skillKey } from '../skills/skillKey.js';
+
+export {
+  satisfiesPrerequisite,
+  validateRecommendation,
+  validateRecommendationsList,
+} from './recommendationValidator.js';
 
 /**
  * Matching a student's CareerTwin against career roles.
@@ -65,7 +81,41 @@ export function scoreRoleMatch(twin, role, precomputedHeld = null) {
 
   const band = bandFor(score);
 
+  // Prerequisite evaluation
+  const satisfiedPrereqs = [];
+  const missingPrereqs = [];
+  for (const prereqId of role?.prerequisites || []) {
+    if (satisfiesPrerequisite(prereqId, held)) {
+      satisfiedPrereqs.push(prereqId);
+    } else {
+      missingPrereqs.push(prereqId);
+    }
+  }
+
+  const contributingPoints = Object.fromEntries(
+    Object.entries(dimensions).map(([name, value]) => [
+      name,
+      Number((value * DIMENSION_WEIGHTS[name] * 100).toFixed(1)),
+    ]),
+  );
+
+  const traceableExplanation = {
+    summaryReason: explain(role, required, preferred, band),
+    contributingPoints,
+    totalPoints: score,
+    prerequisites: {
+      satisfied: satisfiedPrereqs,
+      missing: missingPrereqs,
+    },
+    constraintsConsidered: {
+      hasTargetRoles: Boolean(safeTwin.targetRoles?.length),
+      interestsCount: safeTwin.interests?.length || 0,
+      totalSkillsAnalyzed: safeTwin.skills?.length || 0,
+    },
+  };
+
   return {
+    canonicalId: role?.canonicalId || `role_${(role?.id || '').replace(/-/g, '_')}`,
     roleId: role.id,
     title: role.title,
     category: role.category,
@@ -93,10 +143,16 @@ export function scoreRoleMatch(twin, role, precomputedHeld = null) {
     matchedPreferred: preferred.matched.map(describeMatch),
     missingPreferred: preferred.missing,
 
+    prerequisitesStatus: {
+      satisfied: satisfiedPrereqs,
+      missing: missingPrereqs,
+    },
+
     /** Concrete things the student has done that count towards this role. */
     evidence: collectEvidence([...required.matched, ...preferred.matched]),
 
     explanation: explain(role, required, preferred, band),
+    traceableExplanation,
   };
 }
 
@@ -110,23 +166,47 @@ export function scoreRoleMatch(twin, role, precomputedHeld = null) {
 export function rankRoles(twin, { limit = 5, includeBelowThreshold = false } = {}) {
   const safeTwin = twin && typeof twin === 'object' ? twin : {};
   const held = indexSkills(safeTwin.skills ?? []);
-  const scored = CAREER_ROLES.map((role) => scoreRoleMatch(safeTwin, role, held))
+  const authoritativeRoles = getAuthoritativeRoles();
+  const scored = authoritativeRoles
+    .map((role) => scoreRoleMatch(safeTwin, role, held))
     .filter((match) => includeBelowThreshold || match.score >= MINIMUM_RECOMMENDABLE_SCORE)
-    // Ties broken deterministically by title, then roleId so ordering is rock-solid across runs and environments.
+    // Multi-tier deterministic tie-breaking:
+    // 1. Total score (descending)
+    // 2. Required skills coverage (descending)
+    // 3. Evidence strength (descending)
+    // 4. Role title (alphabetical ascending)
+    // 5. Role ID (alphabetical ascending)
     .sort(
       (left, right) =>
         right.score - left.score ||
+        (right.dimensions?.requiredSkills?.value ?? 0) - (left.dimensions?.requiredSkills?.value ?? 0) ||
+        (right.dimensions?.evidenceStrength?.value ?? 0) - (left.dimensions?.evidenceStrength?.value ?? 0) ||
         left.title.localeCompare(right.title, 'en') ||
         (left.roleId ?? '').localeCompare(right.roleId ?? '', 'en'),
     );
 
+  const validatedMatches = scored.map((match) => {
+    const outcome = validateRecommendation(match, safeTwin);
+    return {
+      ...match,
+      validation: {
+        isValid: outcome.isValid,
+        status: outcome.action === 'accepted' ? 'GROUNDED' : 'DOWNGRADED',
+        isGrounded: outcome.audit?.unsupportedSkills?.length === 0,
+        unsupportedSkills: outcome.audit?.unsupportedSkills || [],
+        missingPrerequisites: outcome.audit?.missingPrerequisites || [],
+        auditNotes: outcome.warnings || [],
+      },
+    };
+  });
+
   return {
-    matches: scored.slice(0, limit),
+    matches: validatedMatches.slice(0, limit),
     catalogue: {
       version: CATALOGUE_VERSION,
       weightsVersion: WEIGHTS_VERSION,
       source: CATALOGUE_SOURCE.type,
-      rolesConsidered: CAREER_ROLES.length,
+      rolesConsidered: authoritativeRoles.length,
     },
   };
 }

@@ -31,13 +31,13 @@ export { ROLE_STATUS, ROLE_PROVENANCE, isEligibleForRecommendation } from './rol
 /**
  * Version of this catalogue.
  */
-export const CATALOGUE_VERSION = 2;
+export const CATALOGUE_VERSION = 1;
 
 /** Where the content came from, recorded honestly on every recommendation. */
 export const CATALOGUE_SOURCE = {
   type: 'curated',
   description:
-    'Hand-written, structured internal reference catalogue of common entry-level technology roles with competency dependency graphs and evidence expectations.',
+    'Hand-written, structured internal reference catalogue of common entry-level technology roles with competency dependency graphs and evidence expectations. Not derived from job-market data, and contains no salary, demand or hiring statistics.',
   version: CATALOGUE_VERSION,
 };
 

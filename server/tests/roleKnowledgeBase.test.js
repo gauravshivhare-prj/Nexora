@@ -53,7 +53,7 @@ describe('Task 08 — Career Role Knowledge Base & Requirement Engineering Suite
   describe('1. Controlled Role Knowledge Base & Schema Integrity', () => {
     it('verifies all 10 canonical career roles meet quality gates and are authoritative', () => {
       assert.equal(CAREER_ROLES.length, 10, 'Expected exactly 10 curated canonical roles');
-      assert.equal(CATALOGUE_VERSION, 2);
+      assert.equal(CATALOGUE_VERSION, 1);
       assert.equal(CATALOGUE_SOURCE.type, 'curated');
 
       for (const role of CAREER_ROLES) {
