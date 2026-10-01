@@ -89,7 +89,7 @@ describe('A3 — Assessment Models & Validation', () => {
       const invalidSkill = {
         ...validAssessmentPayload,
         assessmentId: 'asm_unknown_skill',
-        skillKey: 'NonExistentSkill_999',
+        skillKey: 'NonExistentSkill_999', // gitleaks:allow — a skill name, not a credential
       };
 
       await assert.rejects(

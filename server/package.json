@@ -12,7 +12,8 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
-    "seed:demo": "node src/scripts/seedDemo.js"
+    "seed:demo": "node src/scripts/seedDemo.js",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

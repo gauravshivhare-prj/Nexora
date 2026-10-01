@@ -22,3 +22,15 @@ Thumbs.db
 
 # Machine-local tool settings
 .claude/settings.local.json
+
+# Credentials and key material — never commit
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+*service-account*.json
+*credentials*.json
+.npmrc

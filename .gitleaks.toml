@@ -1,0 +1,15 @@
+# Secret-scanning rules, used by the pre-commit hook and CI.
+# Starts from gitleaks' built-in rule set and adds what it does not cover.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "credentialed-database-uri"
+description = "Database or cache connection string with an embedded username and password"
+regex = '''(?i)\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis(?:s)?|amqps?)://[^\s:@/"'`<>]+:[^\s@/"'`<>]+@[^\s"'`<>]+'''
+keywords = ["mongodb", "postgres", "mysql", "redis", "amqp"]
+
+[allowlist]
+description = "Local, never-committed environment files"
+paths = ['''(^|/)\.env$''']

@@ -25,6 +25,17 @@ import {
   startTestServer,
 } from './helpers/testServer.js';
 import { INTERVIEW_LIMITS, SESSION_STATUS } from '../src/domain/interview/interviewContract.js';
+import {
+  fakeAnthropicKey,
+  fakeCredentialedUri,
+  fakeGitHubToken,
+  fakeGoogleApiKey,
+  fakeJwt,
+  fakeOpenAiKey,
+  fakePassword,
+  fakePrivateKeyBlock,
+  fakeSecretValue,
+} from './helpers/fakeSecrets.js';
 
 describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
   const TEST_DB_URI =
@@ -33,7 +44,7 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
   describe('1. Sensitive Secrets and Credentials Redaction', () => {
     it('redacts Google / Gemini API keys and preserves surrounding critique', () => {
       const input =
-        'Candidate explained event loop well. Internal debug key: AIzaSyD3x9FakeKey1234567890123456789012 was active.';
+        'Candidate explained event loop well. Internal debug key: ' + fakeGoogleApiKey(39) + ' was active.';
       const { text, redactedSecretsCount } = redactSensitiveSecrets(input);
 
       assert.equal(redactedSecretsCount, 1);
@@ -44,7 +55,7 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
 
     it('redacts OpenAI and Anthropic API keys', () => {
       const input =
-        'Evaluated with OpenAI sk-1234567890abcdef1234567890abcdef and Claude sk-ant-api03-abcdef1234567890abcdef-ZZZZ.';
+        'Evaluated with OpenAI ' + fakeOpenAiKey(35) + ' and Claude ' + fakeAnthropicKey(40) + '.';
       const { text, redactedSecretsCount } = redactSensitiveSecrets(input);
 
       assert.equal(redactedSecretsCount, 2);
@@ -55,7 +66,7 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
 
     it('redacts GitHub tokens and AWS access keys', () => {
       const input =
-        'Pushed to repo using ghp_1234567890abcdef1234567890abcdef12 and AWS key AKIAIOSFODNN7EXAMPLE.';
+        'Pushed to repo using ' + fakeGitHubToken(38) + ' and AWS key AKIAIOSFODNN7EXAMPLE.';
       const { text, redactedSecretsCount } = redactSensitiveSecrets(input);
 
       assert.equal(redactedSecretsCount, 2);
@@ -65,7 +76,7 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
 
     it('redacts Bearer tokens and JSON Web Tokens', () => {
       const input =
-        'Candidate auth header Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.signatureValue123456 was tested.';
+        'Candidate auth header Bearer ' + fakeJwt() + ' was tested.';
       const { text, redactedSecretsCount } = redactSensitiveSecrets(input);
 
       assert.ok(redactedSecretsCount >= 1);
@@ -75,7 +86,7 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
 
     it('redacts database connection URIs containing credentials', () => {
       const input =
-        'Database connection string: mongodb://admin:SuperSecretPass123@cluster0.abc.mongodb.net:27017/prod_db and redis://default:secret@cache:6379.';
+        'Database connection string: ' + fakeCredentialedUri('mongodb', '/prod_db') + ' and ' + fakeCredentialedUri('redis');
       const { text } = redactSensitiveSecrets(input);
 
       assert.ok(!text.includes('SuperSecretPass123'));
@@ -85,21 +96,20 @@ describe('TASK R18 — Evaluator Feedback Safety & Bounding Suite', () => {
     });
 
     it('redacts password and secret assignment patterns', () => {
+      const password = fakePassword();
+      const apiKey = fakeSecretValue(18);
       const input =
-        'Config dump: password="MyVerySecretPassword123!" and api_key=secretKey987654321 and mongodb_uri="mongodb://localhost:27017/test".';
+        `Config dump: password="${password}" and api_key=${apiKey} and mongodb_uri="mongodb://localhost:27017/test".`;
       const { text } = redactSensitiveSecrets(input);
 
-      assert.ok(!text.includes('MyVerySecretPassword123!'));
-      assert.ok(!text.includes('secretKey987654321'));
+      assert.ok(!text.includes(password));
+      assert.ok(!text.includes(apiKey));
       assert.ok(text.includes('[REDACTED_SECRET]') || text.includes('[REDACTED_URI]'));
     });
 
     it('redacts PEM private keys completely', () => {
       const input = `Here is the key:
------BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA0Y8F0VwR...
-...secret private key bytes...
------END RSA PRIVATE KEY-----
+${fakePrivateKeyBlock('FakeKeyBody...\n...secret private key bytes...')}
 Feedback: Good grasp of cryptography.`;
 
       const { text } = redactSensitiveSecrets(input);
@@ -259,7 +269,7 @@ Summary: Solid understanding of closures.`;
     it('executes sanitization, secret redaction, claim neutralization, and bounding simultaneously', () => {
       const rawFeedback = `
         The candidate clearly explained Node.js Event Loop phases and libuv threads.
-        Internal debug note: API_KEY="AIzaSy1234567890abcdef1234567890abcdef" was validated.
+        Internal debug note: API_KEY="${fakeGoogleApiKey(38)}" was validated.
         Error: GoogleGenerativeAIError: quota exceeded
         You are officially verified in Node.js and guaranteed a job offer.
         ` + 'Detailed technical discussion of microtasks and macrotasks. '.repeat(40);
@@ -336,7 +346,7 @@ Summary: Solid understanding of closures.`;
         questionId: 'iq-node-001',
         dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.85, relevance: 0.9 },
         feedback:
-          'Strong explanation of Node.js stream types. You are officially certified in Node.js. Debug token: AIzaSyFakeApiKey1234567890123456789012.',
+          'Strong explanation of Node.js stream types. You are officially certified in Node.js. Debug token: ' + fakeGoogleApiKey(38) + '.',
         strengths: ['Clear explanation of streams', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MX0.sig'],
         growthAreas: ['Explain pipe backpressure'],
         groundedSkills: ['Node.js'],
@@ -442,7 +452,7 @@ Summary: Solid understanding of closures.`;
               dimensions: { accuracy: 0.9, depth: 0.85, clarity: 0.9, relevance: 0.95 },
               compositeScore: 0.9,
               feedback:
-                'Excellent explanation of libuv. Debug: api_key="sk-live-secretKey1234567890abcdef". Candidate is officially verified in Node.js and guaranteed a job offer.',
+                'Excellent explanation of libuv. Debug: api_key="' + fakeOpenAiKey(33) + '". Candidate is officially verified in Node.js and guaranteed a job offer.',
               strengths: [
                 'Clear breakdown of queues',
                 'Candidate is now certified in Node.js backend engineering',
@@ -470,7 +480,7 @@ Summary: Solid understanding of closures.`;
       const publicEvaluation = getRes.body.data.session.questions[0].evaluation;
 
       // Verify secrets are redacted from public API response
-      assert.ok(!publicEvaluation.feedback.includes('sk-live-secretKey1234567890abcdef'));
+      assert.ok(!publicEvaluation.feedback.includes(fakeOpenAiKey(33)));
       assert.ok(!publicEvaluation.strengths[2].includes('AKIAIOSFODNN7EXAMPLE'));
       assert.ok(publicEvaluation.feedback.includes('[REDACTED_SECRET]'));
 

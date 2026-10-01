@@ -211,6 +211,24 @@ Copy the `.env.example` files; never commit a real `.env`. Names only below.
 |---|---|
 | `VITE_API_URL` | Backend base URL, no trailing slash. Browser-visible — never put a secret here |
 
+## Secrets and configuration
+
+- Real credentials live **only** in `server/.env` locally (git-ignored) and in your host's
+  secret settings in deployment. The code reads them from `process.env`
+  (`MONGODB_URI`, `JWT_SECRET`, `GEMINI_API_KEY`).
+- `.env.example` files hold variable names and harmless defaults only — never real values.
+- Tests never use real credentials. Code that detects or redacts secrets is tested with
+  the generated fakes in `server/tests/helpers/fakeSecrets.js`; the test database comes
+  from `MONGODB_URI_TEST` or a local `_test` database.
+- **Commit protection**: `npm install` in `server/` or `client/` enables the
+  `.githooks/pre-commit` hook, which blocks commits containing credentials or `.env`
+  files. It uses [gitleaks](https://github.com/gitleaks/gitleaks) when installed
+  (recommended) and a built-in check otherwise. To enable it without installing:
+  `git config core.hooksPath .githooks`.
+- **CI**: `.github/workflows/secret-scan.yml` runs gitleaks over the full history on every
+  push and pull request, so a secret that bypasses the hook still fails the build.
+- If a credential is ever committed, treat it as exposed: rotate it first, then remove it.
+
 ## Deployment
 
 Nexora is two deployable parts with no platform-specific configuration in the repo:

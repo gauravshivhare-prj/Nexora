@@ -1,0 +1,16 @@
+#!/bin/sh
+# Blocks commits that contain credentials. Enabled automatically by
+# `npm install` in server/ or client/ (git config core.hooksPath .githooks).
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml || {
+    echo "Commit blocked: gitleaks found a possible secret in staged changes." >&2
+    echo "Move real values to server/.env; use tests/helpers/fakeSecrets.js in tests." >&2
+    exit 1
+  }
+else
+  echo "gitleaks not installed; running the built-in secret check (install gitleaks for full coverage)." >&2
+fi
+
+# The built-in check always runs too: it also refuses staged .env files.
+node "$(git rev-parse --show-toplevel)/scripts/check-secrets.mjs"

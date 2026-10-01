@@ -8,6 +8,11 @@ import {
 } from '../src/domain/ai/aiSecurityAuditor.js';
 import { AI_CONTRACT_ID } from '../src/domain/ai/aiContracts.js';
 import {
+  fakeCredentialedUri,
+  fakeGoogleApiKey,
+  fakeJwt,
+} from './helpers/fakeSecrets.js';
+import {
   registerAiProvider,
   requestCompletion,
   resetAiProviders,
@@ -23,7 +28,7 @@ describe('Task 15 — Prompt Injection, AI Privacy & LLM Security Hardening Suit
       const leakyRequest = {
         contractId: AI_CONTRACT_ID.RESUME_EXTRACTION,
         system: 'You are an extraction assistant.',
-        user: 'Here is candidate resume. Internal key: AIzaSyD9ABC1234567890abcdefghijklmnopqr',
+        user: 'Here is candidate resume. Internal key: ' + fakeGoogleApiKey(39),
       };
 
       assert.throws(
@@ -36,7 +41,7 @@ describe('Task 15 — Prompt Injection, AI Privacy & LLM Security Hardening Suit
       const jwtRequest = {
         contractId: AI_CONTRACT_ID.INTERVIEW_EVALUATION,
         system: 'Evaluate answer.',
-        user: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeakThisSignature12345',
+        user: 'Bearer ' + fakeJwt(),
       };
 
       assert.throws(
@@ -47,7 +52,7 @@ describe('Task 15 — Prompt Injection, AI Privacy & LLM Security Hardening Suit
       const dbRequest = {
         contractId: AI_CONTRACT_ID.RESUME_EXTRACTION,
         system: 'Extract data.',
-        user: 'Connect to mongodb+srv://admin:superSecretPassword@cluster0.mongodb.net/prod',
+        user: 'Connect to ' + fakeCredentialedUri('mongodb+srv', '/prod'),
       };
 
       assert.throws(
@@ -130,7 +135,7 @@ describe('Task 15 — Prompt Injection, AI Privacy & LLM Security Hardening Suit
     });
 
     it('redacts server secrets reflected in model responses', () => {
-      const rawResponse = 'Evaluator processed answer using apiKey: AIzaSyB1234567890abcdefghijklmnopqr';
+      const rawResponse = 'Evaluator processed answer using apiKey: ' + fakeGoogleApiKey(35);
       const audited = auditInboundAiResponse(rawResponse);
 
       assert.ok(audited.violations.includes(AI_SECURITY_VIOLATION_TYPE.SECRET_LEAK_PREVENTED));
@@ -165,7 +170,7 @@ describe('Task 15 — Prompt Injection, AI Privacy & LLM Security Hardening Suit
         const badReq = {
           contractId: AI_CONTRACT_ID.INTERVIEW_EVALUATION,
           system: 'Evaluate answer.',
-          user: 'Secret key leaked: AIzaSyA1234567890abcdefghijklmnopqr',
+          user: 'Secret key leaked: ' + fakeGoogleApiKey(35),
         };
 
         await assert.rejects(
