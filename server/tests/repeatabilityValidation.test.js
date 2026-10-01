@@ -25,7 +25,7 @@ describe('TASK A25 — Repeatability & Determinism Validation Suite', () => {
 
   // Helper to clone an object cleanly
   function clone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+    return structuredClone(obj);
   }
 
   // =========================================================================

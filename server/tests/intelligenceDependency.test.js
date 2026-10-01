@@ -235,8 +235,13 @@ describe('intelligence dependency & architecture audit', () => {
         basedOn: { catalogueVersion: CATALOGUE_VERSION },
       });
 
-      assert.deepEqual(readiness.required, gap.summary.required);
-      assert.deepEqual(readiness.preferred, gap.summary.preferred);
+      // Readiness projects only the core count fields from gap.summary;
+      // gap.summary may include additional fields (partiallySatisfied, prerequisiteBlockers)
+      // that readiness intentionally does not surface.
+      const countKeys = ['total', 'missing', 'claimed', 'supported', 'verified'];
+      const pickCounts = (obj) => Object.fromEntries(countKeys.map((k) => [k, obj[k]]));
+      assert.deepEqual(readiness.required, pickCounts(gap.summary.required));
+      assert.deepEqual(readiness.preferred, pickCounts(gap.summary.preferred));
     });
 
     it('strictly isolates blockingSkills to unverified required skills', () => {

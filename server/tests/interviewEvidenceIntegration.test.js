@@ -349,7 +349,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
       );
       assert.equal(res.status, 400);
       assert.equal(res.body.errorCode, ERROR_CODES.VALIDATION_ERROR);
-      assert.match(res.body.message, /Unknown canonical skill/);
+      assert.match(res.body.message, /not recognized in the canonical/);
     });
   });
 

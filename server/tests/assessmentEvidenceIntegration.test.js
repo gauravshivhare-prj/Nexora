@@ -239,7 +239,7 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
       assert.ok(nodeGapAfter);
       assert.equal(nodeGapAfter.status, 'verified');
       assert.match(nodeGapAfter.reason, /independently checked/i);
-      assert.match(nodeGapAfter.reason, /Passed assessment for Node\.js/i);
+      assert.match(nodeGapAfter.reason, /VERIFIED from assessment.*Node\.js/i);
       assert.deepEqual(nodeGapAfter.suggestedEvidence, []);
       assert.equal(gapAfter.summary.required.verified, 1);
       assert.equal(gapAfter.summary.required.claimed, 0);
@@ -568,7 +568,7 @@ describe('A8 — Assessment → Evidence Integration & Anti-Forgery Regressions'
       });
       assert.equal(res.status, 400);
       assert.equal(res.body.errorCode, 'VALIDATION_ERROR');
-      assert.match(res.body.message, /Unknown canonical skill/);
+      assert.match(res.body.message, /not recognized in the canonical/);
     });
 
     it('cross-tenant attempt submission returns 404 and creates zero evidence for either student', async () => {

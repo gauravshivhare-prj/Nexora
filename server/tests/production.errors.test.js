@@ -41,6 +41,7 @@ describe('production error contract', () => {
       env: {
         ...process.env,
         NODE_ENV: 'production',
+        AI_PROVIDER: '',
         PORT: String(port),
         MONGODB_URI: resolveTestDatabaseUri(),
       },

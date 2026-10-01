@@ -104,6 +104,9 @@ export async function connectBrowser(debugPort) {
     );
   }
 
+  // Vite dev server compiles on the first request; allow more time for that.
+  let hasCompletedFirstMount = false;
+
   return {
     evaluate,
     waitFor,
@@ -111,9 +114,12 @@ export async function connectBrowser(debugPort) {
 
     async goto(url) {
       await send('Page.navigate', { url });
+      const mountTimeout = hasCompletedFirstMount ? 10_000 : 30_000;
       await waitFor('document.querySelector("#root")?.children.length > 0', {
+        timeoutMs: mountTimeout,
         description: 'the React app to mount',
       });
+      hasCompletedFirstMount = true;
     },
 
     async reload() {
