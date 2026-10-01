@@ -3,6 +3,10 @@ import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logger } from '../../utils/logger.js';
 import { getAiContract } from '../../domain/ai/aiContracts.js';
+import {
+  auditOutboundAiRequest,
+  auditInboundAiResponse,
+} from '../../domain/ai/aiSecurityAuditor.js';
 
 /**
  * The boundary between Nexora's domain logic and whichever model provider is
@@ -143,6 +147,9 @@ export async function requestCompletion(request) {
     }
   }
 
+  // Security & Data Minimization Audit on outbound request
+  auditOutboundAiRequest(effectiveRequest);
+
   let result;
   try {
     result = await provider.complete(effectiveRequest);
@@ -171,11 +178,20 @@ export async function requestCompletion(request) {
     );
   }
 
+  // Security & Exfiltration Audit on inbound model response
+  const audited = auditInboundAiResponse(result.text, request?.contractId);
+  if (audited.violations.length > 0) {
+    logger.warn(`AI inbound security audit triggered on ${provider.name}`, {
+      violations: audited.violations,
+    });
+  }
+
   return {
-    text: result.text,
+    text: audited.sanitizedText,
     model: result.model ?? provider.name,
     contractId: request?.contractId ?? null,
     contractVersion: request?.contractVersion ?? null,
+    securityViolations: audited.violations,
   };
 }
 
