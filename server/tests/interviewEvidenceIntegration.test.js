@@ -327,7 +327,7 @@ describe('R11 — Interview Evidence Integration & Anti-Bypass Regressions', () 
       );
       assert.equal(res.status, 400);
       assert.equal(res.body.errorCode, ERROR_CODES.VALIDATION_ERROR);
-      assert.match(res.body.message, /evaluatedBy must be "human" or "ai"/);
+      assert.match(res.body.message, /(?:evaluatedBy|[Ii]nterview evaluator) must be "human" or "ai"/);
     });
 
     it('rejects uncanonical skill claims on direct interview evidence submission', async () => {
