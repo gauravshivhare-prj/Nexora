@@ -56,7 +56,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$status" -eq 3 ]; then
     findings="$(node -e '
       const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-      for (const f of r) console.log(`${f.File.split(String.fromCharCode(92)).join("/")}:${f.StartLine}  ${f.RuleID}  (commit ${f.Commit.slice(0, 7)})`);
+      console.log(r.map((f) => `${f.File.split(String.fromCharCode(92)).join("/")}:${f.StartLine}  ${f.RuleID}  (commit ${f.Commit.slice(0, 7)})`).join(String.fromCharCode(10) + "  "));
     ' "$REPORT_NODE" 2>/dev/null)"
     # shellcheck disable=SC2086
     block "possible secret in the commits being pushed to $remote_ref (values not shown)." \

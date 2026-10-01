@@ -9,7 +9,7 @@ for c in "$ROOT/.tools/gitleaks.exe" "$ROOT/.tools/gitleaks" "$(command -v gitle
 done
 
 if [ -n "$GITLEAKS" ]; then
-  "$GITLEAKS" git --pre-commit --staged --redact --no-banner --config "$ROOT/.gitleaks.toml" || {
+  "$GITLEAKS" git --pre-commit --staged --redact --no-banner --log-level warn --config "$ROOT/.gitleaks.toml" || {
     echo "Commit blocked: gitleaks found a possible secret in staged changes." >&2
     echo "Move real values to server/.env; use tests/helpers/fakeSecrets.js in tests." >&2
     exit 1
