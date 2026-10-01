@@ -8,7 +8,23 @@ import {
   SEMESTER_LIMITS,
   SKILL_LEVEL_VALUES,
 } from '../constants/profilePolicy.js';
-import { StudentProfile, emptyProfile, toPublicProfile } from '../models/index.js';
+import { Resume, StudentProfile, emptyProfile, toPublicProfile } from '../models/index.js';
+import {
+  normalizeSkills,
+  normalizeDegree,
+  normalizeBranch,
+  normalizeCollegeName,
+  normalizeProjectTechnologies,
+  normalizeCareerPreferences,
+  calculateProfileCompleteness,
+  generateAuditDiff,
+} from '../domain/profile/profileNormalizer.js';
+import {
+  reconcileProfileWithResume,
+  assertAiMutationBoundary,
+} from '../domain/profile/profileResumeReconciler.js';
+import { resolveCanonicalSkill } from '../domain/skills/skillOntology.js';
+import { canonicalSkill } from '../domain/skills/skillKey.js';
 import {
   checkDate,
   checkEnum,
@@ -435,24 +451,72 @@ export async function getProfile(userId) {
  * @returns {Promise<object>} The saved profile, in its public shape.
  * @throws {ApiError} 400 listing every field that failed.
  */
-export async function updateProfile(userId, payload) {
+function extractSection(changes, sectionName) {
+  const result = {};
+  const prefix = `${sectionName}.`;
+  for (const [k, v] of Object.entries(changes)) {
+    if (k.startsWith(prefix)) {
+      result[k.slice(prefix.length)] = v;
+    }
+  }
+  return result;
+}
+
+export async function updateProfile(userId, payload, options = {}) {
   const changes = validateProfilePatch(payload);
+  const source = options.source || 'user_direct';
+
+  const existing = await StudentProfile.findOne({ user: userId });
+
+  // Enforce AI Mutation Boundary: AI hints cannot directly overwrite user-entered fields
+  assertAiMutationBoundary(source, existing, changes);
+
+  // Attach canonical provenance to skills without altering student's entered name
+  if (Array.isArray(changes.skills)) {
+    changes.skills = changes.skills.map((skill) => {
+      const canonical = resolveCanonicalSkill(skill.name) || canonicalSkill(skill.name);
+      return {
+        ...skill,
+        canonicalSkillId: canonical?.id || null,
+        evidenceTier: 'claimed',
+      };
+    });
+  }
+
+  // Audit trail diff
+  const auditDiff = generateAuditDiff(existing?.toObject?.() || {}, changes, source);
+
+  // Compute completeness
+  const mockMerged = {
+    personal: { ...existing?.personal?.toObject?.(), ...extractSection(changes, 'personal') },
+    academic: { ...existing?.academic?.toObject?.(), ...extractSection(changes, 'academic') },
+    career: { ...existing?.career?.toObject?.(), ...extractSection(changes, 'career') },
+    skills: changes.skills || existing?.skills || [],
+    projects: changes.projects || existing?.projects || [],
+    certifications: changes.certifications || existing?.certifications || [],
+    updatedAt: new Date(),
+  };
+  changes.completeness = calculateProfileCompleteness(mockMerged);
+  changes.lastVerifiedAt = new Date();
+  changes.version = (existing?.version || 0) + 1;
+
+  const updateOp = {
+    $set: changes,
+    $setOnInsert: { user: userId },
+  };
+  if (auditDiff.length > 0) {
+    updateOp.$push = {
+      auditTrail: { $each: auditDiff.slice(0, 50), $slice: -100 },
+    };
+  }
 
   try {
     const profile = await StudentProfile.findOneAndUpdate(
       { user: userId },
-      {
-        $set: changes,
-        // Only applied when the upsert creates the document, so an existing
-        // profile's owner is never rewritten.
-        $setOnInsert: { user: userId },
-      },
+      updateOp,
       {
         new: true,
         upsert: true,
-        // Schema limits are a backstop behind the validator above. They would
-        // not run on an update otherwise, leaving the database rules unenforced
-        // for every path except document creation.
         runValidators: true,
         setDefaultsOnInsert: true,
       },
@@ -461,10 +525,10 @@ export async function updateProfile(userId, payload) {
     return toPublicProfile(profile);
   } catch (err) {
     if (err.code === 11000) {
-      // Race condition during upsert insert: retry update directly now that the doc exists
+      delete updateOp.$setOnInsert;
       const profile = await StudentProfile.findOneAndUpdate(
         { user: userId },
-        { $set: changes },
+        updateOp,
         {
           new: true,
           runValidators: true,
@@ -476,4 +540,39 @@ export async function updateProfile(userId, payload) {
     }
     throw err;
   }
+}
+
+/**
+ * Reconciles current student profile against the newest uploaded or parsed resume.
+ *
+ * @param {string} userId
+ * @returns {Promise<object>} Reconciliation report with conflicts and suggestions
+ */
+export async function reconcileProfile(userId) {
+  const profile = await StudentProfile.findOne({ user: userId });
+  const resume = await Resume.findOne({ user: userId }).sort({ createdAt: -1 });
+
+  return reconcileProfileWithResume(profile, resume);
+}
+
+/**
+ * Allows a student to explicitly confirm a suggested or reconciled field.
+ *
+ * @param {string} userId
+ * @param {{ field: string, value: any, source?: string }} payload
+ * @returns {Promise<object>} Updated public profile
+ */
+export async function confirmField(userId, { field, value, source = 'user_confirmed' }) {
+  if (!field || typeof field !== 'string') {
+    throw new Error('Field path is required for confirmation.');
+  }
+
+  const payload = {};
+  const parts = field.split('.');
+  if (parts.length === 1) {
+    payload[parts[0]] = value;
+  } else if (parts.length === 2) {
+    payload[parts[0]] = { [parts[1]]: value };
+  }
+  return updateProfile(userId, payload, { source });
 }

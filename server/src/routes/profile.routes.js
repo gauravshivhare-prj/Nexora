@@ -1,6 +1,11 @@
 import { Router } from 'express';
 
-import { readProfile, saveProfile } from '../controllers/profile.controller.js';
+import {
+  confirmProfileField,
+  readProfile,
+  readProfileReconciliation,
+  saveProfile,
+} from '../controllers/profile.controller.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 /**
@@ -20,5 +25,7 @@ router.use(requireAuth);
 
 router.get('/', readProfile);
 router.patch('/', saveProfile);
+router.get('/reconcile', readProfileReconciliation);
+router.post('/confirm-field', confirmProfileField);
 
 export default router;

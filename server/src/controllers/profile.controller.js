@@ -1,4 +1,4 @@
-import { getProfile, updateProfile } from '../services/profile.service.js';
+import { confirmField, getProfile, reconcileProfile, updateProfile } from '../services/profile.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
@@ -35,6 +35,37 @@ export const saveProfile = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Profile saved',
+    data: { profile, exists: true },
+  });
+});
+
+/**
+ * GET /api/profile/reconcile
+ *
+ * Runs deterministic reconciliation between profile facts and newest active resume facts.
+ */
+export const readProfileReconciliation = asyncHandler(async (req, res) => {
+  const report = await reconcileProfile(req.auth.userId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Profile and resume reconciliation report generated',
+    data: report,
+  });
+});
+
+/**
+ * POST /api/profile/confirm-field
+ *
+ * Explicitly confirms or resolves an AI-suggested or reconciled profile field.
+ */
+export const confirmProfileField = asyncHandler(async (req, res) => {
+  const { field, value, source } = req.body || {};
+  const profile = await confirmField(req.auth.userId, { field, value, source });
+
+  res.status(200).json({
+    success: true,
+    message: `Field ${field} confirmed and updated`,
     data: { profile, exists: true },
   });
 });

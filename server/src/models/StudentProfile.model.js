@@ -45,6 +45,8 @@ const skillSchema = new mongoose.Schema(
       required: true,
       enum: SKILL_LEVEL_VALUES,
     },
+    canonicalSkillId: { type: String, default: null },
+    evidenceTier: { type: String, default: 'claimed' },
   },
   SUBDOCUMENT_OPTIONS,
 );
@@ -124,6 +126,16 @@ const studentProfileSchema = new mongoose.Schema(
     skills: { type: [skillSchema], default: [] },
     projects: { type: [projectSchema], default: [] },
     certifications: { type: [certificationSchema], default: [] },
+
+    // --- Task 06 Lifecycle, Auditability & Freshness ---
+    version: { type: Number, default: 1 },
+    completeness: {
+      percentage: { type: Number, default: 0 },
+      status: { type: String, default: 'incomplete' },
+      missingSections: { type: [String], default: [] },
+    },
+    lastVerifiedAt: { type: Date, default: null },
+    auditTrail: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   { timestamps: true },
 );
@@ -141,6 +153,15 @@ const studentProfileSchema = new mongoose.Schema(
  */
 export function toPublicProfile(profile) {
   return {
+    version: profile.version ?? 1,
+    completeness: profile.completeness
+      ? {
+          percentage: profile.completeness.percentage ?? 0,
+          status: profile.completeness.status ?? 'incomplete',
+          missingSections: profile.completeness.missingSections ?? [],
+        }
+      : { percentage: 0, status: 'incomplete', missingSections: [] },
+    lastVerifiedAt: profile.lastVerifiedAt ? profile.lastVerifiedAt.toISOString() : null,
     personal: {
       phone: profile.personal?.phone ?? null,
       dateOfBirth: toCalendarDate(profile.personal?.dateOfBirth),
@@ -162,7 +183,10 @@ export function toPublicProfile(profile) {
       careerInterests: profile.career?.careerInterests ?? [],
       bio: profile.career?.bio ?? null,
     },
-    skills: (profile.skills ?? []).map((skill) => ({ name: skill.name, level: skill.level })),
+    skills: (profile.skills ?? []).map((skill) => ({
+      name: skill.name,
+      level: skill.level,
+    })),
     projects: (profile.projects ?? []).map((project) => ({
       title: project.title,
       description: project.description ?? null,
