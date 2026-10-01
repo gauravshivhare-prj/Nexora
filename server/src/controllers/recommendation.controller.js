@@ -1,4 +1,5 @@
 import {
+  executeBenchmark,
   getRoleDetails,
   listRoles,
   recommendRoles,
@@ -142,6 +143,21 @@ export const roadmap = asyncHandler(async (req, res) => {
       data.roadmap.items.length > 0
         ? 'Roadmap generated'
         : 'No roadmap needed — you already meet what this role asks for',
+    data,
+  });
+});
+
+/**
+ * GET /api/careers/benchmark
+ *
+ * Runs the evaluation benchmark suite against ground-truth personas and adversarial cases.
+ */
+export const benchmark = asyncHandler(async (_req, res) => {
+  const data = executeBenchmark();
+
+  res.status(200).json({
+    success: true,
+    message: 'Recommendation evaluation benchmark completed',
     data,
   });
 });

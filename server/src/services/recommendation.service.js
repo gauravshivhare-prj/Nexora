@@ -1,6 +1,7 @@
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { CAREER_ROLES, CATALOGUE_SOURCE, findRole } from '../domain/careers/roleCatalogue.js';
 import { rankRoles, scoreRoleMatch, validateRecommendation } from '../domain/careers/matchRole.js';
+import { runRecommendationBenchmark } from '../domain/careers/recommendationBenchmark.js';
 import { DIMENSION_WEIGHTS, WEIGHTS_VERSION } from '../domain/careers/scoring.js';
 import { CareerTwin } from '../models/index.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -210,4 +211,11 @@ export function getRoleDetails(roleId) {
     },
     source: CATALOGUE_SOURCE,
   };
+}
+
+/**
+ * Executes the ground-truth benchmark and evaluation framework for career recommendations.
+ */
+export function executeBenchmark() {
+  return runRecommendationBenchmark();
 }
