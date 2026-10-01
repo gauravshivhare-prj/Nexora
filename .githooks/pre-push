@@ -38,6 +38,11 @@ scanned=0
 
 # git passes one line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>
 while read -r local_ref local_sha remote_ref remote_sha; do
+  remote_sha="$(printf '%s' "$remote_sha" | tr -d '\r')"
+  local_sha="$(printf '%s' "$local_sha" | tr -d '\r')"
+  local_ref="$(printf '%s' "$local_ref" | tr -d '\r')"
+  remote_ref="$(printf '%s' "$remote_ref" | tr -d '\r')"
+
   [ "$local_sha" = "$ZERO" ] && continue # deleting a remote ref pushes no content
 
   if [ "$remote_sha" = "$ZERO" ]; then

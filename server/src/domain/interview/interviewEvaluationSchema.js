@@ -97,6 +97,8 @@ export const INJECTION_PATTERNS = Object.freeze([
   /\bon(error|load|click|mouseover|focus|blur)\s*=/i,
   /data:text\/(html|javascript)/i,
   /\bsrcdoc\s*=/i,
+  /\[REDACTED_SCRIPT\]/i,
+  /\[REDACTED_IMAGE_EXFILTRATION\]/i,
 
   // SQL / Command injection primitives
   /\bDROP\s+TABLE\b/i,
@@ -273,7 +275,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         validFeedback = boundFeedbackSummary(trimmed);
       }
     } else if (hasInjectionContent(trimmed)) {
-      const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(trimmed);
+      const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(|\[REDACTED_SCRIPT\]/i.test(trimmed);
       if (hasXss || !options.allowInjectionEcho) {
         errors.push('Feedback summary contains potentially unsafe or injection-like content.');
       } else {
@@ -305,7 +307,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Strength at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
-          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
+          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(|\[REDACTED_SCRIPT\]/i.test(item);
           if (hasXss || !options.allowInjectionEcho) {
             errors.push(`Strength at index ${i} contains injection-like content.`);
           } else {
@@ -339,7 +341,7 @@ export function validateAiEvaluationJson(rawInput, options = {}) {
         } else if (strict && !boundFeedback && item.trim().length > 250) {
           errors.push(`Growth area at index ${i} exceeds maximum length of 250 characters.`);
         } else if (hasInjectionContent(item)) {
-          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(/i.test(item);
+          const hasXss = /<\s*(script|iframe)\b|javascript:|onerror=|eval\(|\[REDACTED_SCRIPT\]/i.test(item);
           if (hasXss || !options.allowInjectionEcho) {
             errors.push(`Growth area at index ${i} contains injection-like content.`);
           } else {
