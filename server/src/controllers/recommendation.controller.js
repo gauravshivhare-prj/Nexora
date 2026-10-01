@@ -1,4 +1,5 @@
 import {
+  getRoleDetails,
   listRoles,
   recommendRoles,
   scoreAgainstRole,
@@ -20,6 +21,21 @@ export const roles = asyncHandler(async (_req, res) => {
   res.status(200).json({
     success: true,
     message: 'Career roles retrieved',
+    data,
+  });
+});
+
+/**
+ * GET /api/careers/roles/:roleId
+ *
+ * Returns detailed structured requirements and expectations for one career role.
+ */
+export const roleDetails = asyncHandler(async (req, res) => {
+  const data = getRoleDetails(req.params.roleId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Career role details retrieved',
     data,
   });
 });

@@ -157,6 +157,7 @@ export async function scoreAgainstRole(userId, roleId) {
 export function listRoles() {
   return {
     roles: CAREER_ROLES.map((role) => ({
+      canonicalId: role.canonicalId || `role_${role.id.replace(/-/g, '_')}`,
       id: role.id,
       title: role.title,
       category: role.category,
@@ -164,7 +165,47 @@ export function listRoles() {
       requiredSkills: role.requiredSkills,
       preferredSkills: role.preferredSkills,
       relatedTechnologies: role.relatedTechnologies,
+      prerequisites: role.prerequisites || [],
+      proficiencyExpectations: role.proficiencyExpectations || null,
+      evidenceExpectations: role.evidenceExpectations || null,
+      metadata: role.metadata || null,
     })),
+    source: CATALOGUE_SOURCE,
+  };
+}
+
+/**
+ * Returns full structured requirement details for one career role.
+ *
+ * @param {string} roleId
+ * @returns {object} Role details with structured requirements and expectations
+ */
+export function getRoleDetails(roleId) {
+  const role = findRole(roleId);
+  if (!role) {
+    throw ApiError.notFound(
+      'No career role was found with that id.',
+      ERROR_CODES.CAREER_ROLE_NOT_FOUND,
+    );
+  }
+
+  return {
+    role: {
+      canonicalId: role.canonicalId || `role_${role.id.replace(/-/g, '_')}`,
+      id: role.id,
+      title: role.title,
+      category: role.category,
+      summary: role.summary,
+      requiredSkills: role.requiredSkills,
+      preferredSkills: role.preferredSkills,
+      relatedTechnologies: role.relatedTechnologies,
+      commonBackgrounds: role.commonBackgrounds || [],
+      prerequisites: role.prerequisites || [],
+      proficiencyExpectations: role.proficiencyExpectations || null,
+      evidenceExpectations: role.evidenceExpectations || null,
+      competencyRelationships: role.competencyRelationships || [],
+      metadata: role.metadata || null,
+    },
     source: CATALOGUE_SOURCE,
   };
 }

@@ -4,6 +4,7 @@ import {
   recommendations,
   readiness,
   roadmap,
+  roleDetails,
   roleMatch,
   roles,
   skillGap,
@@ -26,6 +27,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/roles', roles);
+router.get('/roles/:roleId', roleDetails);
 router.get('/roles/:roleId/match', roleMatch);
 router.get('/roles/:roleId/skill-gap', skillGap);
 router.get('/roles/:roleId/readiness', readiness);
