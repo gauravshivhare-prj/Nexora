@@ -278,7 +278,7 @@ Summary: Solid understanding of closures.`;
         'Accurate breakdown of timers vs check phases',
         'Demonstrated understanding of process.nextTick priority',
         'Candidate is now certified in Node.js backend engineering',
-        'Great clarity with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.secretSig',
+        'Great clarity with Bearer ' + fakeJwt(),
         'Strength 5',
         'Strength 6 (should be dropped)',
       ];
@@ -347,7 +347,7 @@ Summary: Solid understanding of closures.`;
         dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.85, relevance: 0.9 },
         feedback:
           'Strong explanation of Node.js stream types. You are officially certified in Node.js. Debug token: ' + fakeGoogleApiKey(38) + '.',
-        strengths: ['Clear explanation of streams', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MX0.sig'],
+        strengths: ['Clear explanation of streams', 'Bearer ' + fakeJwt()],
         growthAreas: ['Explain pipe backpressure'],
         groundedSkills: ['Node.js'],
       };
