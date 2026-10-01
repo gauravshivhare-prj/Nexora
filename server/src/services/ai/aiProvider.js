@@ -2,6 +2,7 @@ import { ERROR_CODES } from '../../constants/errorCodes.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logger } from '../../utils/logger.js';
+import { getAiContract } from '../../domain/ai/aiContracts.js';
 
 /**
  * The boundary between Nexora's domain logic and whichever model provider is
@@ -128,9 +129,23 @@ export function resolveAiProvider() {
 export async function requestCompletion(request) {
   const provider = resolveAiProvider();
 
+  let effectiveRequest = request;
+  if (request?.contractId) {
+    const contract = getAiContract(request.contractId);
+    if (contract?.contextLimits?.maxOutputTokens) {
+      effectiveRequest = {
+        ...request,
+        maxOutputTokens: Math.min(
+          request.maxOutputTokens || contract.contextLimits.maxOutputTokens,
+          contract.contextLimits.maxOutputTokens,
+        ),
+      };
+    }
+  }
+
   let result;
   try {
-    result = await provider.complete(request);
+    result = await provider.complete(effectiveRequest);
   } catch (error) {
     logger.error(`AI provider "${provider.name}" failed`, {
       errorType: error?.name ?? 'UnknownError',
@@ -156,7 +171,12 @@ export async function requestCompletion(request) {
     );
   }
 
-  return { text: result.text, model: result.model ?? provider.name };
+  return {
+    text: result.text,
+    model: result.model ?? provider.name,
+    contractId: request?.contractId ?? null,
+    contractVersion: request?.contractVersion ?? null,
+  };
 }
 
 /** Clears the registry. Exists so a test run does not leak state between suites. */

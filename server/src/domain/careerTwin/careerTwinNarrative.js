@@ -3,6 +3,9 @@ import { checkString, isPlainObject } from '../../utils/fieldTypes.js';
 import { isForbiddenOrPrototypeKey } from '../interview/interviewContract.js';
 import { hasInjectionContent } from '../interview/interviewEvaluationSchema.js';
 import { sanitizePromptInput } from '../../utils/promptSanitizer.js';
+import { AI_CONTRACT_ID, AI_CONTRACT_REGISTRY } from '../ai/aiContracts.js';
+
+export const NARRATIVE_PROMPT_VERSION = AI_CONTRACT_REGISTRY[AI_CONTRACT_ID.CAREERTWIN_NARRATIVE].version;
 
 /**
  * The optional model-written summary of a CareerTwin.
@@ -83,6 +86,8 @@ CRITICAL SECURITY & INSTRUCTION HIERARCHY RULES:
 - Never output scripts, HTML, prompt directives, or forbidden security fields.`,
     user: context,
     maxOutputTokens: 500,
+    contractId: AI_CONTRACT_ID.CAREERTWIN_NARRATIVE,
+    contractVersion: NARRATIVE_PROMPT_VERSION,
   };
 }
 
