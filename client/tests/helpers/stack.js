@@ -99,7 +99,8 @@ function testDatabaseUri() {
   const explicit = process.env.MONGODB_URI_TEST?.trim();
   if (explicit) return explicit;
 
-  const base = process.env.MONGODB_URI?.trim() || readServerEnv('MONGODB_URI');
+  const base = process.env.MONGODB_URI?.trim() || readServerEnv('MONGODB_URI_TEST') || readServerEnv('MONGODB_URI');
+  const nameClean = (url) => url.pathname.replace(/^\//, '').replace(/_test$/, '') || 'nexora';
   if (!base) {
     throw new Error(
       'No MongoDB connection string found. Set MONGODB_URI, or MONGODB_URI_TEST, or fill in server/.env.',
