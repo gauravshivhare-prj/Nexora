@@ -1,4 +1,4 @@
-import { generateCareerTwin, getCareerTwin } from '../services/careerTwin.service.js';
+import { generateCareerTwin, getCareerTwin, rebuildCareerTwin } from '../services/careerTwin.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
@@ -38,12 +38,31 @@ export const read = asyncHandler(async (req, res) => {
  */
 export const generate = asyncHandler(async (req, res) => {
   const withNarrative = req.query.narrative === 'true';
+  const forceRebuild = req.query.rebuild === 'true' || req.body?.rebuild === true;
 
-  const twin = await generateCareerTwin(req.auth.userId, { withNarrative });
+  const twin = forceRebuild
+    ? await rebuildCareerTwin(req.auth.userId, { withNarrative })
+    : await generateCareerTwin(req.auth.userId, { withNarrative });
 
   res.status(200).json({
     success: true,
-    message: 'CareerTwin generated',
+    message: forceRebuild ? 'CareerTwin rebuilt from canonical sources' : 'CareerTwin generated',
+    data: { careerTwin: twin, exists: true },
+  });
+});
+
+/**
+ * POST /api/career-twin/rebuild
+ *
+ * Explicitly forces deletion of cached CareerTwin and re-projects from canonical student sources.
+ */
+export const rebuild = asyncHandler(async (req, res) => {
+  const withNarrative = req.query.narrative === 'true';
+  const twin = await rebuildCareerTwin(req.auth.userId, { withNarrative });
+
+  res.status(200).json({
+    success: true,
+    message: 'CareerTwin rebuilt from canonical sources',
     data: { careerTwin: twin, exists: true },
   });
 });

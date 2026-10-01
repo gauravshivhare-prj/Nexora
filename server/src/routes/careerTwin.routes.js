@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { RATE_LIMIT_POLICY } from '../constants/authPolicy.js';
-import { generate, read } from '../controllers/careerTwin.controller.js';
+import { generate, read, rebuild } from '../controllers/careerTwin.controller.js';
 import { createRateLimiter } from '../middleware/rateLimiter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -29,5 +29,6 @@ export const generateLimiter = createRateLimiter(RATE_LIMIT_POLICY.careerTwin);
 
 router.get('/', read);
 router.post('/', generateLimiter, generate);
+router.post('/rebuild', generateLimiter, rebuild);
 
 export default router;

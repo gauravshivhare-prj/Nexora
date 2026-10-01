@@ -363,11 +363,13 @@ export async function loadVerifiedEvidence(userId) {
   return verifiedChecks.map((check) => ({
     skill: check.skillName,
     completedAt: check.completedAt,
+    score: check.score,
     evidence: {
       source: check.kind,
       strength: 'verified',
       detail: check.detail || `${check.kind === CHECK_KINDS.ASSESSMENT ? 'Passed assessment' : 'Passed interview'} for ${check.skillName} with score ${check.score}.`,
       reference: check.reference,
+      score: check.score,
     },
   }));
 }

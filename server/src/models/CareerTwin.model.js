@@ -40,6 +40,10 @@ const evidenceSchema = new mongoose.Schema(
     detail: { type: String, required: true, maxlength: 500 },
     /** Id or title of the record this came from, for tracing it back. */
     reference: { type: String, default: null, maxlength: 200 },
+    provenanceTier: { type: String, default: 'tier_1_claimed' },
+    verified: { type: Boolean, default: false },
+    recordedAt: { type: Date, default: null },
+    score: { type: Number, default: null },
   },
   SUBDOCUMENT_OPTIONS,
 );
@@ -50,8 +54,18 @@ const twinSkillSchema = new mongoose.Schema(
     key: { type: String, required: true },
     /** Display spelling. */
     name: { type: String, required: true },
+    /** Canonical skill ontology ID (e.g. sk_nodejs). */
+    skillId: { type: String, default: null },
+    /** Canonical ontology category (e.g. backend, frontend). */
+    category: { type: String, default: 'general' },
     /** The strongest evidence behind it — never an average. */
     strength: { type: String, enum: EVIDENCE_STRENGTH_VALUES, required: true },
+    /** Current state synonym (claimed, supported, verified). */
+    state: { type: String, enum: EVIDENCE_STRENGTH_VALUES, default: 'claimed' },
+    /** Deterministically derived proficiency level. */
+    proficiency: { type: String, enum: ['beginner', 'intermediate', 'advanced'], default: 'beginner' },
+    /** Deterministic evidence confidence score [0.10, 1.00]. */
+    confidence: { type: Number, min: 0, max: 1, default: 0.35 },
     /**
      * What the student called their own level, if they said.
      *
@@ -61,7 +75,14 @@ const twinSkillSchema = new mongoose.Schema(
      */
     selfDeclaredLevel: { type: String, default: null },
     evidence: { type: [evidenceSchema], default: [] },
+    sources: { type: [String], default: [] },
     sourceCount: { type: Number, default: 0 },
+    lastUpdate: { type: Date, default: null },
+    roleRelevance: {
+      isTargetRoleSkill: { type: Boolean, default: false },
+      relevanceTier: { type: String, enum: ['required', 'preferred', 'transferable', 'general'], default: 'general' },
+      targetRolesMatched: { type: [String], default: [] },
+    },
   },
   SUBDOCUMENT_OPTIONS,
 );
@@ -158,6 +179,7 @@ const careerTwinSchema = new mongoose.Schema(
       resumeCount: { type: Number, default: 0 },
       analysedResumeIds: { type: [String], default: [] },
       verifiedEvidenceCount: { type: Number, default: 0 },
+      canonicalVersion: { type: String, default: '1.0.0' },
     },
 
     generatedAt: { type: Date, required: true },
@@ -185,6 +207,7 @@ export function isCareerTwinStale(
     latestAnalysisAt = null,
     latestEvidenceAt = null,
     verifiedEvidenceCount = null,
+    canonicalVersion = null,
   },
 ) {
   const reasons = [];
@@ -202,17 +225,6 @@ export function isCareerTwinStale(
   if (now.size !== before.size || [...now].some((id) => !before.has(id))) {
     reasons.push('Your analysed resumes have changed since this was generated.');
   } else if (
-    /*
-     * The same resumes, analysed again.
-     *
-     * Comparing the *set* of ids cannot see this: re-running the analysis
-     * keeps the id and replaces the parsed data, so every skill the twin
-     * rests on can change while the set stays identical. The twin would
-     * then quietly present evidence that no longer exists.
-     *
-     * Only checked when the ids match, so a student who added a resume gets
-     * the more specific reason above rather than both.
-     */
     latestAnalysisAt &&
     twin.generatedAt &&
     new Date(latestAnalysisAt) > new Date(twin.generatedAt)
@@ -238,6 +250,10 @@ export function isCareerTwinStale(
     reasons.push('New skill evidence has been recorded since this was generated.');
   }
 
+  if (canonicalVersion && twin.sources?.canonicalVersion && twin.sources.canonicalVersion !== canonicalVersion) {
+    reasons.push('Underlying canonical student schema version changed.');
+  }
+
   return { isStale: reasons.length > 0, reasons };
 }
 
@@ -252,14 +268,36 @@ export function toPublicCareerTwin(twin, staleness = { isStale: false, reasons: 
     skills: (twin.skills ?? []).map((skill) => ({
       key: skill.key,
       name: skill.name,
+      skillId: skill.skillId ?? `sk_${skill.key}`,
+      category: skill.category ?? 'general',
       strength: skill.strength,
+      state: skill.state ?? skill.strength,
+      proficiency: skill.proficiency ?? 'beginner',
+      confidence: typeof skill.confidence === 'number' ? skill.confidence : 0.35,
       selfDeclaredLevel: skill.selfDeclaredLevel ?? null,
+      sources: skill.sources ?? [],
       sourceCount: skill.sourceCount ?? 0,
+      lastUpdate: skill.lastUpdate ?? null,
+      roleRelevance: skill.roleRelevance
+        ? {
+            isTargetRoleSkill: Boolean(skill.roleRelevance.isTargetRoleSkill),
+            relevanceTier: skill.roleRelevance.relevanceTier || 'general',
+            targetRolesMatched: skill.roleRelevance.targetRolesMatched || [],
+          }
+        : {
+            isTargetRoleSkill: false,
+            relevanceTier: 'general',
+            targetRolesMatched: [],
+          },
       evidence: (skill.evidence ?? []).map((item) => ({
         source: item.source,
         strength: item.strength,
         detail: item.detail,
         reference: item.reference ?? null,
+        provenanceTier: item.provenanceTier ?? 'tier_1_claimed',
+        verified: Boolean(item.verified),
+        recordedAt: item.recordedAt ?? null,
+        score: typeof item.score === 'number' ? item.score : null,
       })),
     })),
     interests: twin.interests ?? [],
@@ -299,6 +337,7 @@ export function toPublicCareerTwin(twin, staleness = { isStale: false, reasons: 
       resumeCount: twin.sources?.resumeCount ?? 0,
       analysedResumeCount: (twin.sources?.analysedResumeIds ?? []).length,
       verifiedEvidenceCount: twin.sources?.verifiedEvidenceCount ?? 0,
+      canonicalVersion: twin.sources?.canonicalVersion ?? '1.0.0',
     },
     generatedAt: twin.generatedAt,
     isStale: staleness.isStale,

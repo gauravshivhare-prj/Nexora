@@ -131,7 +131,24 @@ export async function getCareerTwin(userId) {
  *   the twin is generated and `narrative` is null.
  * @throws {ApiError} 409 when there is no input data.
  */
-export async function generateCareerTwin(userId, { withNarrative = false } = {}) {
+/**
+ * Completely rebuilds the CareerTwin from canonical student inputs, deleting any
+ * previously stored twin to guarantee zero unexplained or leftover state.
+ *
+ * @param {string} userId
+ * @param {{ withNarrative?: boolean }} [options]
+ * @returns {Promise<object>} Public CareerTwin
+ */
+export async function rebuildCareerTwin(userId, { withNarrative = false } = {}) {
+  await CareerTwin.deleteOne({ user: userId });
+  return generateCareerTwin(userId, { withNarrative });
+}
+
+export async function generateCareerTwin(userId, { withNarrative = false, rebuild = false } = {}) {
+  if (rebuild) {
+    await CareerTwin.deleteOne({ user: userId });
+  }
+
   const {
     profile,
     profileUpdatedAt,
@@ -159,6 +176,7 @@ export async function generateCareerTwin(userId, { withNarrative = false } = {})
       latestAnalysisAt,
       latestEvidenceAt,
       verifiedEvidenceCount,
+      canonicalVersion: '1.0.0',
     });
   }
 

@@ -613,6 +613,8 @@ export function resolveCanonicalSkill(rawInput) {
   return null;
 }
 
+export const findSkillByAlias = resolveCanonicalSkill;
+
 /**
  * Detects cycles in the prerequisite dependency graph using Depth-First Search.
  *
