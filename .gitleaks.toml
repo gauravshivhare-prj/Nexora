@@ -11,5 +11,7 @@ regex = '''(?i)\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis(?:s)?|amqps?):
 keywords = ["mongodb", "postgres", "mysql", "redis", "amqp"]
 
 [allowlist]
-description = "Local, never-committed environment files"
+description = "Local, never-committed environment files, and known non-secret values"
 paths = ['''(^|/)\.env$''']
+# A skill identifier in an assessment validation test, not a credential.
+regexes = ['''^NonExistentSkill_999$''']
