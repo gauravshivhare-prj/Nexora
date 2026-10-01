@@ -48,21 +48,24 @@ export function groundParsedResume(parsed, sourceText) {
       return null;
     }
 
-    const canonical = resolveCanonicalSkill(value) || canonicalSkill(value);
-    if (canonical) {
-      const span = findSpanInText(sourceText, value) || findSpanInText(sourceText, canonical.name);
+    const resolvedCanonical = canonicalSkill(value);
+    const ontologySkill = resolveCanonicalSkill(value);
+
+    if (resolvedCanonical || ontologySkill) {
+      const name = resolvedCanonical?.name || ontologySkill?.name;
+      const span = findSpanInText(sourceText, value) || findSpanInText(sourceText, name);
       provenanceIndex.push({
         entityType: 'skill',
-        name: canonical.name,
-        canonicalSkillId: canonical.id || null,
+        name,
+        canonicalSkillId: ontologySkill?.id || null,
         matchedText: span?.matchedText || value,
         startOffset: span?.startOffset ?? null,
         endOffset: span?.endOffset ?? null,
         evidenceTier: 'claimed',
       });
       return {
-        name: canonical.name,
-        canonicalSkillId: canonical.id || null,
+        name,
+        canonicalSkillId: ontologySkill?.id || null,
         evidenceTier: 'claimed',
       };
     }
