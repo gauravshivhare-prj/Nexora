@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# Gitleaks fingerprint allowlist
+#
+# Each line is the fingerprint of a historical finding that has been reviewed
+# and confirmed to be a fake, runtime-built test value — not a real secret.
+#
+# Format: <commit>:<file>:<rule-id>:<line>
+# See: https://github.com/gitleaks/gitleaks#gitleaksignore
+# ---------------------------------------------------------------------------
+
+# Commit 2b31ca7: aiSecurityAndPrivacy.test.js — fake credential shapes used
+# to verify the outbound-AI-request blocker. Built by fakeSecrets.js helpers.
+2b31ca7f3c9b0bb01f9845f9b3deb87c77d5157b:server/tests/aiSecurityAndPrivacy.test.js:gcp-api-key:26
+2b31ca7f3c9b0bb01f9845f9b3deb87c77d5157b:server/tests/aiSecurityAndPrivacy.test.js:credentialed-database-uri:50
+2b31ca7f3c9b0bb01f9845f9b3deb87c77d5157b:server/tests/aiSecurityAndPrivacy.test.js:jwt:39
+2b31ca7f3c9b0bb01f9845f9b3deb87c77d5157b:server/tests/aiSecurityAndPrivacy.test.js:generic-api-key:133
+2b31ca7f3c9b0bb01f9845f9b3deb87c77d5157b:server/tests/aiSecurityAndPrivacy.test.js:generic-api-key:168
+
+# Commit 7801548: interviewFeedbackSafety.test.js — fake credential shapes
+# used to verify the feedback redaction pipeline. Built by fakeSecrets.js.
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:gcp-api-key:36
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:hardcoded-password:89
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:private-key:99
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:credentialed-database-uri:78
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:jwt:68
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:generic-api-key:89
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:generic-api-key:262
+78015480e0124e8fcb2b2805e1c466a0e6810ba5:server/tests/interviewFeedbackSafety.test.js:generic-api-key:445
+
+# Commit ce0f084: seedDemo.js — hardcoded demo passwords that were later
+# moved to environment variables (DEMO_STUDENT_PASSWORD, DEMO_ADMIN_PASSWORD).
+ce0f0845b9c02ce5c18f2ca5d324cc79be207f89:server/src/scripts/seedDemo.js:hardcoded-password:24
+ce0f0845b9c02ce5c18f2ca5d324cc79be207f89:server/src/scripts/seedDemo.js:hardcoded-password:30
