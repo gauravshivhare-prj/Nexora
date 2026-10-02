@@ -27,6 +27,8 @@ import {
 } from './interviewEvaluation.service.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
 import { findRole, CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
+import { buildInterviewImpact } from '../domain/evidence/interviewImpact.js';
+import { INTERVIEW_PASS_MARK } from '../domain/evidence/skillEvidenceCheck.js';
 
 /**
  * In-flight answer evaluation locks.
@@ -656,12 +658,23 @@ export async function completeSession(userId, sessionId, options = {}) {
 
   logger.info(`Interview session completed: ${completedSession._id} with overall score ${overallScore}`);
 
+  // Task 20 — Cross-feature impact signal for the interview session.
+  // Tells the client exactly which downstream resources are now stale.
+  const interviewImpact = buildInterviewImpact({
+    overallScore,
+    eligibleForVerified,
+    evaluatorType,
+    evidenceResults,
+    passMark: INTERVIEW_PASS_MARK,
+  });
+
   return {
     session: toPublicInterviewSession(completedSession),
     overallScore,
     eligibleForVerified,
     evidenceResults,
     evidenceChecks: savedChecks.map(toPublicSkillEvidenceCheck),
+    interviewImpact,
   };
 }
 
