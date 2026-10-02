@@ -113,7 +113,10 @@ export const skillGap = asyncHandler(async (req, res) => {
  * score or treating stale derived data as current.
  */
 export const readiness = asyncHandler(async (req, res) => {
-  const data = await getReadiness(req.auth.userId, req.params.roleId);
+  // The standard readiness endpoint deliberately omits the numeric score.
+  // Pass ?includeScore=true to receive the score block alongside readiness.
+  const includeScore = req.query.includeScore === 'true';
+  const data = await getReadiness(req.auth.userId, req.params.roleId, { includeScore });
 
   res.status(200).json({
     success: true,
