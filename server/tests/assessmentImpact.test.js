@@ -14,7 +14,7 @@ import {
  *
  * Contracts:
  * 1. Failed assessment → no evidence, no staleness, retry nextActions.
- * 2. Passed + eligibleForVerified + !isPractice → all 4 domains stale.
+ * 2. Passed + eligibleForVerified + !isPractice → all 5 domains stale (incl. roadmap).
  * 3. Passed + isPractice → careerTwin + skillGap stale (not readiness/opportunities).
  * 4. Passed + !eligibleForVerified (beginner) → careerTwin + skillGap stale.
  * 5. careerTwinWillRefresh is true in all passing cases.
@@ -113,13 +113,14 @@ describe('Task 19 — verified pass impact', () => {
     assert.equal(verifiedResult.careerTwinWillRefresh, true);
   });
 
-  it('marks all 4 downstream domains as stale', () => {
+  it('marks all 5 downstream domains as stale (including roadmap)', () => {
     const domains = verifiedResult.staleDomains;
     assert.ok(domains.includes(IMPACT_DOMAINS.CAREER_TWIN));
     assert.ok(domains.includes(IMPACT_DOMAINS.SKILL_GAP));
     assert.ok(domains.includes(IMPACT_DOMAINS.READINESS));
     assert.ok(domains.includes(IMPACT_DOMAINS.OPPORTUNITIES));
-    assert.equal(domains.length, 4);
+    assert.ok(domains.includes(IMPACT_DOMAINS.ROADMAP), 'ROADMAP must be stale after a verified pass');
+    assert.equal(domains.length, 5);
   });
 
   it('message mentions the skill and verification', () => {

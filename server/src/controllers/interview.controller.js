@@ -7,6 +7,7 @@ import {
   startSession,
   submitQuestionAnswer,
 } from '../services/interviewSession.service.js';
+import { generateSessionReport } from '../services/interviewReport.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { clientGoneSignal } from '../utils/requestSignal.js';
 
@@ -115,5 +116,25 @@ export const abandon = asyncHandler(async (req, res) => {
     success: true,
     message: 'Interview session abandoned',
     data: { session },
+  });
+});
+
+/**
+ * GET /api/interviews/sessions/:sessionId/report
+ *
+ * Returns a structured post-interview report for a completed session.
+ * Report includes: session summary, per-question results, per-skill breakdown,
+ * aggregated strengths/growth areas, evidence summary, and next steps.
+ *
+ * Only the session owner may access the report.
+ * Only completed sessions can produce a report.
+ */
+export const report = asyncHandler(async (req, res) => {
+  const data = await generateSessionReport(req.auth.userId, req.params.sessionId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Interview session report generated',
+    data,
   });
 });

@@ -11,12 +11,12 @@ import {
 import { GAP_IMPORTANCE, GAP_STATUS } from '../src/domain/skillGap/computeSkillGap.js';
 
 /**
- * Task 17 — Career Readiness Score Engine Reconstruction
+ * Task 17 â€” Career Readiness Score Engine Reconstruction
  *
  * Tests the deterministic, evidence-weighted readiness score. The key
  * contracts:
  *
- * 1. Score is [0, 100] — integers only, no floats.
+ * 1. Score is [0, 100] â€” integers only, no floats.
  * 2. Required skills contribute 70%, preferred 30%.
  * 3. Evidence multipliers: missing=0, claimed=0.25, supported=0.65, verified=1.
  * 4. Passed interviews boost a skill by INTERVIEW_BOOST (capped at 1.0).
@@ -24,10 +24,10 @@ import { GAP_IMPORTANCE, GAP_STATUS } from '../src/domain/skillGap/computeSkillG
  * 6. nextMilestone identifies the highest-impact action.
  * 7. Method block states deterministic=true, usesAi=false.
  * 8. Null/empty gap returns 0-score empty result without throwing.
- * 9. Score is deterministic: same inputs → same output.
+ * 9. Score is deterministic: same inputs â†’ same output.
  */
 
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Fixtures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function gapSkill(name, importance, status) {
   return {
@@ -60,9 +60,9 @@ function backendGap(requiredStatuses = [], preferredStatuses = []) {
   };
 }
 
-// ─── 1. Contract & Schema ─────────────────────────────────────────────────────
+// â”€â”€â”€ 1. Contract & Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — readiness score contract & schema', () => {
+describe('Task 17 â€” readiness score contract & schema', () => {
   it('returns all required top-level fields', () => {
     const result = computeReadinessScore(
       backendGap(
@@ -117,10 +117,10 @@ describe('Task 17 — readiness score contract & schema', () => {
   });
 });
 
-// ─── 2. Score Arithmetic ──────────────────────────────────────────────────────
+// â”€â”€â”€ 2. Score Arithmetic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — score arithmetic', () => {
-  it('all-verified required + no preferred → 70 (70% of 100 from required, 0 from preferred)', () => {
+describe('Task 17 â€” score arithmetic', () => {
+  it('all-verified required + no preferred â†’ 70 (70% of 100 from required, 0 from preferred)', () => {
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
       [],
@@ -128,13 +128,13 @@ describe('Task 17 — score arithmetic', () => {
     const result = computeReadinessScore(gap);
 
     // required contribution = 1.0 * 0.70 * 100 = 70
-    // preferred contribution = 0 (no preferred skills, so groupScore=0 → 0*0.30*100=0)
+    // preferred contribution = 0 (no preferred skills, so groupScore=0 â†’ 0*0.30*100=0)
     assert.equal(result.breakdown.required.contribution, 70);
     assert.equal(result.breakdown.preferred.contribution, 0);
     assert.equal(result.value, 70);
   });
 
-  it('all-verified required + all-verified preferred → 100', () => {
+  it('all-verified required + all-verified preferred â†’ 100', () => {
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
@@ -145,7 +145,7 @@ describe('Task 17 — score arithmetic', () => {
     assert.equal(result.band, 'interview-ready');
   });
 
-  it('all-missing required → 0', () => {
+  it('all-missing required â†’ 0', () => {
     const gap = backendGap(
       [GAP_STATUS.MISSING, GAP_STATUS.MISSING, GAP_STATUS.MISSING, GAP_STATUS.MISSING],
       [],
@@ -156,7 +156,7 @@ describe('Task 17 — score arithmetic', () => {
     assert.equal(result.band, 'beginning');
   });
 
-  it('single claimed required skill → score = round(0.25 * 0.70 * 100) = 18', () => {
+  it('single claimed required skill â†’ score = round(0.25 * 0.70 * 100) = 18', () => {
     // One required skill claimed: groupScore = 0.25 / 1 = 0.25, contribution = round(0.25 * 0.70 * 100) = 18
     const gap = backendGap([GAP_STATUS.CLAIMED], []);
     const result = computeReadinessScore(gap);
@@ -166,7 +166,7 @@ describe('Task 17 — score arithmetic', () => {
     assert.equal(result.value, Math.round(0.25 * 0.70 * 100));
   });
 
-  it('single supported required skill → score = round(0.65 * 0.70 * 100) = 46', () => {
+  it('single supported required skill â†’ score = round(0.65 * 0.70 * 100) = 46', () => {
     const gap = backendGap([GAP_STATUS.SUPPORTED], []);
     const result = computeReadinessScore(gap);
 
@@ -175,7 +175,7 @@ describe('Task 17 — score arithmetic', () => {
   });
 
   it('mixed required skills compute proportional weighted average', () => {
-    // 2 verified, 1 claimed, 1 missing → groupScore = (1+1+0.25+0) / 4 = 0.5625
+    // 2 verified, 1 claimed, 1 missing â†’ groupScore = (1+1+0.25+0) / 4 = 0.5625
     // contribution = round(0.5625 * 0.70 * 100) = round(39.375) = 39
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.CLAIMED, GAP_STATUS.MISSING],
@@ -202,9 +202,9 @@ describe('Task 17 — score arithmetic', () => {
   });
 });
 
-// ─── 3. Interview Boost ───────────────────────────────────────────────────────
+// â”€â”€â”€ 3. Interview Boost â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — interview boost', () => {
+describe('Task 17 â€” interview boost', () => {
   it('passing interview boosts skill from supported toward verified', () => {
     const gap = backendGap([GAP_STATUS.SUPPORTED], []);
     const skillKey = gap.skills[0].key;
@@ -229,7 +229,7 @@ describe('Task 17 — interview boost', () => {
     assert.equal(result.value, 70); // 1.0 * 0.70 * 100 = 70, no higher
   });
 
-  it('supported + interview boost reaches (0.65 + 0.35 = 1.0) → full verified credit', () => {
+  it('supported + interview boost reaches (0.65 + 0.35 = 1.0) â†’ full verified credit', () => {
     const gap = backendGap([GAP_STATUS.SUPPORTED], []);
     const skillKey = gap.skills[0].key;
 
@@ -252,7 +252,7 @@ describe('Task 17 — interview boost', () => {
       interviewPassedSkillKeys: new Set([skillKey]),
     });
 
-    // missing(0) + 0.35 boost = 0.35 → same as between-claimed-and-supported
+    // missing(0) + 0.35 boost = 0.35 â†’ same as between-claimed-and-supported
     const expectedMult = Math.min(1.0, 0 + INTERVIEW_BOOST);
     const expectedScore = Math.round(expectedMult * 0.70 * 100);
     assert.equal(withBoost.value, expectedScore);
@@ -276,11 +276,11 @@ describe('Task 17 — interview boost', () => {
   });
 });
 
-// ─── 4. Score Bands ───────────────────────────────────────────────────────────
+// â”€â”€â”€ 4. Score Bands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — score bands', () => {
-  it('score=90+ → interview-ready', () => {
-    // All 4 required verified + all 4 preferred verified → 100
+describe('Task 17 â€” score bands', () => {
+  it('score=90+ â†’ interview-ready', () => {
+    // All 4 required verified + all 4 preferred verified â†’ 100
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
@@ -290,7 +290,7 @@ describe('Task 17 — score bands', () => {
     assert.ok(result.value >= 90);
   });
 
-  it('score=75–89 → strong', () => {
+  it('score=75â€“89 â†’ strong', () => {
     // 4 required verified (70) + 2 preferred verified out of 4 (0.5*0.30*100=15) = 85
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
@@ -301,7 +301,7 @@ describe('Task 17 — score bands', () => {
     assert.equal(result.band, 'strong');
   });
 
-  it('score=0–24 → beginning', () => {
+  it('score=0â€“24 â†’ beginning', () => {
     const gap = backendGap(
       [GAP_STATUS.MISSING, GAP_STATUS.CLAIMED, GAP_STATUS.MISSING, GAP_STATUS.MISSING],
       [],
@@ -312,9 +312,9 @@ describe('Task 17 — score bands', () => {
   });
 });
 
-// ─── 5. Confidence ────────────────────────────────────────────────────────────
+// â”€â”€â”€ 5. Confidence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — confidence', () => {
+describe('Task 17 â€” confidence', () => {
   it('high confidence when 70%+ skills are supported or verified', () => {
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.SUPPORTED, GAP_STATUS.VERIFIED],
@@ -334,7 +334,7 @@ describe('Task 17 — confidence', () => {
   });
 
   it('medium confidence when 35-70% skills are corroborated', () => {
-    // 2/4 required supported → 50% → medium
+    // 2/4 required supported â†’ 50% â†’ medium
     const gap = backendGap(
       [GAP_STATUS.SUPPORTED, GAP_STATUS.SUPPORTED, GAP_STATUS.CLAIMED, GAP_STATUS.MISSING],
       [],
@@ -344,9 +344,9 @@ describe('Task 17 — confidence', () => {
   });
 });
 
-// ─── 6. nextMilestone ────────────────────────────────────────────────────────
+// â”€â”€â”€ 6. nextMilestone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — nextMilestone', () => {
+describe('Task 17 â€” nextMilestone', () => {
   it('returns achievable=false at interview-ready band (nothing higher)', () => {
     const gap = backendGap(
       [GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED, GAP_STATUS.VERIFIED],
@@ -365,7 +365,7 @@ describe('Task 17 — nextMilestone', () => {
     );
     const result = computeReadinessScore(gap);
 
-    // The missing skill (JavaScript) has the lowest multiplier → highest impact
+    // The missing skill (JavaScript) has the lowest multiplier â†’ highest impact
     assert.equal(result.nextMilestone.skill.name, 'JavaScript');
     assert.ok(result.nextMilestone.action.length > 0);
     assert.ok(typeof result.nextMilestone.pointsNeeded === 'number');
@@ -384,14 +384,14 @@ describe('Task 17 — nextMilestone', () => {
       [],
     );
     const result = computeReadinessScore(gap);
-    // Supported skill is the lowest → verification action
+    // Supported skill is the lowest â†’ verification action
     assert.match(result.nextMilestone.action, /verif|assessment|interview/i);
   });
 });
 
-// ─── 7. Edge Cases & Determinism ─────────────────────────────────────────────
+// â”€â”€â”€ 7. Edge Cases & Determinism â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('Task 17 — edge cases & determinism', () => {
+describe('Task 17 â€” edge cases & determinism', () => {
   it('handles null gap without throwing', () => {
     const result = computeReadinessScore(null);
     assert.equal(result.value, 0);
@@ -438,5 +438,129 @@ describe('Task 17 — edge cases & determinism', () => {
     // Should not throw with invalid input
     const result = computeReadinessScore(gap, { interviewPassedSkillKeys: ['javascript'] });
     assert.ok(typeof result.value === 'number');
+  });
+});
+
+// â”€â”€â”€ Task 17 â€” Duplicate Skill Deduplication Regression â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+describe('Task 17 â€” duplicate skill deduplication (regression)', () => {
+  const R = GAP_IMPORTANCE.REQUIRED;
+  const P = GAP_IMPORTANCE.PREFERRED;
+
+  function skill(name, status, importance) {
+    return {
+      key: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      name,
+      status,
+      importance,
+    };
+  }
+
+  it('duplicate required-verified skill does not inflate the score (EC7 regression)', () => {
+    // Without duplicate: 1 verified out of 2 required = 0.5 * 0.70 * 100 = 35
+    const noDup = computeReadinessScore({
+      roleId: 'r',
+      skills: [skill('JavaScript', GAP_STATUS.VERIFIED, R), skill('Node.js', GAP_STATUS.MISSING, R)],
+    });
+
+    // With duplicate: same JS appears twice â€” must still score the same as without duplicate
+    const withDup = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.VERIFIED, R),
+        skill('JavaScript', GAP_STATUS.VERIFIED, R), // duplicate
+        skill('Node.js', GAP_STATUS.MISSING, R),
+      ],
+    });
+
+    assert.equal(noDup.value, 35, 'baseline should be 35');
+    assert.equal(withDup.value, noDup.value, 'duplicate must not inflate the score');
+  });
+
+  it('duplicate preferred-verified skill does not inflate the preferred contribution', () => {
+    // 1 required missing = 0 * 0.70 * 100 = 0
+    // 1 preferred verified without dup = 1.0 * 0.30 * 100 = 30
+    const noDup = computeReadinessScore({
+      roleId: 'r',
+      skills: [skill('JavaScript', GAP_STATUS.MISSING, R), skill('SQL', GAP_STATUS.VERIFIED, P)],
+    });
+
+    const withDup = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.MISSING, R),
+        skill('SQL', GAP_STATUS.VERIFIED, P),
+        skill('SQL', GAP_STATUS.VERIFIED, P), // duplicate preferred
+      ],
+    });
+
+    assert.equal(noDup.value, 30, 'baseline preferred contribution should be 30');
+    assert.equal(withDup.value, noDup.value, 'duplicate preferred must not inflate the score');
+  });
+
+  it('duplicate mixed-status keeps the highest-quality entry', () => {
+    // JS appears as both MISSING and VERIFIED â€” dedup must keep VERIFIED (quality=3)
+    // 1 required verified = 1.0 * 0.70 * 100 = 70
+    const result = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.MISSING, R),  // lower quality
+        skill('JavaScript', GAP_STATUS.VERIFIED, R), // higher quality â€” must win
+      ],
+    });
+
+    assert.equal(result.value, 70, 'highest-quality entry should win in deduplication');
+  });
+
+  it('duplicate CLAIMED vs SUPPORTED keeps SUPPORTED', () => {
+    // SUPPORTED(0.65) wins over CLAIMED(0.25)
+    const withDup = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.CLAIMED, R),
+        skill('JavaScript', GAP_STATUS.SUPPORTED, R),
+      ],
+    });
+
+    const unique = computeReadinessScore({
+      roleId: 'r',
+      skills: [skill('JavaScript', GAP_STATUS.SUPPORTED, R)],
+    });
+
+    assert.equal(withDup.value, unique.value, 'SUPPORTED should win over CLAIMED in deduplication');
+  });
+
+  it('unique skills are unaffected by deduplication logic', () => {
+    const unique = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.VERIFIED, R),
+        skill('Node.js', GAP_STATUS.SUPPORTED, R),
+        skill('SQL', GAP_STATUS.CLAIMED, P),
+      ],
+    });
+
+    // EC14 formula:
+    //   required avg = (1.0 + 0.65) / 2 = 0.825
+    //   preferred avg = 0.25
+    //   composite = round(0.825 * 0.70 * 100 + 0.25 * 0.30 * 100) = round(57.75 + 7.5) = round(65.25) = 65
+    const expected = Math.round(((1.0 + 0.65) / 2) * 0.70 * 100 + 0.25 * 0.30 * 100);
+    assert.equal(unique.value, expected, 'unique skills must score correctly without deduplication side effects');
+  });
+
+  it('duplicate with null/empty key is safely ignored', () => {
+    // Skills with empty key after normalization should not crash
+    const result = computeReadinessScore({
+      roleId: 'r',
+      skills: [
+        skill('JavaScript', GAP_STATUS.VERIFIED, R),
+        { key: '', name: '', status: GAP_STATUS.MISSING, importance: R }, // invalid â€” empty key
+        skill('Node.js', GAP_STATUS.MISSING, R),
+      ],
+    });
+
+    // The empty-key entry is dropped by deduplicateSkills
+    // 1 of 2 valid required skills verified = 35
+    assert.equal(result.value, 35, 'empty-key skills must be silently ignored');
   });
 });

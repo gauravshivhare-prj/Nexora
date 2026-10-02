@@ -81,6 +81,7 @@ export function buildAssessmentImpact({ passed, eligibleForVerified, skillKey, e
       IMPACT_DOMAINS.SKILL_GAP,
       IMPACT_DOMAINS.READINESS,
       IMPACT_DOMAINS.OPPORTUNITIES,
+      IMPACT_DOMAINS.ROADMAP,
     );
     message = `${skillKey} is now verified. Your CareerTwin will refresh on next access.`;
     nextActions = [

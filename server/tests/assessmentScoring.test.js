@@ -42,7 +42,7 @@ let mongoAvailable = true;
 describe('A5 — Transparent Deterministic Scoring & Evidence Policy Separation', () => {
   before(async () => {
     try {
-      server = await startTestServer();
+      server = await startTestServer({ suiteId: 'asmscoring' });
     } catch {
       mongoAvailable = false;
     }

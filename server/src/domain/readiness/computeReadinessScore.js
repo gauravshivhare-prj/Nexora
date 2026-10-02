@@ -166,7 +166,53 @@ export function computeReadinessScore(gap, { interviewPassedSkillKeys = new Set(
 // ─── Internal helpers ──────────────────────────────────────────────────────
 
 /**
+ * Deduplicates a list of gap skills by canonical key.
+ *
+ * When the same skill appears more than once (e.g. a CareerTwin has two
+ * entries with the same key), only the entry with the highest evidence
+ * quality is kept. Without deduplication, a duplicated verified skill
+ * inflates the group score because it adds an extra 1.0 to the numerator
+ * while also adding 1 to the denominator — making the average appear higher
+ * than it really is.
+ *
+ * Evidence quality ordering (highest to lowest):
+ *   verified > supported > claimed > missing
+ *
+ * @param {Array<object>} skills Raw skill list, possibly containing duplicates.
+ * @returns {Array<object>} De-duplicated skill list.
+ */
+function deduplicateSkills(skills) {
+  const QUALITY_ORDER = {
+    [GAP_STATUS.VERIFIED]: 3,
+    [GAP_STATUS.SUPPORTED]: 2,
+    [GAP_STATUS.CLAIMED]: 1,
+    [GAP_STATUS.MISSING]: 0,
+  };
+
+  const best = new Map();
+  for (const skill of skills) {
+    if (!skill || typeof skill !== 'object') continue;
+    const key = (skill.key || skill.name || '').toLowerCase().trim();
+    if (!key) continue;
+    const existing = best.get(key);
+    if (!existing) {
+      best.set(key, skill);
+    } else {
+      const existingQuality = QUALITY_ORDER[existing.status] ?? 0;
+      const candidateQuality = QUALITY_ORDER[skill.status] ?? 0;
+      if (candidateQuality > existingQuality) {
+        best.set(key, skill);
+      }
+    }
+  }
+  return [...best.values()];
+}
+
+/**
  * Computes the [0, 1] coverage score for a group of skills.
+ *
+ * Skills are deduplicated by key before scoring so that a duplicate entry
+ * cannot artificially inflate the group score.
  *
  * @param {Array<object>} skills Subset of gap skills (all same importance).
  * @param {Set<string>} interviewKeys
@@ -181,12 +227,15 @@ function scoreForGroup(skills, interviewKeys) {
     };
   }
 
+  // Deduplicate before scoring — keeps highest-quality evidence per skill key.
+  const uniqueSkills = deduplicateSkills(skills);
+
   let totalWeight = 0;
   let earnedWeight = 0;
-  const counts = { total: skills.length, missing: 0, claimed: 0, supported: 0, verified: 0, interviewBoosted: 0 };
+  const counts = { total: uniqueSkills.length, missing: 0, claimed: 0, supported: 0, verified: 0, interviewBoosted: 0 };
   const scoredSkills = [];
 
-  for (const skill of skills) {
+  for (const skill of uniqueSkills) {
     const baseMultiplier = EVIDENCE_WEIGHT[skill.status] ?? 0;
     const skillKey = skill.key || skill.name || '';
 

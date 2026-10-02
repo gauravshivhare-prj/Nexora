@@ -24,7 +24,7 @@ import { clearInFlightEvaluations } from '../../src/services/interviewSession.se
  * suite that drops collections must never be one typo away from deleting
  * development data.
  */
-export function resolveTestDatabaseUri() {
+export function resolveTestDatabaseUri(suiteId = '') {
   const explicit = process.env.MONGODB_URI_TEST?.trim();
   const uri = explicit || deriveTestUri(process.env.MONGODB_URI?.trim());
 
@@ -37,6 +37,18 @@ export function resolveTestDatabaseUri() {
     throw new Error(
       `Refusing to run tests against database "${databaseName}": its name must end with "_test".`,
     );
+  }
+
+  // Per-suite isolation: if suiteId is supplied, derive a private database that
+  // still ends with "_test" so the safety guard accepts it. The pattern is:
+  //   <base_without_test_suffix>_<suiteId>_test
+  // e.g. nexora_test → nexora_asmscoring_test
+  // The suite database is dropped by startTestServer().close().
+  if (suiteId) {
+    const url = new URL(uri);
+    const baseName = databaseName.replace(/_test$/, '');
+    url.pathname = `/${baseName}_${suiteId}_test`;
+    return url.toString();
   }
 
   return uri;
@@ -78,10 +90,21 @@ export function resetRateLimiters() {
 /**
  * Connects to the test database and starts the app on an ephemeral port.
  *
+ * Pass an optional `suiteId` (a short, filesystem-safe string) to use a
+ * private database for this test file. This eliminates cross-suite data races
+ * when multiple suites run concurrently, because each suite connects to its
+ * own `<base>_test_<suiteId>` database and drops it on close().
+ *
+ * Integration test files that share state with other suites (via the default
+ * shared _test database) must only be run serially (npm test uses
+ * --test-concurrency=1 for this reason).
+ *
+ * @param {{ suiteId?: string }} [options]
  * @returns {Promise<{ baseUrl: string, close: () => Promise<void> }>}
  */
-export async function startTestServer() {
-  await mongoose.connect(resolveTestDatabaseUri(), { serverSelectionTimeoutMS: 5000 });
+export async function startTestServer({ suiteId = '' } = {}) {
+  const uri = resolveTestDatabaseUri(suiteId);
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
   await ensureModelIndexes();
   resetRateLimiters();
 

@@ -7,6 +7,7 @@ import {
   create,
   list,
   read,
+  report,
   start,
   submitAnswer,
 } from '../controllers/interview.controller.js';
@@ -34,6 +35,7 @@ export const sessionWriteLimiter = createRateLimiter(RATE_LIMIT_POLICY.interview
 router.post('/sessions', sessionWriteLimiter, create);
 router.get('/sessions', list);
 router.get('/sessions/:sessionId', read);
+router.get('/sessions/:sessionId/report', report);
 router.post('/sessions/:sessionId/start', sessionWriteLimiter, start);
 router.post('/sessions/:sessionId/questions/:questionId/answers', evaluationLimiter, submitAnswer);
 router.post('/sessions/:sessionId/complete', sessionWriteLimiter, complete);
