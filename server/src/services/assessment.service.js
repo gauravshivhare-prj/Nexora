@@ -16,6 +16,7 @@ import {
   getAssessmentById as getCatalogAssessmentById,
   getAssessmentCatalog,
 } from '../domain/assessment/assessmentCatalog.js';
+import { buildAssessmentImpact } from '../domain/assessment/assessmentImpact.js';
 import { recordAssessment } from './skillEvidence.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
@@ -24,6 +25,7 @@ import {
   FORBIDDEN_CLIENT_VERIFICATION_FIELDS,
 } from '../constants/assessmentPolicy.js';
 import { canonicalSkill, skillKey } from '../domain/skills/skillKey.js';
+
 
 /**
  * Ensures the canonical catalog assessments exist in MongoDB.
@@ -458,13 +460,29 @@ export async function submitAssessmentAttempt(userId, payload) {
 
   const publicAttempt = toPublicAssessmentAttempt(updatedAttempt);
 
+  // 8. Task 19 — Cross-feature impact signal.
+  //
+  // Tells the client exactly what downstream resources are now stale so the
+  // UI can invalidate its caches deterministically without polling.
+  //
+  // This is computed best-effort: any error here must not fail the submission.
+  const assessmentImpact = buildAssessmentImpact({
+    passed: evalResult.passed,
+    eligibleForVerified: Boolean(evalResult.evidenceResult?.eligibleForVerified),
+    skillKey: fullAssessment.skillKey,
+    evidenceCheckId,
+    isPractice: Boolean(fullAssessment.isPractice),
+  });
+
   return {
     attempt: publicAttempt,
     result: publicAttempt,
     evidenceResult: evalResult.evidenceResult,
     evidenceStatus: evalResult.evidenceStatus,
+    assessmentImpact,
   };
 }
+
 
 /**
  * Retrieves a single attempt by ID for an authenticated user.
@@ -631,3 +649,4 @@ function validateSubmissionAnswers(answers) {
     }
   }
 }
+
