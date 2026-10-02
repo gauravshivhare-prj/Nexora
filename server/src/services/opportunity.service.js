@@ -1,10 +1,21 @@
-import { OPPORTUNITY_CATALOGUE, matchOpportunities } from '../domain/opportunities/opportunityCatalogue.js';
+import {
+  OPPORTUNITY_CATALOGUE,
+  matchOpportunities,
+  nearMissOpportunities,
+} from '../domain/opportunities/opportunityCatalogue.js';
 import { OPPORTUNITY_CATALOGUE_VERSION } from '../domain/opportunities/opportunityContract.js';
 import { CAREER_ROLES } from '../domain/careers/roleCatalogue.js';
 import { CareerTwin, StudentProfile } from '../models/index.js';
 
 /**
- * Returns opportunities for the authenticated student only.
+ * Returns matched and near-miss opportunities for the authenticated student.
+ *
+ * Task 18 — Opportunity Matching & Eligibility Engine Reconstruction:
+ *   - Expanded catalogue (10 curated opportunities across 4 career paths).
+ *   - `opportunities`: fully-matched (all eligibility rules satisfied).
+ *   - `nearMiss`: opportunities the student partially qualifies for, with
+ *     `gapToEligibility` listing exactly which skills to verify.
+ *   - `matchScore`: percentage of required skills already verified.
  *
  * Missing inputs are an honest empty result: eligibility cannot be inferred
  * from an incomplete profile or from claims weaker than verified evidence.
@@ -30,12 +41,15 @@ export async function getOpportunities(userId, filters = {}) {
   }
 
   const opportunities = matchOpportunities(twin, profile, OPPORTUNITY_CATALOGUE, effectiveFilters);
+  const nearMiss = nearMissOpportunities(twin, profile, OPPORTUNITY_CATALOGUE, effectiveFilters);
 
   return {
     opportunities,
+    nearMiss,
     catalogue: {
       version: OPPORTUNITY_CATALOGUE_VERSION,
-      source: OPPORTUNITY_CATALOGUE[0]?.source ?? null,
+      source: OPPORTUNITY_CATALOGUE[0]?.source?.type ?? null,
+      totalInCatalogue: OPPORTUNITY_CATALOGUE.length,
     },
     method: {
       deterministic: true,
@@ -43,7 +57,7 @@ export async function getOpportunities(userId, filters = {}) {
       requiresVerifiedEvidence: true,
       sourceStatus: 'curated_internal',
       liveCoverage: false,
-      note: 'Opportunities are curated internal practice exercises and apprenticeships, not live external job postings.',
+      note: 'Opportunities are curated internal practice exercises and apprenticeships, not live external job postings. nearMiss shows opportunities you partially qualify for with a gapToEligibility action list.',
     },
   };
 }

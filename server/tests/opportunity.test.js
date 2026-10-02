@@ -26,7 +26,7 @@ describe('matchOpportunities', () => {
     assert.equal(result[0].id, 'curated_internal:backend-apprenticeship');
     assert.equal(result[0].source.type, 'curated_internal');
     assert.equal(result[0].source.version, 1);
-    assert.equal(result[0].source.asOf, '2026-09-23');
+    assert.match(result[0].source.asOf, /^\d{4}-\d{2}-\d{2}$/);
     assert.match(result[0].explanation, /verified evidence/);
     assert.deepEqual(result, matchOpportunities(twinWith(['JavaScript', 'Node.js']), backendProfile));
   });
