@@ -23,9 +23,15 @@ import { checkInteger } from '../utils/fieldTypes.js';
  * a student completes an item by adding the evidence, which closes the gap,
  * which removes the item. A stored completion flag could disagree with the
  * evidence, which is exactly what this design prevents.
+ *
+ * Task 16 — Personalised Roadmap Engine:
+ *   Passes `availableHoursPerWeek` and `studentGoals` through to buildRoadmap
+ *   so the priority engine can pace milestones and align goal-adjacent skills.
  */
 
 const MAX_ITEMS = 25;
+const MAX_HOURS_PER_WEEK = 80;
+const MIN_HOURS_PER_WEEK = 1;
 
 function parseMaxItems(raw) {
   if (raw === undefined) return 10;
@@ -42,20 +48,67 @@ function parseMaxItems(raw) {
 }
 
 /**
- * Generates a roadmap towards one role.
+ * Parses and validates availableHoursPerWeek from a query parameter.
+ *
+ * Defaults to 15 when absent. Clamps to [1, 80] rather than rejecting — a
+ * student who says "100 hours/week" is optimistic, not malicious, and
+ * clamping produces a useful plan rather than an error page.
+ *
+ * @param {unknown} raw
+ * @returns {number}
+ */
+function parseHoursPerWeek(raw) {
+  if (raw === undefined || raw === null) return 15;
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 15;
+
+  return Math.min(MAX_HOURS_PER_WEEK, Math.max(MIN_HOURS_PER_WEEK, Math.round(parsed)));
+}
+
+/**
+ * Parses student goals from a comma-separated query parameter.
+ *
+ * Goals are matched against skill names during prioritisation — a student
+ * who says "I want to learn React" gets a modest boost on React-adjacent
+ * skills. The list is normalised to strings and deduplicated.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function parseStudentGoals(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  return [...new Set(raw.split(',').map((g) => g.trim()).filter(Boolean))];
+}
+
+/**
+ * Generates a personalised roadmap towards one role.
  *
  * @param {string} userId From requireAuth.
  * @param {string} roleId
- * @param {{ maxItems?: unknown }} [options]
+ * @param {object} [options]
+ * @param {unknown} [options.maxItems]
+ * @param {unknown} [options.availableHoursPerWeek]
+ * @param {unknown} [options.studentGoals]
+ * @param {object} [options.skillGap] Pre-computed gap (e.g. from summary.service).
  * @throws {ApiError} 404 unknown role, 409 no CareerTwin.
  */
-export async function getRoadmap(userId, roleId, { maxItems, skillGap } = {}) {
+export async function getRoadmap(userId, roleId, {
+  maxItems,
+  availableHoursPerWeek,
+  studentGoals,
+  skillGap,
+} = {}) {
   // Reuses the skill gap service wholesale, including its ownership scoping,
   // its 404 for an unknown role and its 409 for a missing CareerTwin. If a
   // precomputed skillGap is provided (e.g. by summary.service), reuse it directly.
   const { gap, basedOn } = skillGap ?? (await getSkillGap(userId, roleId));
 
-  const roadmap = buildRoadmap(gap, { maxItems: parseMaxItems(maxItems) });
+  const roadmap = buildRoadmap(gap, {
+    maxItems: parseMaxItems(maxItems),
+    availableHoursPerWeek: parseHoursPerWeek(availableHoursPerWeek),
+    studentGoals: parseStudentGoals(studentGoals),
+  });
 
   return {
     roadmap,

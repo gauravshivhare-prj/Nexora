@@ -269,10 +269,33 @@ function RoadmapStep({ item, position }) {
       ) : null}
 
       <dl className="mt-3 flex flex-col gap-1 text-xs">
+        {item.learningOrder?.phase ? (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="font-semibold text-ink-muted">Phase</dt>
+            <dd className="text-ink">{item.learningOrder.phase}</dd>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-x-2">
           <dt className="font-semibold text-ink-muted">Effort</dt>
           <dd className="text-ink">{EFFORT_LABELS[item.estimatedEffort] ?? item.estimatedEffort}</dd>
         </div>
+
+        {item.learningOrder?.effortEstimate && item.learningOrder?.paceWeeks ? (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="font-semibold text-ink-muted">Estimated pace</dt>
+            <dd className="text-ink">
+              ~{item.learningOrder.effortEstimate}h total · reaches week {item.learningOrder.paceWeeks} at your pace
+            </dd>
+          </div>
+        ) : null}
+
+        {item.learningOrder?.whyBefore ? (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="font-semibold text-ink-muted">Learning order</dt>
+            <dd className="text-ink break-words">{item.learningOrder.whyBefore}</dd>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-x-2">
           <dt className="font-semibold text-ink-muted">Why</dt>
@@ -379,6 +402,24 @@ function Method({ method }) {
           {method.usesAi ? ', with AI' : ', with no AI involved'}.
         </dd>
       </div>
+
+      {method.personalization?.weeklyPace ? (
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-semibold text-ink-muted">Paced for</dt>
+          <dd className="text-ink">{method.personalization.weeklyPace}h/week</dd>
+        </div>
+      ) : null}
+
+      {method.sequenceValidation && !method.sequenceValidation.isValid ? (
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-semibold text-ink-muted">Sequence note</dt>
+          <dd className="text-ink">
+            {method.sequenceValidation.violationCount} ordering issue
+            {method.sequenceValidation.violationCount !== 1 ? 's' : ''} detected — learning order
+            may not be optimal for all prerequisite chains.
+          </dd>
+        </div>
+      ) : null}
 
       {method.resourceNote ? (
         <div className="flex flex-wrap gap-x-2">

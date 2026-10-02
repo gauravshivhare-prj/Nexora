@@ -135,6 +135,8 @@ export const readiness = asyncHandler(async (req, res) => {
 export const roadmap = asyncHandler(async (req, res) => {
   const data = await getRoadmap(req.auth.userId, req.params.roleId, {
     maxItems: req.query.maxItems,
+    availableHoursPerWeek: req.query.availableHoursPerWeek,
+    studentGoals: req.query.studentGoals,
   });
 
   res.status(200).json({
