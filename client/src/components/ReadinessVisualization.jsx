@@ -32,6 +32,7 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
     preferred = { total: 0, missing: 0, claimed: 0, supported: 0, verified: 0 },
     blockingSkills = [],
     score: readinessScore = null,
+    delta: readinessDelta = null,
   } = readiness;
 
   const statusInfo = READINESS_STATUS_PRESENTATION[evidenceStatus] ?? READINESS_STATUS_PRESENTATION.insufficient_data;
@@ -45,7 +46,7 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Mathematical Readiness Score Card (Task 17 & Task 23) */}
+      {/* Mathematical Readiness Score Card (Task 17, 23 & 24) */}
       {readinessScore && typeof readinessScore.score === 'number' && (
         <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/5 via-surface to-brand/10 p-5 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -55,7 +56,7 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
                 <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">/ 100</span>
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-bold text-ink">Readiness Score</span>
                   <span
                     className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ${
@@ -70,6 +71,24 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
                   >
                     {readinessScore.band?.replace('-', ' ')}
                   </span>
+                  {readinessDelta?.hasPrevious && typeof readinessDelta.scoreDelta === 'number' && (
+                    <span
+                      title={`Previous score: ${readinessDelta.previousScore}`}
+                      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        readinessDelta.scoreDelta > 0
+                          ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                          : readinessDelta.scoreDelta < 0
+                            ? 'border border-rose-300 bg-rose-50 text-rose-800'
+                            : 'border border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      {readinessDelta.scoreDelta > 0
+                        ? `▲ +${readinessDelta.scoreDelta}`
+                        : readinessDelta.scoreDelta < 0
+                          ? `▼ ${readinessDelta.scoreDelta}`
+                          : '— 0'}
+                    </span>
+                  )}
                   {readinessScore.interviewBoostApplied && (
                     <span
                       title="Includes interview boost for verified demonstration"
@@ -86,6 +105,12 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
                   <span>·</span>
                   <span>Preferred: <strong>{readinessScore.breakdown?.preferredScore ?? 0}</strong>/{readinessScore.breakdown?.preferredContributionMax ?? 30} pts</span>
                 </div>
+                {readinessDelta?.hasPrevious && readinessDelta.summary && (
+                  <div className="mt-1 text-xs text-brand-text font-medium flex items-center gap-1.5">
+                    <span aria-hidden="true">📈</span>
+                    <span>{readinessDelta.summary}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -104,10 +129,21 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
         </div>
       )}
 
+      {/* Newly Resolved Skills Banner (Task 24) */}
+      {readinessDelta?.skills?.newlyResolved?.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs text-emerald-900 flex items-center gap-2.5">
+          <span className="text-base" aria-hidden="true">🎉</span>
+          <div>
+            <strong>Progress Milestone:</strong> {readinessDelta.skills.newlyResolved.map((s) => s.name).join(', ')} successfully resolved from blocking requirements!
+          </div>
+        </div>
+      )}
+
       {/* Evidence Status Header Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusInfo.badgeClass}`}>
+
             {statusInfo.label}
           </span>
           {dataStatus === 'stale' && (
@@ -277,6 +313,13 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
               >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-ink">{skill.name}</span>
+                  {readinessDelta?.skills?.newlyBlocking?.some(
+                    (nb) => (nb.key && nb.key === skill.key) || nb.name === skill.name,
+                  ) && (
+                    <span className="inline-flex rounded-full border border-rose-300 bg-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-800">
+                      New Blocker
+                    </span>
+                  )}
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                     skill.status === 'missing'
                       ? 'border border-rose-200 bg-rose-50 text-rose-800'

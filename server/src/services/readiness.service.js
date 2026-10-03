@@ -16,17 +16,19 @@ import {
   CHECK_OUTCOMES,
 } from '../domain/evidence/skillEvidenceCheck.js';
 
+import { computeReadinessDelta } from '../domain/readiness/computeReadinessDelta.js';
+
 /**
  * Builds readiness from the existing CareerTwin and skill-gap contracts.
  * Nothing is persisted unless includeScore=true and recordSnapshot=true.
  *
- * Task 17 & Task 23 — Career Readiness Score Engine & History:
+ * Task 17 & Task 23 & Task 24 — Career Readiness Score Engine, History & Change Attribution:
  *   Adds a deterministic `score` block to the readiness response. The score
  *   is computed from evidence-weighted skill coverage and may be boosted by
  *   passed interview sessions. No AI is involved.
  *
- *   When `includeScore` is true, a historical snapshot is automatically
- *   recorded in ReadinessSnapshot to allow students to track progress over time.
+ *   When `includeScore` is true, change attribution `delta` is computed against
+ *   the most recent prior snapshot, and a new snapshot is recorded.
  *
  * @param {string} userId From requireAuth.
  * @param {string} roleId
@@ -54,7 +56,16 @@ export async function getReadiness(
       basedOn: { catalogueVersion: CATALOGUE_VERSION },
     });
     const score = includeScore ? computeReadinessScore(null) : undefined;
-    const result = includeScore ? { ...readiness, score } : readiness;
+    let delta = undefined;
+    if (includeScore) {
+      try {
+        const priorSnapshot = await ReadinessSnapshot.findOne({ user: userId, roleId }).sort({ createdAt: -1 });
+        delta = computeReadinessDelta(priorSnapshot, { ...readiness, score });
+      } catch {
+        // Non-blocking
+      }
+    }
+    const result = includeScore ? { ...readiness, score, ...(delta ? { delta } : {}) } : readiness;
     if (includeScore && recordSnapshot) {
       await recordReadinessSnapshot(userId, roleId, result, null);
     }
@@ -71,7 +82,16 @@ export async function getReadiness(
         basedOn: { catalogueVersion: CATALOGUE_VERSION },
       });
       const score = includeScore ? computeReadinessScore(null) : undefined;
-      const result = includeScore ? { ...readiness, score } : readiness;
+      let delta = undefined;
+      if (includeScore) {
+        try {
+          const priorSnapshot = await ReadinessSnapshot.findOne({ user: userId, roleId }).sort({ createdAt: -1 });
+          delta = computeReadinessDelta(priorSnapshot, { ...readiness, score });
+        } catch {
+          // Non-blocking
+        }
+      }
+      const result = includeScore ? { ...readiness, score, ...(delta ? { delta } : {}) } : readiness;
       if (includeScore && recordSnapshot) {
         await recordReadinessSnapshot(userId, roleId, result, null);
       }
@@ -106,7 +126,19 @@ export async function getReadiness(
   }
 
   const score = computeReadinessScore(gapResult.gap, { interviewPassedSkillKeys });
-  const result = { ...readiness, score };
+
+  let delta = undefined;
+  try {
+    const priorSnapshot = await ReadinessSnapshot.findOne({
+      user: userId,
+      roleId,
+    }).sort({ createdAt: -1 });
+    delta = computeReadinessDelta(priorSnapshot, { ...readiness, score });
+  } catch {
+    // Non-blocking delta calculation
+  }
+
+  const result = { ...readiness, score, ...(delta ? { delta } : {}) };
 
   if (recordSnapshot) {
     await recordReadinessSnapshot(userId, roleId, result, gapResult?.gap);
@@ -114,6 +146,7 @@ export async function getReadiness(
 
   return result;
 }
+
 
 /**
  * Persists a historical snapshot of readiness when a score is evaluated.
