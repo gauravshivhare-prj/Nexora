@@ -13,6 +13,9 @@ import skillEvidenceRoutes from './skillEvidence.routes.js';
 import assessmentRoutes from './assessment.routes.js';
 import readinessRoutes from './readiness.routes.js';
 
+import studentRoutes from './student.routes.js';
+import adminRoutes from './admin.routes.js';
+
 /** Root API router. Future feature routers mount here, one per phase. */
 const router = Router();
 
@@ -28,6 +31,7 @@ router.use('/summary', summaryRoutes);
 router.use('/skill-evidence', skillEvidenceRoutes);
 router.use('/assessments', assessmentRoutes);
 router.use('/interviews', interviewRoutes);
-
+router.use('/student', studentRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;
