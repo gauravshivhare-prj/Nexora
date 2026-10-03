@@ -178,7 +178,18 @@ export const env = {
   geminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash',
   geminiTimeoutMs: parseTimeoutMs(process.env.GEMINI_TIMEOUT_MS, 60000),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  mongodbPoolSize: parsePositiveInteger(process.env.MONGODB_POOL_SIZE, 20),
+  mongodbMinPoolSize: parsePositiveInteger(process.env.MONGODB_MIN_POOL_SIZE, 5),
 };
+
+function parsePositiveInteger(value, fallback) {
+  if (!value) return fallback;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0) {
+    throw new Error(`Expected a positive integer, got "${value}".`);
+  }
+  return num;
+}
 
 /**
  * The JWT signing secret. Read once here and never re-read from process.env,

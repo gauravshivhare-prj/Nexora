@@ -8,8 +8,10 @@ import { logger } from '../utils/logger.js';
  */
 
 // Fail fast rather than letting the driver buffer operations for 30s.
-const CONNECTION_OPTIONS = {
+export const CONNECTION_OPTIONS = {
   serverSelectionTimeoutMS: 5000,
+  maxPoolSize: env.mongodbPoolSize ?? 20,
+  minPoolSize: env.mongodbMinPoolSize ?? 5,
 };
 
 /** Slow query logging threshold in milliseconds (500ms). */
