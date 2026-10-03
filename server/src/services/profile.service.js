@@ -516,6 +516,7 @@ export async function updateProfile(userId, payload, options = {}) {
 
   const updateOp = {
     $set: changes,
+    $inc: { __v: 1 },
     $setOnInsert: { user: userId },
   };
   if (auditDiff.length > 0) {
@@ -538,7 +539,7 @@ export async function updateProfile(userId, payload, options = {}) {
 
     return toPublicProfile(profile);
   } catch (err) {
-    if (err.code === 11000) {
+    if (err.code === 11000 || err.name === 'VersionError') {
       delete updateOp.$setOnInsert;
       const profile = await StudentProfile.findOneAndUpdate(
         { user: userId },

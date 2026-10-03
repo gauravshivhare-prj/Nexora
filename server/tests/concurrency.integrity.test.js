@@ -4,6 +4,7 @@ import { after, before, describe, it } from 'node:test';
 import {
   Assessment,
   AssessmentAttempt,
+  CareerTwin,
   InterviewSession,
   SkillEvidenceCheck,
   StudentProfile,
@@ -394,6 +395,47 @@ describe('G26 — Data Integrity and Concurrency Test Suite', () => {
       // CAS in submitQuestionAnswer ensures only one first attempt is recorded at that attempt index
       const successAnswers = responses.filter((r) => r.status === 200);
       assert.ok(successAnswers.length >= 1, 'At least one answer must succeed');
+    });
+  });
+
+  describe('6. Concurrent CareerTwin Generation OCC', () => {
+    it('handles simultaneous career-twin generations without duplicate key errors or crashes', async () => {
+      const twinEmail = `twin.race.${Date.now()}@example.com`;
+      const { user: twinUser, token: twinToken } = await registerAndLogin(twinEmail);
+
+      // Seed minimal profile so user has enough input for CareerTwin
+      await sendJsonWithToken(server.baseUrl, '/api/profile', {
+        method: 'PATCH',
+        token: twinToken,
+        payload: {
+          career: { targetRole: 'Backend Developer' },
+          skills: [
+            { name: 'Node.js', level: 'intermediate' },
+            { name: 'MongoDB', level: 'intermediate' },
+          ],
+        },
+      });
+
+      // Fire 4 concurrent POST /api/career-twin requests
+      const twinPromises = [
+        sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token: twinToken }),
+        sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token: twinToken }),
+        sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token: twinToken }),
+        sendWithToken(server.baseUrl, '/api/career-twin', { method: 'POST', token: twinToken }),
+      ];
+
+      const responses = await Promise.all(twinPromises);
+
+      for (const res of responses) {
+        assert.equal(res.status, 200, `Expected 200, got ${res.status}: ${JSON.stringify(res.body)}`);
+        assert.equal(res.body.success, true);
+        assert.ok(res.body.data.careerTwin);
+      }
+
+      // Exactly ONE CareerTwin document must exist for this user in MongoDB
+      const twinDocs = await CareerTwin.find({ user: twinUser.id });
+      assert.equal(twinDocs.length, 1, 'Expected exactly one CareerTwin document in DB');
+      assert.ok(twinDocs[0].__v >= 1, 'Version key __v must be incremented on generation');
     });
   });
 });

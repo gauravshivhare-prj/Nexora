@@ -198,23 +198,45 @@ export async function generateCareerTwin(userId, { withNarrative = false, rebuil
     narrative = { text: null, provider: null, model: null, generatedAt: null, warnings: [] };
   }
 
-  const stored = await CareerTwin.findOneAndUpdate(
-    { user: userId },
-    {
-      $set: {
-        skills: content.skills,
-        interests: content.interests,
-        targetRoles: content.targetRoles,
-        academic: content.academic,
-        indicators: content.indicators,
-        narrative,
-        sources: { ...content.sources, profileUpdatedAt },
-        generatedAt: new Date(),
+  const updatePayload = {
+    skills: content.skills,
+    interests: content.interests,
+    targetRoles: content.targetRoles,
+    academic: content.academic,
+    indicators: content.indicators,
+    narrative,
+    sources: { ...content.sources, profileUpdatedAt },
+    generatedAt: new Date(),
+  };
+
+  let stored;
+  try {
+    stored = await CareerTwin.findOneAndUpdate(
+      { user: userId },
+      {
+        $set: updatePayload,
+        $inc: { __v: 1 },
+        $setOnInsert: { user: userId },
       },
-      $setOnInsert: { user: userId },
-    },
-    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
-  );
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    );
+  } catch (err) {
+    if (err.code === 11000 || err.name === 'VersionError') {
+      logger.warn(`CareerTwin race condition detected for user ${userId}; retrying update`, {
+        error: err.message,
+      });
+      stored = await CareerTwin.findOneAndUpdate(
+        { user: userId },
+        {
+          $set: updatePayload,
+          $inc: { __v: 1 },
+        },
+        { new: true, runValidators: true },
+      );
+    } else {
+      throw err;
+    }
+  }
 
   // Freshly built from the data just read, so it cannot be stale.
   return toPublicCareerTwin(stored, { isStale: false, reasons: [] });
