@@ -68,3 +68,49 @@ export async function fetchCurrentUser({ signal } = {}) {
   const body = await request('/api/auth/me', { signal });
   return requireUser(body);
 }
+
+/**
+ * POST /api/auth/refresh
+ *
+ * @returns {Promise<{ user: object, token: string, meta: object }>}
+ */
+export async function refreshSessionRequest() {
+  const body = await post('/api/auth/refresh', {});
+  return requireSession(body);
+}
+
+/**
+ * POST /api/auth/change-password
+ *
+ * @param {{ currentPassword: string, newPassword: string }} payload
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+export async function changePasswordRequest({ currentPassword, newPassword }) {
+  const body = await post('/api/auth/change-password', { currentPassword, newPassword });
+  return body?.data ?? body;
+}
+
+/**
+ * Decodes JWT claims (iat, exp) safely without libraries.
+ *
+ * @param {string} token
+ * @returns {{ sub?: string, iat?: number, exp?: number } | null}
+ */
+export function parseTokenClaims(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}

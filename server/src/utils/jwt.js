@@ -93,7 +93,11 @@ export function verifyAccessToken(token) {
     );
   }
 
-  return { userId: payload.sub.trim() };
+  return {
+    userId: payload.sub.trim(),
+    iat: payload.iat ?? null,
+    exp: payload.exp ?? null,
+  };
 }
 
 /**
@@ -111,4 +115,32 @@ export function extractBearerToken(authorizationHeader) {
   if (parts[0].toLowerCase() !== 'bearer') return null;
 
   return parts[1].length > 0 ? parts[1] : null;
+}
+
+/**
+ * Decodes token payload without signature verification for client inspection.
+ *
+ * @param {string} token
+ * @returns {{ userId: string, iat: string | null, exp: string | null, expiresInSeconds: number | null } | null}
+ */
+export function decodeAccessToken(token) {
+  if (typeof token !== 'string' || token.length === 0) return null;
+
+  try {
+    const payload = jwt.decode(token);
+    if (!payload || typeof payload !== 'object') return null;
+
+    const exp = typeof payload.exp === 'number' ? payload.exp : null;
+    const iat = typeof payload.iat === 'number' ? payload.iat : null;
+    const now = Math.floor(Date.now() / 1000);
+
+    return {
+      userId: typeof payload.sub === 'string' ? payload.sub : null,
+      iat: iat ? new Date(iat * 1000).toISOString() : null,
+      exp: exp ? new Date(exp * 1000).toISOString() : null,
+      expiresInSeconds: exp ? Math.max(0, exp - now) : null,
+    };
+  } catch {
+    return null;
+  }
 }

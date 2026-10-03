@@ -60,6 +60,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+
+    lockoutUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     // Provides createdAt and updatedAt.

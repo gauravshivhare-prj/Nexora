@@ -28,7 +28,7 @@ const DESTINATIONS = [
 ];
 
 export function AppNav() {
-  const { user, logout } = useAuth();
+  const { user, logout, sessionMeta } = useAuth();
   const location = useLocation();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -37,6 +37,10 @@ export function AppNav() {
   // Closing on navigation is not cosmetic: on a phone the panel covers the
   // page, so leaving it open after a tap would hide the thing just opened.
   useEffect(() => setIsOpen(false), [location.pathname]);
+
+  const minutesRemaining = sessionMeta?.exp
+    ? Math.max(0, Math.round((sessionMeta.exp * 1000 - Date.now()) / 60000))
+    : null;
 
   async function handleLogout() {
     if (isLoggingOut) return;
@@ -81,6 +85,16 @@ export function AppNav() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {sessionMeta?.exp && (
+            <span
+              title={`Session expires at ${new Date(sessionMeta.exp * 1000).toLocaleTimeString()}`}
+              className="hidden items-center gap-1.5 rounded-full border border-emerald-200/60 bg-emerald-50/50 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-950/40 dark:text-emerald-300 lg:inline-flex"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Session {minutesRemaining !== null ? `${minutesRemaining}m` : 'active'}
+            </span>
+          )}
+
           <p className="hidden text-sm whitespace-nowrap text-ink-muted 2xl:block">{user.name}</p>
 
           {/* Same control as the public pages: the theme belongs to the

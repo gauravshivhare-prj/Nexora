@@ -1,6 +1,8 @@
 import {
+  changePassword,
   getAuthenticatedUser,
   loginUser,
+  refreshUserSession,
   registerUser,
 } from '../services/auth.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -59,5 +61,35 @@ export const logout = asyncHandler(async (_req, res) => {
     success: true,
     message: 'Logout successful',
     data: { instruction: 'Discard the stored access token on the client.' },
+  });
+});
+
+/**
+ * POST /api/auth/refresh
+ *
+ * Refreshes an active session token statelessly.
+ */
+export const refresh = asyncHandler(async (req, res) => {
+  const result = await refreshUserSession(req.auth.userId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Session token refreshed',
+    data: result,
+  });
+});
+
+/**
+ * POST /api/auth/change-password
+ *
+ * Updates account password after validating current password.
+ */
+export const updatePassword = asyncHandler(async (req, res) => {
+  const result = await changePassword(req.auth.userId, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: result,
   });
 });

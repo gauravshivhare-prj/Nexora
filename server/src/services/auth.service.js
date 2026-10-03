@@ -162,23 +162,147 @@ function invalidCredentials() {
 export async function loginUser(payload) {
   const { email, password } = validateLoginInput(payload);
 
-  // passwordHash is select:false on the schema, so it must be asked for
-  // explicitly. This is the only query in the codebase that reads it.
-  const user = await User.findOne({ email }).select('+passwordHash');
+  // passwordHash, failedLoginAttempts, and lockoutUntil are select:false on schema
+  const user = await User.findOne({ email }).select(
+    '+passwordHash +failedLoginAttempts +lockoutUntil',
+  );
 
-  // Always run a bcrypt comparison, even with no user, so that an unknown
-  // email takes the same time as a known one. Returning early here would
-  // make account enumeration possible by timing alone.
+  const now = new Date();
+  const isLocked = Boolean(user?.lockoutUntil && new Date(user.lockoutUntil) > now);
+
+  // Always run a bcrypt comparison, even with no user or if account is locked,
+  // so that timing characteristics remain identical and no account state is leaked.
   const hashToCompare = user?.passwordHash ?? (await getDummyPasswordHash());
   const passwordMatches = await verifyPassword(password, hashToCompare);
 
+  if (isLocked) {
+    throw ApiError.tooManyRequests(
+      'Account is temporarily locked due to too many failed login attempts. Please try again later in 30 minutes.',
+      ERROR_CODES.ACCOUNT_LOCKED,
+    );
+  }
+
   if (!user || !passwordMatches || !user.isActive) {
+    if (user && user.isActive) {
+      const attempts = (user.failedLoginAttempts || 0) + 1;
+      const update = { failedLoginAttempts: attempts };
+      if (attempts >= 10) {
+        update.lockoutUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes lockout
+      }
+      User.updateOne({ _id: user._id }, { $set: update }).catch(() => {});
+    }
     throw invalidCredentials();
+  }
+
+  // Reset failed login attempts on successful authentication
+  if ((user.failedLoginAttempts && user.failedLoginAttempts > 0) || user.lockoutUntil) {
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { failedLoginAttempts: 0, lockoutUntil: null } },
+    );
   }
 
   return {
     user: toPublicUser(user),
     token: signAccessToken({ id: user._id.toString() }),
+  };
+}
+
+/**
+ * Validates password change input payload.
+ *
+ * @param {unknown} payload
+ * @returns {{ currentPassword: string, newPassword: string }}
+ * @throws {ApiError} 400
+ */
+export function validatePasswordChangeInput(payload) {
+  const collector = new ValidationCollector();
+  const body =
+    payload !== null && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : null;
+  if (!currentPassword) {
+    collector.add('currentPassword', 'Current password is required');
+  }
+
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : null;
+  if (!newPassword) {
+    collector.add('newPassword', 'New password is required');
+  } else if (
+    newPassword.length < PASSWORD_POLICY.minLength ||
+    byteLength(newPassword) > PASSWORD_POLICY.maxBytes ||
+    (PASSWORD_POLICY.requiresLetter && !/\p{L}/u.test(newPassword)) ||
+    (PASSWORD_POLICY.requiresDigit && !/\d/.test(newPassword))
+  ) {
+    collector.add('newPassword', PASSWORD_REQUIREMENT_MESSAGE);
+  }
+
+  collector.throwIfInvalid();
+
+  if (currentPassword === newPassword) {
+    throw ApiError.badRequest(
+      'New password cannot be the same as your current password.',
+      ERROR_CODES.CREDENTIAL_SAME_AS_CURRENT,
+    );
+  }
+
+  return { currentPassword, newPassword };
+}
+
+/**
+ * Changes a user's password after verifying their current password.
+ *
+ * @param {string} userId From requireAuth
+ * @param {object} payload { currentPassword, newPassword }
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+export async function changePassword(userId, payload) {
+  const { currentPassword, newPassword } = validatePasswordChangeInput(payload);
+
+  const user = await User.findById(userId).select('+passwordHash');
+  if (!user) {
+    throw ApiError.unauthorized('Account no longer exists.', ERROR_CODES.AUTH_TOKEN_INVALID);
+  }
+
+  const matches = await verifyPassword(currentPassword, user.passwordHash);
+  if (!matches) {
+    throw ApiError.badRequest('Current password is incorrect.', ERROR_CODES.INVALID_CREDENTIALS);
+  }
+
+  const newHash = await hashPassword(newPassword);
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        passwordHash: newHash,
+        failedLoginAttempts: 0,
+        lockoutUntil: null,
+      },
+    },
+  );
+
+  return {
+    success: true,
+    message: 'Password changed successfully.',
+  };
+}
+
+/**
+ * Issues a fresh access token for an active authenticated user.
+ *
+ * @param {string} userId From requireAuth
+ * @returns {Promise<{ user: object, token: string, meta: object }>}
+ */
+export async function refreshUserSession(userId) {
+  const user = await getAuthenticatedUser(userId);
+  const token = signAccessToken({ id: user.id });
+
+  return {
+    user,
+    token,
+    meta: {
+      refreshedAt: new Date().toISOString(),
+    },
   };
 }
 

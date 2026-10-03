@@ -2,9 +2,12 @@ import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ApiRequestError } from '../services/apiClient.js';
 import {
+  changePasswordRequest,
   fetchCurrentUser,
   loginRequest,
   logoutRequest,
+  parseTokenClaims,
+  refreshSessionRequest,
   registerRequest,
 } from '../services/auth.service.js';
 import { clearToken, readToken, writeToken } from '../services/tokenStorage.js';
@@ -28,6 +31,7 @@ export const AUTH_STATUS = {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [sessionMeta, setSessionMeta] = useState(() => parseTokenClaims(readToken()));
   // Starts as RESTORING whenever a stored token exists, so the very first
   // render of a protected route shows a loading state instead of briefly
   // redirecting a logged-in user to /login.
@@ -39,12 +43,14 @@ export function AuthProvider({ children }) {
   const endSession = useCallback(() => {
     clearToken();
     setUser(null);
+    setSessionMeta(null);
     setStatus(AUTH_STATUS.ANONYMOUS);
   }, []);
 
   const beginSession = useCallback((sessionUser, token) => {
     writeToken(token);
     setUser(sessionUser);
+    setSessionMeta(parseTokenClaims(token));
     setStatus(AUTH_STATUS.AUTHENTICATED);
   }, []);
 
@@ -123,17 +129,30 @@ export function AuthProvider({ children }) {
     }
   }, [endSession]);
 
+  const refreshSession = useCallback(async () => {
+    const { user: sessionUser, token } = await refreshSessionRequest();
+    beginSession(sessionUser, token);
+    return sessionUser;
+  }, [beginSession]);
+
+  const changePassword = useCallback(async (payload) => {
+    return changePasswordRequest(payload);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       status,
+      sessionMeta,
       isAuthenticated: status === AUTH_STATUS.AUTHENTICATED,
       isRestoring: status === AUTH_STATUS.RESTORING,
       login,
       register,
       logout,
+      refreshSession,
+      changePassword,
     }),
-    [user, status, login, register, logout],
+    [user, status, sessionMeta, login, register, logout, refreshSession, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

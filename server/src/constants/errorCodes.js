@@ -25,6 +25,10 @@ export const ERROR_CODES = {
   AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
   /** Authenticated successfully, but the account is deactivated. */
   ACCOUNT_INACTIVE: 'ACCOUNT_INACTIVE',
+  /** Account is locked due to excessive failed login attempts. */
+  ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+  /** New credential matches current credential during change-password. */
+  CREDENTIAL_SAME_AS_CURRENT: 'CREDENTIAL_SAME_AS_CURRENT',
   FORBIDDEN: 'FORBIDDEN',
 
   // --- Rate limiting ------------------------------------------------------
