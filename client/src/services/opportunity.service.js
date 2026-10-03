@@ -32,15 +32,22 @@ export function toOpportunity(raw) {
     explanation: String(
       raw.explanation ?? 'All listed eligibility rules are satisfied by verified evidence and profile data.',
     ),
+    matchScore: typeof raw.matchScore === 'number' ? raw.matchScore : 100,
+    gapToEligibility: Array.isArray(raw.gapToEligibility) ? raw.gapToEligibility : [],
+    addedDate: raw.addedDate ? String(raw.addedDate) : null,
+    expiresAt: raw.expiresAt ? String(raw.expiresAt) : null,
+    isActive: raw.isActive !== false,
+    matchExplanation: raw.matchExplanation ?? null,
   };
 }
 
 /**
  * GET /api/opportunities
- * Fetches matched opportunities for the authenticated student.
+ * Fetches matched and near-miss opportunities for the authenticated student.
  */
-export async function fetchOpportunities({ signal } = {}) {
-  const body = await request('/api/opportunities', { signal });
+export async function fetchOpportunities({ threshold, signal } = {}) {
+  const query = threshold !== undefined ? `?threshold=${encodeURIComponent(threshold)}` : '';
+  const body = await request(`/api/opportunities${query}`, { signal });
   const data = body?.data ?? body;
 
   if (!Array.isArray(data?.opportunities)) {
@@ -49,6 +56,7 @@ export async function fetchOpportunities({ signal } = {}) {
 
   return {
     opportunities: data.opportunities.map(toOpportunity),
+    nearMiss: Array.isArray(data.nearMiss) ? data.nearMiss.map(toOpportunity) : [],
     catalogue: data.catalogue
       ? {
           version: Number(data.catalogue.version ?? 1),

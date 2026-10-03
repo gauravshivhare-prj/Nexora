@@ -17,7 +17,8 @@ export function OpportunitiesPage() {
   const [loadStatus, setLoadStatus] = useState(LOAD_STATUS.LOADING);
   const [loadError, setLoadError] = useState(null);
 
-  // Filters
+  // Tabs & Filters
+  const [viewCategory, setViewCategory] = useState('matched'); // 'matched' | 'near_miss'
   const [sourceFilter, setSourceFilter] = useState(OPPORTUNITY_FILTER_TYPES.ALL);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
@@ -57,6 +58,8 @@ export function OpportunitiesPage() {
   }, [selectedOpportunity]);
 
   const allOpportunities = data?.opportunities ?? [];
+  const nearMissOpportunities = data?.nearMiss ?? [];
+  const currentPool = viewCategory === 'near_miss' ? nearMissOpportunities : allOpportunities;
 
   // Single-pass memoized filtering and count calculation
   const { filteredOpportunities, curatedCount, liveCount } = useMemo(() => {
@@ -65,7 +68,7 @@ export function OpportunitiesPage() {
     const filtered = [];
     const query = searchQuery.trim().toLowerCase();
 
-    for (const opp of allOpportunities) {
+    for (const opp of currentPool) {
       if (opp.isCurated) curated++;
       if (opp.isLive) live++;
 
@@ -88,7 +91,7 @@ export function OpportunitiesPage() {
     }
 
     return { filteredOpportunities: filtered, curatedCount: curated, liveCount: live };
-  }, [allOpportunities, sourceFilter, searchQuery]);
+  }, [currentPool, sourceFilter, searchQuery]);
 
   if (loadStatus === LOAD_STATUS.LOADING) {
     return (
@@ -119,6 +122,38 @@ export function OpportunitiesPage() {
       />
 
       <div className="flex flex-col gap-6">
+        {/* Category Mode Switcher: Matched vs Near-Miss */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-orange-100 pb-4">
+          <button
+            type="button"
+            onClick={() => {
+              setViewCategory('matched');
+              setSourceFilter(OPPORTUNITY_FILTER_TYPES.ALL);
+            }}
+            className={`min-h-[44px] rounded-xl px-5 py-2.5 text-xs font-bold transition-all ${
+              viewCategory === 'matched'
+                ? 'bg-brand text-on-brand shadow-sm'
+                : 'border border-orange-200 bg-surface text-ink hover:border-brand/50'
+            }`}
+          >
+            ✓ Fully Matched ({allOpportunities.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewCategory('near_miss');
+              setSourceFilter(OPPORTUNITY_FILTER_TYPES.ALL);
+            }}
+            className={`min-h-[44px] rounded-xl px-5 py-2.5 text-xs font-bold transition-all ${
+              viewCategory === 'near_miss'
+                ? 'bg-brand text-on-brand shadow-sm'
+                : 'border border-orange-200 bg-surface text-ink hover:border-brand/50'
+            }`}
+          >
+            ★ Unlockable Near-Misses ({nearMissOpportunities.length})
+          </button>
+        </div>
+
         {/* Provenance & Methodology Notice */}
         <div className="rounded-2xl border border-orange-200 bg-surface p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
@@ -126,7 +161,11 @@ export function OpportunitiesPage() {
               <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 font-semibold text-brand-text">
                 <span aria-hidden="true">✓</span> Deterministic Match
               </span>
-              <span>Requires verified skills &amp; profile target role</span>
+              <span>
+                {viewCategory === 'near_miss'
+                  ? 'Shows opportunities where you meet required skill thresholds with clear actions to unlock'
+                  : 'Requires 100% verified skills & profile target role'}
+              </span>
             </div>
 
             {data?.catalogue && (
@@ -149,18 +188,18 @@ export function OpportunitiesPage() {
               onClick={() => setSourceFilter(OPPORTUNITY_FILTER_TYPES.ALL)}
               className={`min-h-[44px] rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                 sourceFilter === OPPORTUNITY_FILTER_TYPES.ALL
-                  ? 'bg-brand text-on-brand shadow-sm'
+                  ? 'bg-surface border-2 border-brand text-brand-text font-bold shadow-xs'
                   : 'border border-orange-100 bg-surface text-ink hover:border-brand/40'
               }`}
             >
-              All Matches ({allOpportunities.length})
+              All Sources ({currentPool.length})
             </button>
             <button
               type="button"
               onClick={() => setSourceFilter(OPPORTUNITY_FILTER_TYPES.CURATED)}
               className={`min-h-[44px] rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                 sourceFilter === OPPORTUNITY_FILTER_TYPES.CURATED
-                  ? 'bg-brand text-on-brand shadow-sm'
+                  ? 'bg-surface border-2 border-brand text-brand-text font-bold shadow-xs'
                   : 'border border-orange-100 bg-surface text-ink hover:border-brand/40'
               }`}
             >
@@ -171,7 +210,7 @@ export function OpportunitiesPage() {
               onClick={() => setSourceFilter(OPPORTUNITY_FILTER_TYPES.LIVE)}
               className={`min-h-[44px] rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
                 sourceFilter === OPPORTUNITY_FILTER_TYPES.LIVE
-                  ? 'bg-brand text-on-brand shadow-sm'
+                  ? 'bg-surface border-2 border-brand text-brand-text font-bold shadow-xs'
                   : 'border border-orange-100 bg-surface text-ink hover:border-brand/40'
               }`}
             >
@@ -279,18 +318,36 @@ export function OpportunitiesPage() {
                   <div className="flex flex-col gap-3">
                     {/* Source & Curated vs Live Badge Header */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${presentation.badgeClass}`}
-                      >
-                        <span aria-hidden="true">{presentation.icon}</span>
-                        {presentation.label}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${presentation.badgeClass}`}
+                        >
+                          <span aria-hidden="true">{presentation.icon}</span>
+                          {presentation.label}
+                        </span>
 
-                      {opportunity.source.asOf && (
+                        {opportunity.matchScore !== undefined && (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              opportunity.matchScore === 100
+                                ? 'border border-green-200 bg-green-50 text-green-800'
+                                : 'border border-amber-200 bg-amber-50 text-amber-800'
+                            }`}
+                          >
+                            {opportunity.matchScore}% Match
+                          </span>
+                        )}
+                      </div>
+
+                      {opportunity.expiresAt ? (
+                        <span className="text-[11px] text-ink-muted">
+                          Valid until {opportunity.expiresAt}
+                        </span>
+                      ) : opportunity.source.asOf ? (
                         <span className="text-[11px] text-ink-muted">
                           Source date: {opportunity.source.asOf}
                         </span>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Title & Summary */}
@@ -305,17 +362,24 @@ export function OpportunitiesPage() {
                     {opportunity.requiredSkills.length > 0 && (
                       <div className="flex flex-col gap-1.5 pt-1">
                         <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-                          Verified Required Skills:
+                          Required Skills:
                         </span>
                         <div className="flex flex-wrap gap-1.5">
-                          {opportunity.requiredSkills.map((skill) => (
-                            <span
-                              key={skill}
-                              className="inline-flex rounded-lg border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-800"
-                            >
-                              ✓ {skill}
-                            </span>
-                          ))}
+                          {opportunity.requiredSkills.map((skill) => {
+                            const isMissing = opportunity.gapToEligibility?.some((g) => g.skill.toLowerCase() === skill.toLowerCase());
+                            return (
+                              <span
+                                key={skill}
+                                className={`inline-flex rounded-lg border px-2 py-0.5 text-xs font-medium ${
+                                  isMissing
+                                    ? 'border-amber-200 bg-amber-50 text-amber-900'
+                                    : 'border-green-200 bg-green-50 text-green-800'
+                                }`}
+                              >
+                                {isMissing ? '○ ' : '✓ '} {skill}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -340,6 +404,23 @@ export function OpportunitiesPage() {
                       <span className="font-semibold text-brand-text">Match Reason: </span>
                       <span className="text-ink-muted">{opportunity.explanation}</span>
                     </div>
+
+                    {/* Near-Miss Actionable Gaps */}
+                    {opportunity.gapToEligibility && opportunity.gapToEligibility.length > 0 && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-xs">
+                        <span className="font-bold text-amber-900 block mb-1.5">
+                          Actions to Unlock ({opportunity.gapToEligibility.length} remaining):
+                        </span>
+                        <ul className="space-y-1.5">
+                          {opportunity.gapToEligibility.map((gap) => (
+                            <li key={gap.skill} className="flex items-start gap-1.5 text-[11px] text-amber-950">
+                              <span className="text-amber-600 font-bold">•</span>
+                              <span><strong>{gap.skill}:</strong> {gap.action}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -375,17 +456,32 @@ export function OpportunitiesPage() {
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-orange-200 bg-canvas p-6 shadow-xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                      (OPPORTUNITY_SOURCE_PRESENTATION[selectedOpportunity.source.type] ??
-                        OPPORTUNITY_SOURCE_PRESENTATION.curated_internal).badgeClass
-                    }`}
-                  >
-                    {
-                      (OPPORTUNITY_SOURCE_PRESENTATION[selectedOpportunity.source.type] ??
-                        OPPORTUNITY_SOURCE_PRESENTATION.curated_internal).label
-                    }
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                        (OPPORTUNITY_SOURCE_PRESENTATION[selectedOpportunity.source.type] ??
+                          OPPORTUNITY_SOURCE_PRESENTATION.curated_internal).badgeClass
+                      }`}
+                    >
+                      {
+                        (OPPORTUNITY_SOURCE_PRESENTATION[selectedOpportunity.source.type] ??
+                          OPPORTUNITY_SOURCE_PRESENTATION.curated_internal).label
+                      }
+                    </span>
+
+                    {selectedOpportunity.matchScore !== undefined && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          selectedOpportunity.matchScore === 100
+                            ? 'border border-green-200 bg-green-50 text-green-800'
+                            : 'border border-amber-200 bg-amber-50 text-amber-800'
+                        }`}
+                      >
+                        {selectedOpportunity.matchScore}% Match
+                      </span>
+                    )}
+                  </div>
+
                   <h2 id="opportunity-detail-title" className="mt-2 text-lg font-bold text-ink">
                     {selectedOpportunity.title}
                   </h2>
@@ -409,20 +505,43 @@ export function OpportunitiesPage() {
 
                 <div>
                   <h4 className="font-semibold text-ink uppercase tracking-wider text-[11px]">
-                    Eligibility &amp; Verified Skills
+                    Eligibility &amp; Verification
                   </h4>
                   <p className="mt-1 text-ink-muted">{selectedOpportunity.explanation}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedOpportunity.requiredSkills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex rounded-lg border border-green-200 bg-green-50 px-2 py-0.5 font-medium text-green-800"
-                      >
-                        ✓ {skill}
-                      </span>
-                    ))}
+                    {selectedOpportunity.requiredSkills.map((skill) => {
+                      const isMissing = selectedOpportunity.gapToEligibility?.some((g) => g.skill.toLowerCase() === skill.toLowerCase());
+                      return (
+                        <span
+                          key={skill}
+                          className={`inline-flex rounded-lg border px-2 py-0.5 font-medium ${
+                            isMissing
+                              ? 'border-amber-200 bg-amber-50 text-amber-900'
+                              : 'border-green-200 bg-green-50 text-green-800'
+                          }`}
+                        >
+                          {isMissing ? '○ Need: ' : '✓ Verified: '} {skill}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {selectedOpportunity.gapToEligibility && selectedOpportunity.gapToEligibility.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
+                    <h4 className="font-bold text-amber-900 text-xs mb-1.5">
+                      Recommended Steps to Qualify:
+                    </h4>
+                    <ul className="space-y-1.5">
+                      {selectedOpportunity.gapToEligibility.map((gap) => (
+                        <li key={gap.skill} className="flex items-start gap-1.5 text-[11px] text-amber-950">
+                          <span className="text-amber-600 font-bold">•</span>
+                          <span><strong>{gap.skill}:</strong> {gap.action}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <div>
                   <h4 className="font-semibold text-ink uppercase tracking-wider text-[11px]">
@@ -442,7 +561,7 @@ export function OpportunitiesPage() {
 
                 <div className="rounded-xl border border-orange-100 bg-orange-50/20 p-3">
                   <h4 className="font-semibold text-ink uppercase tracking-wider text-[11px]">
-                    Provenance &amp; Source Metadata
+                    Provenance &amp; Validity
                   </h4>
                   <div className="mt-1 space-y-1 text-ink-muted">
                     <p>
@@ -451,13 +570,18 @@ export function OpportunitiesPage() {
                     <p>
                       <strong>Catalogue Version:</strong> v{selectedOpportunity.source.version}
                     </p>
-                    {selectedOpportunity.source.asOf && (
+                    {selectedOpportunity.addedDate && (
                       <p>
-                        <strong>Data Effective As Of:</strong> {selectedOpportunity.source.asOf}
+                        <strong>Added On:</strong> {selectedOpportunity.addedDate}
+                      </p>
+                    )}
+                    {selectedOpportunity.expiresAt && (
+                      <p>
+                        <strong>Valid Until:</strong> {selectedOpportunity.expiresAt}
                       </p>
                     )}
                     <p>
-                      <strong>Matching Engine:</strong> Strict deterministic evaluation (zero canned scores)
+                      <strong>Matching Engine:</strong> Pure deterministic evaluation against verified evidence
                     </p>
                   </div>
                 </div>

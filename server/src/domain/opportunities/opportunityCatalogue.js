@@ -5,11 +5,17 @@ import {
   OPPORTUNITY_CATALOGUE_VERSION,
   OPPORTUNITY_SOURCE_TYPES,
 } from './opportunityContract.js';
+import {
+  validateOpportunityCatalogue,
+  auditCatalogueFreshness,
+} from './catalogueIntegrity.js';
+
+export { validateOpportunityCatalogue, auditCatalogueFreshness };
 
 const SOURCE_AS_OF = '2026-10-02';
 
 /**
- * Task 18 — Expanded Opportunity Catalogue.
+ * Task 18 & 25 — Expanded Opportunity Catalogue.
  *
  * Ten curated internal practice opportunities across four career paths.
  * IDs are stable and must never be reused for a different record.
@@ -20,12 +26,13 @@ const SOURCE_AS_OF = '2026-10-02';
  * - `minSkillFraction` (0 < f ≤ 1) allows partial-match in nearMiss matching:
  *   an opportunity appears as a near-miss if (verifiedSkills / requiredSkills) ≥ minSkillFraction
  *   but the full eligibility is not satisfied.
+ * - Each entry declares `addedDate`, `expiresAt`, and `isActive` for freshness tracking.
  */
 export const OPPORTUNITY_CATALOGUE = Object.freeze([
   // ─── Backend ───────────────────────────────────────────────────────────────
   Object.freeze({
     id: 'curated_internal:backend-apprenticeship',
-    title: 'Backend Apprenticeship',
+    title: 'Backend apprenticeship',
     summary:
       'A practice opportunity for building server-side applications with Node.js and RESTful APIs.',
     source: source(),
@@ -36,6 +43,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['JavaScript', 'Node.js'],
     targetRoleIds: ['backend-developer'],
     minSkillFraction: 0.5,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
   Object.freeze({
     id: 'curated_internal:backend-database-practicum',
@@ -50,6 +60,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['Node.js', 'SQL', 'MongoDB'],
     targetRoleIds: ['backend-developer', 'full-stack-developer'],
     minSkillFraction: 0.5,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
   Object.freeze({
     id: 'curated_internal:backend-api-design',
@@ -64,6 +77,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['JavaScript', 'Node.js', 'REST APIs'],
     targetRoleIds: ['backend-developer', 'full-stack-developer'],
     minSkillFraction: 0.67,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
 
   // ─── Frontend ──────────────────────────────────────────────────────────────
@@ -79,6 +95,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['HTML', 'CSS', 'JavaScript'],
     targetRoleIds: ['frontend-developer'],
     minSkillFraction: 0.5,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
   Object.freeze({
     id: 'curated_internal:react-component-challenge',
@@ -93,6 +112,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['JavaScript', 'React', 'CSS'],
     targetRoleIds: ['frontend-developer', 'full-stack-developer'],
     minSkillFraction: 0.67,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
 
   // ─── Full-Stack ─────────────────────────────────────────────────────────────
@@ -109,6 +131,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['JavaScript', 'React', 'Node.js'],
     targetRoleIds: ['full-stack-developer'],
     minSkillFraction: 0.67,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
   Object.freeze({
     id: 'curated_internal:fullstack-deployment',
@@ -123,6 +148,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['JavaScript', 'Node.js', 'Docker'],
     targetRoleIds: ['full-stack-developer', 'devops-engineer'],
     minSkillFraction: 0.67,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
 
   // ─── DevOps ────────────────────────────────────────────────────────────────
@@ -139,6 +167,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['Docker', 'Git', 'Linux'],
     targetRoleIds: ['devops-engineer'],
     minSkillFraction: 0.5,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
   Object.freeze({
     id: 'curated_internal:devops-kubernetes',
@@ -153,6 +184,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
     requiredSkills: ['Docker', 'Kubernetes', 'Linux'],
     targetRoleIds: ['devops-engineer'],
     minSkillFraction: 0.67,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
 
   // ─── Cross-role ─────────────────────────────────────────────────────────────
@@ -177,6 +211,9 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
       'devops-engineer',
     ],
     minSkillFraction: 1.0,
+    addedDate: '2026-10-02',
+    expiresAt: '2027-10-02',
+    isActive: true,
   }),
 ]);
 
@@ -189,7 +226,7 @@ export const OPPORTUNITY_CATALOGUE = Object.freeze([
  * intentionally strict: an unsupported catalogue item must not leak into a
  * student's result merely because one field happened to match.
  *
- * Supports optional filters (roleId, skill) without compromising deterministic matching.
+ * Supports optional filters (roleId, skill, currentDate, includeExpired) without compromising deterministic matching.
  */
 export function matchOpportunities(
   twin,
@@ -205,7 +242,7 @@ export function matchOpportunities(
   const filterRoleId = filters?.roleId ? filters.roleId.trim().toLowerCase() : null;
   const filterSkillKey = filters?.skill ? skillKey(filters.skill) : null;
 
-  const filtered = applyFilters(catalogue, filterRoleId, filterSkillKey);
+  const filtered = applyFilters(catalogue, filterRoleId, filterSkillKey, filters);
 
   return filtered
     .map((opportunity) => matchOne(opportunity, verifiedSkills, targetRoleId))
@@ -217,16 +254,18 @@ export function matchOpportunities(
  *
  * A "near miss" is an opportunity where:
  * 1. The student does NOT fully qualify (not in matchOpportunities result).
- * 2. The student meets at least `opportunity.minSkillFraction` of required skills.
+ * 2. The student meets at least `opportunity.minSkillFraction` of required skills
+ *    (or a custom threshold specified via filters.threshold / filters.nearMissThreshold).
  * 3. The opportunity targets a role the student is interested in (if profile has one).
  *
  * Each near-miss includes a `gapToEligibility` field listing exactly which
- * skills the student needs to verify to unlock the opportunity.
+ * skills the student needs to verify to unlock the opportunity, plus a
+ * `matchExplanation` detailing satisfied and missing requirements.
  *
  * @param {object|null} twin CareerTwin document
  * @param {object|null} profile StudentProfile document
  * @param {object[]|readonly object[]} [catalogue] Opportunity catalogue
- * @param {object} [filters] Optional roleId / skill filters
+ * @param {object} [filters] Optional roleId / skill / threshold filters
  * @returns {object[]} Near-miss opportunities with gapToEligibility
  */
 export function nearMissOpportunities(
@@ -243,7 +282,7 @@ export function nearMissOpportunities(
   const filterRoleId = filters?.roleId ? filters.roleId.trim().toLowerCase() : null;
   const filterSkillKey = filters?.skill ? skillKey(filters.skill) : null;
 
-  const filtered = applyFilters(catalogue, filterRoleId, filterSkillKey);
+  const filtered = applyFilters(catalogue, filterRoleId, filterSkillKey, filters);
 
   // Exclude fully-matched opportunities from near-miss results
   const fullyMatched = new Set(
@@ -254,7 +293,7 @@ export function nearMissOpportunities(
 
   return filtered
     .filter((opp) => !fullyMatched.has(opp.id))
-    .map((opp) => nearMissOne(opp, verifiedSkills, targetRoleId))
+    .map((opp) => nearMissOne(opp, verifiedSkills, targetRoleId, filters))
     .filter(Boolean);
 }
 
@@ -270,11 +309,22 @@ function resolveVerifiedSkills(twin) {
   );
 }
 
-/** Applies role/skill filters without mutating the catalogue. */
-function applyFilters(catalogue, filterRoleId, filterSkillKey) {
+/** Applies role/skill and expiry filters without mutating the catalogue. */
+function applyFilters(catalogue, filterRoleId, filterSkillKey, filters = {}) {
+  const currentDate = filters?.currentDate || filters?.now || new Date().toISOString().slice(0, 10);
+  const includeExpired = Boolean(filters?.includeExpired);
+
   return catalogue
     .filter((opportunity) => isCurrentSource(opportunity?.source))
     .filter((opportunity) => {
+      // Exclude inactive opportunities
+      if (opportunity.isActive === false) {
+        return false;
+      }
+      // Exclude expired opportunities (unless explicitly requested)
+      if (!includeExpired && opportunity.expiresAt && opportunity.expiresAt < currentDate) {
+        return false;
+      }
       if (
         filterRoleId &&
         !opportunity.targetRoleIds?.some((r) => r.toLowerCase() === filterRoleId)
@@ -317,6 +367,7 @@ function matchOne(opportunity, verifiedSkills, targetRoleId) {
   const requiredKeys = (opportunity.requiredSkills ?? []).map((name) => skillKey(name)).filter(Boolean);
   const verifiedCount = requiredKeys.filter((k) => verifiedSkills.has(k)).length;
   const matchScore = requiredKeys.length > 0 ? Math.round((verifiedCount / requiredKeys.length) * 100) : 100;
+  const satisfiedSkills = (opportunity.requiredSkills ?? []).filter((name) => verifiedSkills.has(skillKey(name)));
 
   return {
     id: opportunity.id,
@@ -330,6 +381,17 @@ function matchOne(opportunity, verifiedSkills, targetRoleId) {
     matchScore,
     gapToEligibility: [],
     explanation: 'All listed eligibility rules are satisfied by verified evidence and profile data.',
+    matchExplanation: {
+      satisfiedSkills,
+      missingSkills: [],
+      verifiedCount,
+      requiredCount: requiredKeys.length,
+      matchedRole: targetRoleId,
+      summary: 'All listed eligibility rules are satisfied by verified evidence and profile data.',
+    },
+    addedDate: opportunity.addedDate ?? null,
+    expiresAt: opportunity.expiresAt ?? null,
+    isActive: opportunity.isActive ?? true,
   };
 }
 
@@ -337,7 +399,7 @@ function matchOne(opportunity, verifiedSkills, targetRoleId) {
  * Evaluates one opportunity for near-miss status.
  * Returns a near-miss object if the student partially qualifies, null otherwise.
  */
-function nearMissOne(opportunity, verifiedSkills, targetRoleId) {
+function nearMissOne(opportunity, verifiedSkills, targetRoleId, filters = {}) {
   if (!opportunity || typeof opportunity !== 'object') return null;
 
   // Check role eligibility — must match the student's target role
@@ -352,10 +414,21 @@ function nearMissOne(opportunity, verifiedSkills, targetRoleId) {
 
   const verifiedCount = requiredKeys.filter((k) => verifiedSkills.has(k)).length;
   const fraction = verifiedCount / requiredKeys.length;
-  const minFraction = opportunity.minSkillFraction ?? 0.5;
+
+  // Determine effective minSkillFraction (configurable via filters)
+  let effectiveMinFraction = opportunity.minSkillFraction ?? 0.5;
+  const rawThreshold = filters?.threshold ?? filters?.nearMissThreshold;
+  if (typeof rawThreshold === 'number' && !Number.isNaN(rawThreshold)) {
+    effectiveMinFraction = rawThreshold > 1 ? rawThreshold / 100 : rawThreshold;
+  } else if (typeof rawThreshold === 'string' && rawThreshold.trim() !== '') {
+    const parsed = Number.parseFloat(rawThreshold.trim());
+    if (!Number.isNaN(parsed)) {
+      effectiveMinFraction = parsed > 1 ? parsed / 100 : parsed;
+    }
+  }
 
   // Only qualify as near-miss if meeting the minimum fraction
-  if (fraction < minFraction) return null;
+  if (fraction < effectiveMinFraction) return null;
 
   const missingKeys = requiredKeys.filter((k) => !verifiedSkills.has(k));
   const gapToEligibility = missingKeys.map((key) => {
@@ -365,6 +438,11 @@ function nearMissOne(opportunity, verifiedSkills, targetRoleId) {
       action: `Verify ${originalName ?? key} with a project or assessment to unlock this opportunity.`,
     };
   });
+
+  const satisfiedSkills = (opportunity.requiredSkills ?? []).filter((name) => verifiedSkills.has(skillKey(name)));
+  const missingSkillNames = missingKeys.map(
+    (key) => opportunity.requiredSkills.find((name) => skillKey(name) === key) ?? key,
+  );
 
   const matchScore = Math.round(fraction * 100);
 
@@ -379,6 +457,17 @@ function nearMissOne(opportunity, verifiedSkills, targetRoleId) {
     matchScore,
     gapToEligibility,
     explanation: `You meet ${verifiedCount} of ${requiredKeys.length} required skills. Verify the remaining ${missingKeys.length} to qualify.`,
+    matchExplanation: {
+      satisfiedSkills,
+      missingSkills: missingSkillNames,
+      verifiedCount,
+      requiredCount: requiredKeys.length,
+      thresholdUsed: effectiveMinFraction,
+      summary: `You meet ${verifiedCount} of ${requiredKeys.length} required skills. Verify the remaining ${missingKeys.length} to qualify.`,
+    },
+    addedDate: opportunity.addedDate ?? null,
+    expiresAt: opportunity.expiresAt ?? null,
+    isActive: opportunity.isActive ?? true,
   };
 }
 

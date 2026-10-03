@@ -40,6 +40,11 @@ export async function getOpportunities(userId, filters = {}) {
     }
   }
 
+  // Support configurable threshold
+  if (filters?.threshold !== undefined && filters?.nearMissThreshold === undefined) {
+    effectiveFilters.nearMissThreshold = filters.threshold;
+  }
+
   const opportunities = matchOpportunities(twin, profile, OPPORTUNITY_CATALOGUE, effectiveFilters);
   const nearMiss = nearMissOpportunities(twin, profile, OPPORTUNITY_CATALOGUE, effectiveFilters);
 
@@ -48,7 +53,7 @@ export async function getOpportunities(userId, filters = {}) {
     nearMiss,
     catalogue: {
       version: OPPORTUNITY_CATALOGUE_VERSION,
-      source: OPPORTUNITY_CATALOGUE[0]?.source?.type ?? null,
+      source: OPPORTUNITY_CATALOGUE[0]?.source ? { ...OPPORTUNITY_CATALOGUE[0].source } : null,
       totalInCatalogue: OPPORTUNITY_CATALOGUE.length,
     },
     method: {
