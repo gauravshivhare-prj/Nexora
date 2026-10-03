@@ -99,7 +99,8 @@ export function errorHandler(error, req, res, next) {
   const { statusCode, message, errorCode, details } = normaliseError(error);
 
   const safeUrl = req.originalUrl?.replace(/([?&](?:token|key|apiKey|secret|password)=)[^&]+/gi, '$1[REDACTED]') || req.url || '';
-  const logContext = `${req.method} ${safeUrl} → ${statusCode} ${errorCode}`;
+  const reqId = req.id ? `[${req.id}] ` : '';
+  const logContext = `${reqId}${req.method} ${safeUrl} → ${statusCode} ${errorCode}`;
   if (statusCode >= 500) {
     logger.error(`Unhandled request failure: ${logContext}`, error);
   } else {
@@ -107,6 +108,10 @@ export function errorHandler(error, req, res, next) {
   }
 
   const body = { success: false, message, errorCode };
+
+  if (req.id) {
+    body.requestId = req.id;
+  }
 
   // Per-field validation failures. Safe in production: these are the caller's
   // own field names and our own policy messages, never internal state.

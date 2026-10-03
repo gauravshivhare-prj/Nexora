@@ -5,6 +5,8 @@ import apiRoutes from './routes/index.js';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
+import { requestId } from './middleware/requestId.js';
+import { responseTiming } from './middleware/responseTiming.js';
 import { requestLogger } from './middleware/requestLogger.js';
 
 /**
@@ -18,6 +20,10 @@ export function createApp() {
 
   app.set('trust proxy', env.trustProxy);
   app.disable('x-powered-by');
+
+  app.use(requestId);
+  app.use(responseTiming);
+
   // A JSON API is never meant to be sniffed as another type or framed.
   app.use((_req, res, next) => {
     res.set({
@@ -35,7 +41,8 @@ export function createApp() {
     cors({
       origin: allowedOrigins,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+      exposedHeaders: ['X-Request-Id', 'X-Response-Time', 'X-API-Version', 'Retry-After'],
       credentials: true,
     }),
   );
