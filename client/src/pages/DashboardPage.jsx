@@ -5,7 +5,7 @@ import { Card, EmptyState, ErrorState, LoadingState, PageShell } from '../compon
 import { ReadinessVisualization } from '../components/ReadinessVisualization.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { SECTION_STATUS, fetchDashboard } from '../services/dashboard.service.js';
-import { formatDateTime } from '../utils/dateFormat.js';
+import { formatDateTime, formatRelativeTime } from '../utils/dateFormat.js';
 import { toMessage } from '../utils/errorMessage.js';
 
 /**
@@ -89,6 +89,67 @@ export function DashboardPage() {
       </header>
 
       <div className="flex flex-col gap-5">
+        {/* Task 28 — Quick Activity & Freshness Overview */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <div className="flex flex-col gap-1 p-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Profile Evidence
+              </span>
+              <span className="text-lg font-bold text-ink">
+                {data.profile.value?.skillCount ?? 0} Skills · {data.profile.value?.projectCount ?? 0} Projects
+              </span>
+              <span className="text-[11px] text-ink-muted truncate">
+                {data.profile.value?.updatedAt
+                  ? `Updated ${formatRelativeTime(data.profile.value.updatedAt)}`
+                  : 'Profile not started'}
+              </span>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex flex-col gap-1 p-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Resumes Evidence
+              </span>
+              <span className="text-lg font-bold text-ink">
+                {data.resumes.value?.analysed ?? 0} of {data.resumes.value?.total ?? 0} Analysed
+              </span>
+              <span className="text-[11px] text-ink-muted truncate">
+                {data.resumes.value?.total > 0 ? 'Contributes to twin' : 'No resume uploaded'}
+              </span>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex flex-col gap-1 p-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                Technical Assessments
+              </span>
+              <span className="text-lg font-bold text-ink">
+                {data.assessments?.value?.attemptsCount ?? 0} Attempts
+              </span>
+              <Link to="/assessments" className="text-[11px] font-medium text-brand hover:underline">
+                Take an assessment →
+              </Link>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex flex-col gap-1 p-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                AI Mock Interviews
+              </span>
+              <span className="text-lg font-bold text-ink">
+                {data.interviews?.value?.sessionsCount ?? 0} Completed
+              </span>
+              <Link to="/interviews" className="text-[11px] font-medium text-brand hover:underline">
+                Practice interview →
+              </Link>
+            </div>
+          </Card>
+        </div>
+
         <JourneyProgressTile section={data.journeyProgress} />
         <CareerTwinTile section={data.careerTwin} onRetry={() => load()} />
 
