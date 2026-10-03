@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
 import { requestId } from './middleware/requestId.js';
 import { responseTiming } from './middleware/responseTiming.js';
+import { metricsMiddleware } from './middleware/metrics.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 
@@ -24,6 +25,7 @@ export function createApp() {
 
   app.use(requestId);
   app.use(responseTiming);
+  app.use(metricsMiddleware);
   app.use(securityHeaders);
   const allowedOrigins = env.clientUrl?.includes(',')
     ? env.clientUrl.split(',').map((s) => s.trim()).filter(Boolean)

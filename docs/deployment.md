@@ -270,3 +270,56 @@ When Render or Kubernetes sends `SIGTERM` or `SIGINT`:
 - MongoDB connection pool is drained and closed via `disconnectDatabase()`.
 - An unreferenced timeout timer guarantees the container process terminates even if an unresponsive client socket fails to disconnect.
 
+---
+
+## Observability, Telemetry & Operational Readiness (Task 49)
+
+### 1. Structured JSON Logging in Production
+In development and test environments (`NODE_ENV !== 'production'`), logs are colorized and formatted for terminal readability.
+In production (`NODE_ENV === 'production'`), `logger.js` automatically outputs single-line JSON format parseable by Datadog, AWS CloudWatch, Grafana Loki, or Render log drains:
+```json
+{
+  "level": "info",
+  "timestamp": "2026-10-03T18:15:30.123Z",
+  "message": "[d27c1ff2-93a6-45ae-a48b-628409d1f73d] POST /api/resumes/analysis 200 — 42.1ms",
+  "context": {
+    "userId": "6ac13d1f5d317b0bb1ae35eb",
+    "provider": "mock-resume-analyser"
+  }
+}
+```
+**PII & Secret Sanitization**:
+- All authorization headers, bearer tokens, API keys, passwords, and secrets are redacted to `[REDACTED]`.
+- Email addresses and phone numbers matching regex patterns are redacted to `[REDACTED_EMAIL]` and `[REDACTED_PHONE]`.
+- Debug-level logging is automatically silenced in production.
+
+### 2. Real-Time In-Memory Metrics Endpoints
+Nexora collects zero-dependency in-memory telemetry via `metricsMiddleware` and `metricsCollector`:
+- **Admin Endpoint**: `GET /api/health/metrics` or `GET /api/admin/metrics` (Requires `role: 'admin'`).
+- **Telemetry Payload**:
+  - `requests`: Total counts, active in-flight requests, breakdown by HTTP method (GET, POST, PATCH, DELETE) and status class (`2xx`, `3xx`, `4xx`, `5xx`).
+  - `latencyMs`: Accurate percentile distribution computed over a 1,000-request rolling window (`p50`, `p90`, `p95`, `p99`, `mean`, `min`, `max`).
+  - `errors`: Client error count (`4xx`), server error count (`5xx`), and real-time `errorRatePercent`.
+  - `system`: Node.js process uptime, platform, PID, and memory breakdown (`rss`, `heapTotal`, `heapUsed`, `external` in MB).
+  - `ai`: Real-time AI provider status and circuit breaker state.
+- **Cache Header**: Explicitly configured with `Cache-Control: no-store` to prevent caching of operational metrics.
+
+### 3. Monitoring & Alerting Runbook
+
+| Signal | Metric / Source | Warning Threshold | Critical Incident Threshold | Mitigation Runbook |
+| :--- | :--- | :--- | :--- | :--- |
+| **API Availability** | `/api/health` HTTP status | Returns 200 with `status: "degraded"` | Returns 503 or unreachable for > 1 min | Check MongoDB cluster connectivity in Atlas; verify container process memory. |
+| **Error Rate** | `errors.errorRatePercent` | > 2.0% over 5-minute window | > 5.0% over 5-minute window | Inspect server 5xx logs; check for unhandled exceptions or database write lockups. |
+| **Latency p95** | `latencyMs.p95` | > 800ms | > 2,000ms | Check for unindexed MongoDB queries using slow query auditor (`server/src/config/database.js`). |
+| **AI Circuit Breaker** | `ai.circuitBreaker.state` | State transitions to `HALF_OPEN` | State transitions to `OPEN` (tripped) | Provider outage or rate limit reached; investigate upstream provider status and quota budgets. |
+| **Memory Pressure** | `system.memoryUsageMb.heapUsed` | > 350 MB | > 450 MB | Potential memory leak in cache buffers; restart instance and inspect heap snapshot. |
+
+### 4. Production Release Certification Sign-Off Gate
+Before declaring any release ready for production:
+- [ ] Run full automated test suite: `node --test --test-concurrency=1 "tests/**/*.test.js"` (0 failures).
+- [ ] Run secret scanner: `.tools\gitleaks.exe detect --source . --no-banner` (0 leaks).
+- [ ] Run client production build: `npm run build --prefix client` (Clean Vite build, 0 warnings/errors).
+- [ ] Verify zero high/critical CVEs: `npm audit --prefix server` and `npm audit --prefix client`.
+- [ ] Verify `.env` production variables match `.env.example` with zero test credentials.
+
+

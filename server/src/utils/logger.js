@@ -71,9 +71,34 @@ function sanitizeMeta(meta, depth = 0) {
 
 function write(level, message, meta) {
   const timestamp = new Date().toISOString();
-  const label = `${LEVEL_COLOURS[level]}${level.toUpperCase()}${RESET}`;
-  const line = `${timestamp} ${label} ${message}`;
+  const sanitizedMessage = sanitizeLogString(message);
   const stream = level === 'error' || level === 'warn' ? console.error : console.log;
+
+  // In production, emit machine-parseable structured JSON for log aggregators
+  if (isProduction()) {
+    const payload = {
+      level,
+      timestamp,
+      message: sanitizedMessage,
+    };
+    if (meta !== undefined) {
+      if (meta instanceof Error) {
+        payload.error = {
+          name: meta.name,
+          message: sanitizeLogString(meta.message),
+          stack: sanitizeLogString(meta.stack),
+        };
+      } else {
+        payload.context = sanitizeMeta(meta);
+      }
+    }
+    stream(JSON.stringify(payload));
+    return;
+  }
+
+  // Development & test environments: human-readable colorized terminal output
+  const label = `${LEVEL_COLOURS[level]}${level.toUpperCase()}${RESET}`;
+  const line = `${timestamp} ${label} ${sanitizedMessage}`;
 
   if (meta === undefined) {
     stream(line);
