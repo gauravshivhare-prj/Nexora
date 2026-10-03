@@ -500,6 +500,7 @@ export async function submitQuestionAnswer(
       question,
       answerText: answerText.trim(),
       previousTurns,
+      userId: session.user,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
     });

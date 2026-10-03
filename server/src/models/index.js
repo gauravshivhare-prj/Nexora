@@ -23,6 +23,7 @@ import {
   toPublicReadinessSnapshot,
 } from './ReadinessSnapshot.model.js';
 import { AuditLog, toPublicAuditLog } from './AuditLog.model.js';
+import { UserAiQuota, toPublicUserAiQuota } from './UserAiQuota.model.js';
 
 /**
  * Model registry and index management.
@@ -41,6 +42,7 @@ const MODELS = [
   InterviewSession,
   ReadinessSnapshot,
   AuditLog,
+  UserAiQuota,
 ];
 
 /**
@@ -69,6 +71,7 @@ export {
   SkillEvidenceCheck,
   StudentProfile,
   User,
+  UserAiQuota,
   emptyProfile,
   isCareerTwinStale,
   toAdminAssessment,
@@ -83,5 +86,6 @@ export {
   toPublicResume,
   toPublicSkillEvidenceCheck,
   toPublicUser,
+  toPublicUserAiQuota,
   toResumeSummary,
 };

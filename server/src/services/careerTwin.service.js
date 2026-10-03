@@ -19,6 +19,7 @@ import {
 import { knownSkillNames } from '../domain/skills/skillKey.js';
 import { parseJsonObject } from './ai/aiJson.js';
 import { isAiConfigured, requestCompletion, resolveAiProvider } from './ai/aiProvider.js';
+import { checkUserAiQuota, recordAiUsage } from './ai/aiQuota.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
 
@@ -189,7 +190,7 @@ export async function generateCareerTwin(userId, { withNarrative = false, rebuil
     if (existingTwin?.narrative?.text && staleness && !staleness.isStale) {
       narrative = existingTwin.narrative;
     } else {
-      narrative = await generateNarrative(content);
+      narrative = await generateNarrative(content, userId);
     }
   } else if (existingTwin?.narrative?.text && staleness && !staleness.isStale) {
     narrative = existingTwin.narrative;
@@ -249,15 +250,41 @@ function hasEnoughInput(profile, resumes, verifiedEvidence) {
  * Each failure is logged, and a rejected summary is recorded in `warnings` so
  * the reason is visible rather than silent.
  */
-async function generateNarrative(content) {
+async function generateNarrative(content, userId) {
   const empty = { text: null, provider: null, model: null, generatedAt: null, warnings: [] };
 
   if (!isAiConfigured()) return empty;
+
+  // Pre-flight quota check: if user reached daily quota, gracefully omit narrative
+  if (userId) {
+    try {
+      await checkUserAiQuota(userId);
+    } catch (quotaError) {
+      logger.warn(`AI quota reached for user ${userId}; skipping narrative generation gracefully`, {
+        error: quotaError.message,
+      });
+      return {
+        ...empty,
+        warnings: ['Daily AI evaluation quota reached. CareerTwin was generated with standard intelligence without narrative.'],
+      };
+    }
+  }
 
   const provider = resolveAiProvider();
 
   try {
     const { text, model } = await requestCompletion(buildNarrativeRequest(content));
+
+    // Account for successful AI evaluation cost and increment user quota
+    if (userId) {
+      await recordAiUsage({
+        userId,
+        contractId: 'career_twin_narrative',
+        model,
+        inputChars: JSON.stringify(content).length,
+        outputTokens: 250,
+      });
+    }
 
     const json = parseJsonObject(text);
     if (json.error) return { ...empty, warnings: [json.error] };

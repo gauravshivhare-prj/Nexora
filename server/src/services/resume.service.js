@@ -18,6 +18,7 @@ import { validateParsedResume } from '../domain/resume/parsedResumeSchema.js';
 import { buildResumeExtractionRequest } from '../domain/resume/resumePrompt.js';
 import { parseJsonObject } from './ai/aiJson.js';
 import { requestCompletion, resolveAiProvider } from './ai/aiProvider.js';
+import { checkUserAiQuota, recordAiUsage } from './ai/aiQuota.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { checkString, isBlank, isPlainObject, unknownKeyPaths } from '../utils/fieldTypes.js';
 import { logger } from '../utils/logger.js';
@@ -356,6 +357,9 @@ export async function analyseResume(userId, resumeId, { signal } = {}) {
     );
   }
 
+  // Pre-flight check: ensure authenticated student has remaining daily AI quota
+  await checkUserAiQuota(userId);
+
   // Checked before anything is written, so an unconfigured deployment leaves
   // the document exactly as it was rather than marking a failure nobody caused.
   const provider = resolveAiProvider();
@@ -384,6 +388,15 @@ export async function analyseResume(userId, resumeId, { signal } = {}) {
 
   try {
     const result = await runAnalysisPipeline(resume.extractedText, provider, signal);
+
+    // Account for successful AI evaluation cost and increment user quota
+    await recordAiUsage({
+      userId,
+      contractId: 'resume_extraction',
+      model: result.model || provider.name,
+      inputChars: resume.extractedText?.length || 0,
+      outputTokens: 500,
+    });
 
     let conflicts = [];
     try {

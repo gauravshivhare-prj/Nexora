@@ -70,6 +70,8 @@ export const ERROR_CODES = {
    * model problem, not an outage.
    */
   AI_OUTPUT_INVALID: 'AI_OUTPUT_INVALID',
+  /** Daily AI evaluation quota exceeded for the authenticated user. */
+  AI_QUOTA_EXCEEDED: 'AI_QUOTA_EXCEEDED',
 
   // --- Interview ----------------------------------------------------------
   INTERVIEW_SESSION_NOT_FOUND: 'INTERVIEW_SESSION_NOT_FOUND',

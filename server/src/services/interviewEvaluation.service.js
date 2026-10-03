@@ -6,6 +6,7 @@ import {
   requestCompletion,
   resolveAiProvider,
 } from './ai/aiProvider.js';
+import { checkUserAiQuota, recordAiUsage } from './ai/aiQuota.service.js';
 import {
   INTERVIEW_CONTRACT_VERSION,
   INTERVIEW_PASS_MARK,
@@ -51,6 +52,7 @@ export async function evaluateQuestionAnswer({
   question,
   answerText,
   previousTurns = [],
+  userId,
   signal,
   timeoutMs = DEFAULT_AI_TIMEOUT_MS,
 }) {
@@ -88,6 +90,11 @@ export async function evaluateQuestionAnswer({
     );
   }
 
+  // Pre-flight check: verify daily AI evaluation quota if user is identified
+  if (userId) {
+    await checkUserAiQuota(userId);
+  }
+
   // Verify provider availability early before expensive prompt construction
   const provider = resolveAiProvider();
 
@@ -113,6 +120,17 @@ export async function evaluateQuestionAnswer({
       ...requestPayload,
       signal: effectiveSignal,
     });
+
+    // Account for successful AI evaluation cost and increment user quota
+    if (userId) {
+      await recordAiUsage({
+        userId,
+        contractId: 'interview_evaluation',
+        model: completion.model || provider.name,
+        inputChars: answerText.trim().length,
+        outputTokens: 350,
+      });
+    }
   } catch (error) {
     // If request timed out, wrap into safe service unavailable error
     if (effectiveSignal.aborted && !signal?.aborted) {
