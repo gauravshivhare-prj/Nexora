@@ -98,6 +98,7 @@ export const roleMatch = asyncHandler(async (req, res) => {
  * a pure function of a CareerTwin and a versioned role.
  */
 export const skillGap = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=60');
   const data = await getSkillGap(req.auth.userId, req.params.roleId);
 
   res.status(200).json({
@@ -114,6 +115,7 @@ export const skillGap = asyncHandler(async (req, res) => {
  * score or treating stale derived data as current.
  */
 export const readiness = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=60');
   // The standard readiness endpoint deliberately omits the numeric score.
   // Pass ?includeScore=true to receive the score block alongside readiness.
   const includeScore = req.query.includeScore === 'true' || req.headers['x-include-score'] === 'true';
@@ -133,6 +135,7 @@ export const readiness = asyncHandler(async (req, res) => {
  * Retrieves chronological historical readiness snapshots for the authenticated student.
  */
 export const readinessHistory = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=60');
   const history = await getReadinessHistory(req.auth.userId, req.params.roleId, {
     limit: req.query.limit,
   });
@@ -159,6 +162,7 @@ export const readinessHistory = asyncHandler(async (req, res) => {
  * not left thinking a ten-item plan is the whole of it.
  */
 export const roadmap = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, max-age=60');
   const data = await getRoadmap(req.auth.userId, req.params.roleId, {
     maxItems: req.query.maxItems,
     availableHoursPerWeek: req.query.availableHoursPerWeek,

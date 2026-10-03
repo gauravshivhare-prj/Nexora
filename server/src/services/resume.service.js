@@ -22,6 +22,7 @@ import { checkUserAiQuota, recordAiUsage } from './ai/aiQuota.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { checkString, isBlank, isPlainObject, unknownKeyPaths } from '../utils/fieldTypes.js';
 import { logger } from '../utils/logger.js';
+import { formatPagination } from '../utils/pagination.js';
 import { ValidationCollector } from '../utils/validation.js';
 
 /**
@@ -268,8 +269,27 @@ export async function createResumeFromFile(userId, file, fields = {}) {
 // ----------------------------------------------------------------- reading
 
 /** Lists the caller's resumes, newest first. Summaries only — no full text. */
-export async function listResumes(userId) {
-  const resumes = await Resume.find({ user: userId })
+export async function listResumes(userId, options = {}) {
+  const query = { user: userId };
+  const page = options.page;
+  const limit = options.limit;
+  const skip = options.skip;
+
+  if (typeof page === 'number' || typeof limit === 'number') {
+    const total = await Resume.countDocuments(query);
+    const resumes = await Resume.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip ?? (Math.max(1, page ?? 1) - 1) * (limit ?? 20))
+      .limit(limit ?? 20)
+      .select('-extractedText -parsed');
+
+    return {
+      resumes: resumes.map(toResumeSummary),
+      pagination: formatPagination({ page: page ?? 1, limit: limit ?? 20, total }),
+    };
+  }
+
+  const resumes = await Resume.find(query)
     .sort({ createdAt: -1 })
     // The two heaviest fields, excluded because a list never renders them.
     .select('-extractedText -parsed');

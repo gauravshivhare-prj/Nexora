@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
+import { formatPagination } from '../utils/pagination.js';
 import {
   CareerTwin,
   InterviewSession,
@@ -240,9 +241,11 @@ export async function createSession(userId, input = {}) {
  * @param {string} userId
  * @returns {Promise<Array<object>>}
  */
-export async function listSessions(userId) {
+export async function listSessions(userId, options = {}) {
   if (!mongoose.isValidObjectId(userId)) {
-    return [];
+    return options.page || options.limit
+      ? { sessions: [], pagination: formatPagination({ page: 1, limit: 20, total: 0 }) }
+      : [];
   }
 
   const now = new Date();
@@ -260,7 +263,27 @@ export async function listSessions(userId) {
     },
   );
 
-  const sessions = await InterviewSession.find({ user: userId })
+  const query = { user: userId };
+  const page = options.page;
+  const limit = options.limit;
+  const skip = options.skip;
+
+  if (typeof page === 'number' || typeof limit === 'number') {
+    const total = await InterviewSession.countDocuments(query);
+    const sessions = await InterviewSession.find(query)
+      .select('-user -__v')
+      .sort({ createdAt: -1 })
+      .skip(skip ?? (Math.max(1, page ?? 1) - 1) * (limit ?? 20))
+      .limit(limit ?? 20)
+      .lean();
+
+    return {
+      sessions: sessions.map((s) => toPublicInterviewSession(s)),
+      pagination: formatPagination({ page: page ?? 1, limit: limit ?? 20, total }),
+    };
+  }
+
+  const sessions = await InterviewSession.find(query)
     .select('-user -__v')
     .sort({ createdAt: -1 })
     .lean();

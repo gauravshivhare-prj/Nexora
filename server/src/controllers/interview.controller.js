@@ -10,6 +10,7 @@ import {
 } from '../services/interviewSession.service.js';
 import { generateSessionReport } from '../services/interviewReport.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { parsePagination, formatPagination } from '../utils/pagination.js';
 import { clientGoneSignal } from '../utils/requestSignal.js';
 
 /**
@@ -53,12 +54,17 @@ export const create = asyncHandler(async (req, res) => {
  * Lists all interview sessions belonging to the authenticated student.
  */
 export const list = asyncHandler(async (req, res) => {
-  const sessions = await listSessions(req.auth.userId);
+  const { page, limit, skip } = parsePagination(req.query, 20, 100);
+  const result = await listSessions(req.auth.userId, { page, limit, skip });
+  const sessions = Array.isArray(result) ? result : result.sessions;
+  const pagination = Array.isArray(result)
+    ? formatPagination({ page, limit, total: sessions.length })
+    : result.pagination;
 
   res.status(200).json({
     success: true,
     message: sessions.length > 0 ? 'Interview sessions retrieved' : 'No interview sessions found',
-    data: { sessions, count: sessions.length },
+    data: { sessions, count: sessions.length, pagination },
   });
 });
 

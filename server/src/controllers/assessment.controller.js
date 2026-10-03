@@ -8,6 +8,7 @@ import {
   submitAssessmentAttempt,
 } from '../services/assessment.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { parsePagination, formatPagination } from '../utils/pagination.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 
@@ -19,13 +20,18 @@ import { ERROR_CODES } from '../constants/errorCodes.js';
  */
 export const listAssessmentsHandler = asyncHandler(async (req, res) => {
   const { skill, difficulty, group } = req.query;
+  const { page, limit, skip } = parsePagination(req.query, 20, 100);
 
-  const assessments = await listAssessments({ skill, difficulty, group });
+  const result = await listAssessments({ skill, difficulty, group, page, limit, skip });
+  const assessments = Array.isArray(result) ? result : result.assessments;
+  const pagination = Array.isArray(result)
+    ? formatPagination({ page, limit, total: assessments.length })
+    : result.pagination;
 
   res.status(200).json({
     success: true,
     message: 'Assessments retrieved',
-    data: { assessments },
+    data: { assessments, pagination },
   });
 });
 
@@ -149,13 +155,18 @@ export const getAttemptHandler = asyncHandler(async (req, res) => {
  */
 export const listAttemptsHandler = asyncHandler(async (req, res) => {
   const { assessmentId } = req.query;
+  const { page, limit, skip } = parsePagination(req.query, 20, 100);
 
-  const attempts = await listUserAttempts(req.auth.userId, { assessmentId });
+  const result = await listUserAttempts(req.auth.userId, { assessmentId, page, limit, skip });
+  const attempts = Array.isArray(result) ? result : result.attempts;
+  const pagination = Array.isArray(result)
+    ? formatPagination({ page, limit, total: attempts.length })
+    : result.pagination;
 
   res.status(200).json({
     success: true,
     message: 'Assessment attempts retrieved',
-    data: { attempts },
+    data: { attempts, pagination },
   });
 });
 

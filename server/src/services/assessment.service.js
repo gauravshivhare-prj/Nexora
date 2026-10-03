@@ -25,6 +25,7 @@ import {
   FORBIDDEN_CLIENT_VERIFICATION_FIELDS,
 } from '../constants/assessmentPolicy.js';
 import { canonicalSkill, skillKey } from '../domain/skills/skillKey.js';
+import { formatPagination } from '../utils/pagination.js';
 
 
 /**
@@ -58,7 +59,7 @@ export async function seedAssessmentCatalog() {
 /**
  * Lists all active, sanitized assessments available for students.
  */
-export async function listAssessments({ skill, difficulty, group } = {}) {
+export async function listAssessments({ skill, difficulty, group, page, limit, skip } = {}) {
   const query = { isActive: true };
 
   if (skill !== undefined && skill !== null) {
@@ -95,10 +96,19 @@ export async function listAssessments({ skill, difficulty, group } = {}) {
     query.group = group.trim().toLowerCase();
   }
 
-  let assessments = await Assessment.find(query).sort({ title: 1 }).lean();
+  const isPaginated = typeof page === 'number' || typeof limit === 'number';
+
+  let total = await Assessment.countDocuments(query);
+  let assessmentsQuery = Assessment.find(query).sort({ title: 1 });
+  if (isPaginated) {
+    assessmentsQuery = assessmentsQuery
+      .skip(skip ?? (Math.max(1, page ?? 1) - 1) * (limit ?? 20))
+      .limit(limit ?? 20);
+  }
+  let assessments = await assessmentsQuery.lean();
 
   // If DB is empty, fallback to canonical catalog
-  if (assessments.length === 0) {
+  if (assessments.length === 0 && total === 0) {
     const totalDocs = await Assessment.countDocuments();
     if (totalDocs === 0) {
       let catalog = getAssessmentCatalog({ activeOnly: true });
@@ -118,11 +128,30 @@ export async function listAssessments({ skill, difficulty, group } = {}) {
           (asm) => (asm.group || ASSESSMENT_GROUPS.ENGINEERING) === query.group,
         );
       }
-      return catalog.map(toPublicAssessment);
+      total = catalog.length;
+      if (isPaginated) {
+        const effectiveSkip = skip ?? (Math.max(1, page ?? 1) - 1) * (limit ?? 20);
+        catalog = catalog.slice(effectiveSkip, effectiveSkip + (limit ?? 20));
+      }
+      const mappedCatalog = catalog.map(toPublicAssessment);
+      return isPaginated
+        ? {
+            assessments: mappedCatalog,
+            pagination: formatPagination({ page: page ?? 1, limit: limit ?? 20, total }),
+          }
+        : mappedCatalog;
     }
   }
 
-  return assessments.map(toPublicAssessment);
+  const mappedAssessments = assessments.map(toPublicAssessment);
+  if (isPaginated) {
+    return {
+      assessments: mappedAssessments,
+      pagination: formatPagination({ page: page ?? 1, limit: limit ?? 20, total }),
+    };
+  }
+
+  return mappedAssessments;
 }
 
 /**
@@ -504,7 +533,7 @@ export async function getAttemptById(userId, attemptId) {
 /**
  * Lists all attempts for an authenticated user.
  */
-export async function listUserAttempts(userId, { assessmentId } = {}) {
+export async function listUserAttempts(userId, { assessmentId, page, limit, skip } = {}) {
   if (!userId) {
     throw ApiError.unauthorized('User authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
   }
@@ -518,6 +547,22 @@ export async function listUserAttempts(userId, { assessmentId } = {}) {
       throw ApiError.badRequest('assessmentId filter must be a valid alphanumeric slug.', ERROR_CODES.VALIDATION_ERROR);
     }
     query.assessmentId = assessmentId.trim();
+  }
+
+  const isPaginated = typeof page === 'number' || typeof limit === 'number';
+
+  if (isPaginated) {
+    const total = await AssessmentAttempt.countDocuments(query);
+    const attempts = await AssessmentAttempt.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip ?? (Math.max(1, page ?? 1) - 1) * (limit ?? 20))
+      .limit(limit ?? 20)
+      .lean();
+
+    return {
+      attempts: attempts.map(toPublicAssessmentAttempt),
+      pagination: formatPagination({ page: page ?? 1, limit: limit ?? 20, total }),
+    };
   }
 
   const attempts = await AssessmentAttempt.find(query).sort({ createdAt: -1 }).lean();

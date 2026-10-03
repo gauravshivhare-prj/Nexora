@@ -7,6 +7,7 @@ import {
   listResumes,
 } from '../services/resume.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { parsePagination, formatPagination } from '../utils/pagination.js';
 import { clientGoneSignal } from '../utils/requestSignal.js';
 
 /**
@@ -50,12 +51,17 @@ export const upload = asyncHandler(async (req, res) => {
 
 /** GET /api/resumes — the caller's resumes, newest first. */
 export const list = asyncHandler(async (req, res) => {
-  const resumes = await listResumes(req.auth.userId);
+  const { page, limit, skip } = parsePagination(req.query, 20, 100);
+  const result = await listResumes(req.auth.userId, { page, limit, skip });
+  const resumes = Array.isArray(result) ? result : result.resumes;
+  const pagination = Array.isArray(result)
+    ? formatPagination({ page, limit, total: resumes.length })
+    : result.pagination;
 
   res.status(200).json({
     success: true,
     message: resumes.length > 0 ? 'Resumes retrieved' : 'No resumes saved yet',
-    data: { resumes, count: resumes.length },
+    data: { resumes, count: resumes.length, pagination },
   });
 });
 
