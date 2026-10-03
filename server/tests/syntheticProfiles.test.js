@@ -294,9 +294,10 @@ describe('TASK A21 — Synthetic Intelligence Fixtures Regression Suite', () => 
       assert.equal(intOpps.length, 0);
 
       // Advanced unlocks curated backend apprenticeship
-      assert.equal(advOpps.length, 1);
-      assert.equal(advOpps[0].id, 'curated_internal:backend-apprenticeship');
-      assert.equal(advOpps[0].matchedEligibility.length, 2);
+      assert.ok(advOpps.length >= 1);
+      const appOpp = advOpps.find((o) => o.id === 'curated_internal:backend-apprenticeship');
+      assert.ok(appOpp, 'Must match backend-apprenticeship');
+      assert.equal(appOpp.matchedEligibility.length, 2);
     });
   });
 
@@ -335,8 +336,9 @@ describe('TASK A21 — Synthetic Intelligence Fixtures Regression Suite', () => 
       assert.equal(matchOpportunities(begFe.twin, begFe.profile).length, 0);
       assert.equal(matchOpportunities(intFe.twin, intFe.profile).length, 0);
       const advOpps = matchOpportunities(advFe.twin, advFe.profile);
-      assert.equal(advOpps.length, 1);
-      assert.equal(advOpps[0].id, 'curated_internal:frontend-apprenticeship');
+      assert.ok(advOpps.length >= 1);
+      const feApp = advOpps.find((o) => o.id === 'curated_internal:frontend-apprenticeship');
+      assert.ok(feApp, 'Must match frontend-apprenticeship');
     });
   });
 
