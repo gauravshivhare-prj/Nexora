@@ -8,6 +8,7 @@ import {
   evaluatePersona,
   evaluateMonotonicSensitivity,
   runRecommendationBenchmark,
+  computeBenchmarkMetrics,
 } from '../src/domain/careers/recommendationBenchmark.js';
 import { rankRoles, scoreRoleMatch } from '../src/domain/careers/matchRole.js';
 import { findRole } from '../src/domain/careers/roleCatalogue.js';
@@ -21,18 +22,19 @@ import {
   resetRateLimiters,
   startTestServer,
 } from './helpers/testServer.js';
+import { fakePassword } from './helpers/fakeSecrets.js';
 
 /**
- * Task 10 — Recommendation Evaluation & Ground-Truth Benchmark Suite
+ * Task 10 & 48 — Recommendation Evaluation, Accuracy Benchmark & Continuous Evaluation Suite
  */
 
-const PASSWORD = 'Str0ngPassphrase1!';
+const PASSWORD = fakePassword();
 let server;
 let counter = 0;
 
 describe('Task 10 — Recommendation Evaluation & Ground-Truth Benchmark Suite', () => {
   before(async () => {
-    server = await startTestServer();
+    server = await startTestServer({ suiteId: 'rec-benchmark' });
   });
 
   after(async () => {
@@ -177,21 +179,49 @@ describe('Task 10 — Recommendation Evaluation & Ground-Truth Benchmark Suite',
   });
 
   // =========================================================================
-  // 4. Automated Benchmark Runner & Regression Gate
+  // 4. Automated Benchmark Runner & Regression Gate (Task 48)
   // =========================================================================
   describe('4. Automated Benchmark Runner & Regression Gate', () => {
-    it('passes all regression quality gates against baseline standards', () => {
+    it('passes all regression quality gates against baseline standards including F1-score', () => {
       const benchmarkReport = runRecommendationBenchmark();
 
       assert.equal(benchmarkReport.passedGate, true, `Quality gate failed: ${benchmarkReport.failures.join('; ')}`);
       assert.equal(benchmarkReport.metrics.precisionAt1, RECOMMENDATION_BENCHMARK_BASELINES.minPrecisionAt1);
       assert.equal(benchmarkReport.metrics.precisionAt3, RECOMMENDATION_BENCHMARK_BASELINES.minPrecisionAt3);
+      assert.ok(benchmarkReport.metrics.f1Score >= RECOMMENDATION_BENCHMARK_BASELINES.minF1Score);
+      assert.equal(benchmarkReport.metrics.f1Score, 1.0);
+      assert.equal(benchmarkReport.metrics.macroPrecision, 1.0);
+      assert.equal(benchmarkReport.metrics.macroRecall, 1.0);
+      assert.equal(benchmarkReport.metrics.confusionMatrix.truePositives, 5);
+      assert.equal(benchmarkReport.metrics.confusionMatrix.falsePositives, 0);
+      assert.equal(benchmarkReport.metrics.confusionMatrix.falseNegatives, 0);
+      assert.equal(benchmarkReport.metrics.thresholdCalibration.minimumRecommendableScore, 20);
       assert.equal(benchmarkReport.metrics.hallucinationRate, RECOMMENDATION_BENCHMARK_BASELINES.maxHallucinationRate);
       assert.equal(benchmarkReport.metrics.contradictionFailures, RECOMMENDATION_BENCHMARK_BASELINES.maxContradictionRate);
       assert.equal(benchmarkReport.metrics.monotonicityPassed, true);
       assert.equal(benchmarkReport.metrics.consistencyPassed, true);
       assert.equal(benchmarkReport.metrics.explanationCompleteness, 1.0);
       assert.equal(benchmarkReport.failures.length, 0);
+      assert.ok(Array.isArray(benchmarkReport.perPersonaMetrics));
+      assert.equal(benchmarkReport.perPersonaMetrics.length, 5);
+    });
+
+    it('computeBenchmarkMetrics accurately calculates precision, recall, and F1 across diverse scenarios', () => {
+      // Synthetic scenario: 2 hits, 1 miss
+      const mockEvals = [
+        { personaId: 'p1', name: 'P1', expectedRole: 'roleA', actualRole: 'roleA', precision1Passed: true },
+        { personaId: 'p2', name: 'P2', expectedRole: 'roleB', actualRole: 'roleB', precision1Passed: true },
+        { personaId: 'p3', name: 'P3', expectedRole: 'roleC', actualRole: 'roleD', precision1Passed: false },
+      ];
+
+      const metrics = computeBenchmarkMetrics(mockEvals);
+      assert.equal(metrics.confusionMatrix.truePositives, 2);
+      assert.equal(metrics.confusionMatrix.falsePositives, 1);
+      assert.equal(metrics.confusionMatrix.falseNegatives, 1);
+      assert.equal(metrics.macroPrecision, Number(((1 + 1 + 0) / 3).toFixed(3)));
+      assert.equal(metrics.macroRecall, Number(((1 + 1 + 0) / 3).toFixed(3)));
+      assert.ok(metrics.macroF1 > 0.6);
+      assert.equal(metrics.thresholdCalibration.minimumRecommendableScore, 20);
     });
   });
 
@@ -210,6 +240,9 @@ describe('Task 10 — Recommendation Evaluation & Ground-Truth Benchmark Suite',
       assert.ok(data.passedGate);
       assert.ok(data.metrics);
       assert.equal(data.metrics.precisionAt1, 1.0);
+      assert.equal(data.metrics.f1Score, 1.0);
+      assert.equal(data.metrics.macroPrecision, 1.0);
+      assert.equal(data.metrics.thresholdCalibration.minimumRecommendableScore, 20);
       assert.equal(data.metrics.hallucinationRate, 0);
       assert.ok(data.personaEvaluations.length >= 5);
       assert.ok(data.baselines);

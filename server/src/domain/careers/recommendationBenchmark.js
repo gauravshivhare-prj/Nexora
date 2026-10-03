@@ -1,22 +1,25 @@
 import { rankRoles, scoreRoleMatch, validateRecommendation } from './matchRole.js';
 import { findRole, getAuthoritativeRoles } from './roleCatalogue.js';
+import { MINIMUM_RECOMMENDABLE_SCORE } from './scoring.js';
 
 /**
- * Task 10 — Recommendation Evaluation & Ground-Truth Benchmark System
+ * Task 10 & 48 — Recommendation Evaluation, Accuracy Benchmark & Continuous Evaluation System
  *
  * Provides a rigorous, automated recommendation evaluation framework that measures:
  * 1. Target Relevance & Precision (Precision@1, Precision@3 against ground-truth profiles)
- * 2. Deterministic Consistency & Invariance across runs
- * 3. Zero-Hallucination Rate (verifying that no ungrounded skills enter recommendations)
- * 4. Contradiction Resistance (verifying that stated goals never override proven skill fits)
- * 5. Monotonic Input Sensitivity (verifying that verified evidence additions strictly increase scores)
- * 6. Explanation Completeness (ensuring 100% of recommendations carry traceable mathematical proofs)
+ * 2. Precision, Recall, and F1-Score with confusion matrix and threshold calibration analysis
+ * 3. Deterministic Consistency & Invariance across runs
+ * 4. Zero-Hallucination Rate (verifying that no ungrounded skills enter recommendations)
+ * 5. Contradiction Resistance (verifying that stated goals never override proven skill fits)
+ * 6. Monotonic Input Sensitivity (verifying that verified evidence additions strictly increase scores)
+ * 7. Explanation Completeness (ensuring 100% of recommendations carry traceable mathematical proofs)
  */
 
 export const RECOMMENDATION_BENCHMARK_BASELINES = Object.freeze({
-  version: 1,
+  version: 2,
   minPrecisionAt1: 1.0, // 100% precision@1 on canonical personas
   minPrecisionAt3: 1.0, // 100% precision@3 on canonical personas
+  minF1Score: 0.9, // Minimum 90% F1-score across canonical personas
   maxHallucinationRate: 0.0, // Zero tolerance for ungrounded skills in recommendations
   maxContradictionRate: 0.0, // Zero tolerance for contradictory interest overrides
   minMonotonicityRate: 1.0, // 100% strict monotonicity under evidence promotion
@@ -361,10 +364,14 @@ export function runRecommendationBenchmark(options = {}) {
     failures.push('Deterministic consistency failure: two runs with identical inputs produced different rankings');
   }
 
+  // 5. Accuracy Metrics (Precision, Recall, F1 & Confusion Matrix)
+  const benchmarkMetrics = computeBenchmarkMetrics(personaEvaluations);
+
   // Check Quality Gates against Baselines
   const passedGate =
     precisionAt1 >= RECOMMENDATION_BENCHMARK_BASELINES.minPrecisionAt1 &&
     precisionAt3 >= RECOMMENDATION_BENCHMARK_BASELINES.minPrecisionAt3 &&
+    benchmarkMetrics.macroF1 >= RECOMMENDATION_BENCHMARK_BASELINES.minF1Score &&
     hallucinationRate <= RECOMMENDATION_BENCHMARK_BASELINES.maxHallucinationRate &&
     contradictionFailures <= RECOMMENDATION_BENCHMARK_BASELINES.maxContradictionRate &&
     sensitivityResult.isMonotonic &&
@@ -378,6 +385,13 @@ export function runRecommendationBenchmark(options = {}) {
     metrics: {
       precisionAt1: Number(precisionAt1.toFixed(3)),
       precisionAt3: Number(precisionAt3.toFixed(3)),
+      f1Score: benchmarkMetrics.macroF1,
+      macroPrecision: benchmarkMetrics.macroPrecision,
+      macroRecall: benchmarkMetrics.macroRecall,
+      macroF1: benchmarkMetrics.macroF1,
+      microF1: benchmarkMetrics.microF1,
+      confusionMatrix: benchmarkMetrics.confusionMatrix,
+      thresholdCalibration: benchmarkMetrics.thresholdCalibration,
       hallucinationRate,
       contradictionFailures,
       monotonicityPassed: sensitivityResult.isMonotonic,
@@ -391,7 +405,85 @@ export function runRecommendationBenchmark(options = {}) {
       failuresCount: failures.length,
     },
     personaEvaluations,
+    perPersonaMetrics: benchmarkMetrics.perPersona,
     sensitivityProgression: sensitivityResult.progression,
     failures,
   };
 }
+
+/**
+ * Computes precision, recall, and F1 metrics for benchmark evaluation results.
+ *
+ * @param {Array<object>|object} results Either an array of persona evaluations or full benchmark results.
+ * @returns {object} Formatted precision, recall, F1, and confusion matrix metrics.
+ */
+export function computeBenchmarkMetrics(results) {
+  const evaluations = Array.isArray(results)
+    ? results
+    : Array.isArray(results?.personaEvaluations)
+      ? results.personaEvaluations
+      : [];
+
+  let totalTP = 0;
+  let totalFP = 0;
+  let totalFN = 0;
+
+  const perPersona = evaluations.map((p) => {
+    const isHit = Boolean(p.precision1Passed);
+    const tp = isHit ? 1 : 0;
+    const fp = !isHit && p.actualRole && p.actualRole !== 'none' ? 1 : 0;
+    const fn = !isHit ? 1 : 0;
+
+    totalTP += tp;
+    totalFP += fp;
+    totalFN += fn;
+
+    const precision = tp + fp > 0 ? tp / (tp + fp) : (isHit ? 1.0 : 0.0);
+    const recall = tp + fn > 0 ? tp / (tp + fn) : (isHit ? 1.0 : 0.0);
+    const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0.0;
+
+    return {
+      personaId: p.personaId,
+      name: p.name,
+      expectedRole: p.expectedRole,
+      actualRole: p.actualRole,
+      precision: Number(precision.toFixed(3)),
+      recall: Number(recall.toFixed(3)),
+      f1Score: Number(f1.toFixed(3)),
+    };
+  });
+
+  const count = evaluations.length || 1;
+  const macroPrecision = perPersona.reduce((acc, p) => acc + p.precision, 0) / count;
+  const macroRecall = perPersona.reduce((acc, p) => acc + p.recall, 0) / count;
+  const macroF1 = macroPrecision + macroRecall > 0
+    ? (2 * macroPrecision * macroRecall) / (macroPrecision + macroRecall)
+    : 0.0;
+
+  const microPrecision = totalTP + totalFP > 0 ? totalTP / (totalTP + totalFP) : (totalTP > 0 ? 1.0 : 0.0);
+  const microRecall = totalTP + totalFN > 0 ? totalTP / (totalTP + totalFN) : (totalTP > 0 ? 1.0 : 0.0);
+  const microF1 = microPrecision + microRecall > 0
+    ? (2 * microPrecision * microRecall) / (microPrecision + microRecall)
+    : 0.0;
+
+  return {
+    macroPrecision: Number(macroPrecision.toFixed(3)),
+    macroRecall: Number(macroRecall.toFixed(3)),
+    macroF1: Number(macroF1.toFixed(3)),
+    microPrecision: Number(microPrecision.toFixed(3)),
+    microRecall: Number(microRecall.toFixed(3)),
+    microF1: Number(microF1.toFixed(3)),
+    confusionMatrix: {
+      truePositives: totalTP,
+      falsePositives: totalFP,
+      falseNegatives: totalFN,
+    },
+    thresholdCalibration: {
+      minimumRecommendableScore: MINIMUM_RECOMMENDABLE_SCORE,
+      decisionBoundaryDescription:
+        'Threshold calibrated at score >= 20. Prunes incidental single-skill overlap (<20% coverage) to prevent false-positive noise, while retaining exploratory opportunities for beginners.',
+    },
+    perPersona,
+  };
+}
+

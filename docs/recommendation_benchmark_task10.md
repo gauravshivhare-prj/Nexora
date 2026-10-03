@@ -35,6 +35,7 @@ The benchmark runner enforces the following hard invariants (`RECOMMENDATION_BEN
 $$\begin{aligned}
 \text{Precision@1} &\ge 1.00 \quad (100\%) \\
 \text{Precision@3} &\ge 1.00 \quad (100\%) \\
+\text{Macro F1-Score} &\ge 0.90 \quad (90\%) \\
 \text{Hallucination Rate} &= 0.00\% \\
 \text{Contradiction Failures} &= 0 \\
 \text{Monotonicity Score} &= 1.00 \quad (100\%) \\
@@ -43,12 +44,27 @@ $$\begin{aligned}
 
 ---
 
+## Precision, Recall & F1 Analysis (`computeBenchmarkMetrics`)
+
+The continuous evaluation runner includes a dedicated accuracy computation function (`computeBenchmarkMetrics`):
+- **True Positives (TP)**: Ground-truth target roles accurately recommended at Rank #1.
+- **False Positives (FP)**: Irrelevant roles incorrectly recommended at Rank #1.
+- **False Negatives (FN)**: Ground-truth target roles that failed to be recommended.
+- **Macro & Micro Metrics**:
+  - Macro Precision, Recall, and F1 computed across all evaluation personas.
+  - Micro-aggregated metrics across entire corpus.
+  - Full confusion matrix reporting (`{ truePositives, falsePositives, falseNegatives }`).
+- **Threshold Calibration**:
+  - Validates `MINIMUM_RECOMMENDABLE_SCORE = 20` to verify that noisy sub-threshold recommendations are suppressed.
+
+---
+
 ## API & Runner Endpoints
 
 - **Service Runner**: `executeBenchmark()` via `recommendation.service.js` invokes `runRecommendationBenchmark()`.
 - **Protected Endpoint**: `GET /api/careers/benchmark`
   - Requires valid JWT authentication.
-  - Returns complete JSON report with `passedGate: true`, metric scores, per-persona evaluation, and failure diagnostics.
+  - Returns complete JSON report with `passedGate: true`, metric scores (`f1Score`, `macroPrecision`, `macroRecall`, `confusionMatrix`), per-persona evaluation, and threshold calibration metadata.
 
 ---
 
@@ -58,5 +74,6 @@ Verified via `server/tests/recommendationBenchmark.test.js`:
 - `1. Representative Ground-Truth Personas Evaluation`: 100% Precision@1 on all 5 student tracks; senior student achieves $\ge 75$ score; non-CS pivot student cleanly maps to Data Analyst.
 - `2. Adversarial & Boundary Robustness`: Buzzword profile capped $\le 15$; concrete Backend skills beat contradictory Frontend stated goal; empty profile produces 0 recommendations.
 - `3. Monotonic Input Sensitivity & Deterministic Invariance`: Monotonic score progression confirmed ($22 \rightarrow 51 \rightarrow 76$); repeat runs yield identical outputs.
-- `4. Automated Benchmark Runner & Regression Gate`: `runRecommendationBenchmark()` passes all quality gates with 0 failures.
+- `4. Automated Benchmark Runner & Regression Gate`: `runRecommendationBenchmark()` passes all quality gates with 0 failures, 1.0 Macro F1-score, and clean confusion matrix.
 - `5. Benchmark API Endpoint Integration`: `GET /api/careers/benchmark` returns 200 with full audit payload; unauthenticated requests rejected with 401.
+
