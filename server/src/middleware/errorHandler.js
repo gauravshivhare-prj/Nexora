@@ -110,7 +110,9 @@ export function errorHandler(error, req, res, next) {
   const body = { success: false, message, errorCode };
 
   if (req.id && (!isProduction || req.headers['x-request-id'])) {
-    body.requestId = req.id;
+    if (errorCode !== ERROR_CODES.INVALID_CREDENTIALS || req.headers['x-request-id']) {
+      body.requestId = req.id;
+    }
   }
 
   // Per-field validation failures. Safe in production: these are the caller's
