@@ -185,6 +185,16 @@ export async function clearReadinessSnapshots() {
   }
 }
 
+/** Removes all audit logs. */
+export async function clearAuditLogs() {
+  try {
+    await mongoose.connection.collection('auditlogs').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
+
 
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.

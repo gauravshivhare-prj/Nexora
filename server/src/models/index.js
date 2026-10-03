@@ -22,6 +22,7 @@ import {
   ReadinessSnapshot,
   toPublicReadinessSnapshot,
 } from './ReadinessSnapshot.model.js';
+import { AuditLog, toPublicAuditLog } from './AuditLog.model.js';
 
 /**
  * Model registry and index management.
@@ -39,6 +40,7 @@ const MODELS = [
   AssessmentAttempt,
   InterviewSession,
   ReadinessSnapshot,
+  AuditLog,
 ];
 
 /**
@@ -59,6 +61,7 @@ export async function ensureModelIndexes() {
 export {
   Assessment,
   AssessmentAttempt,
+  AuditLog,
   CareerTwin,
   InterviewSession,
   ReadinessSnapshot,
@@ -71,6 +74,7 @@ export {
   toAdminAssessment,
   toPublicAssessment,
   toPublicAssessmentAttempt,
+  toPublicAuditLog,
   toPublicCareerTwin,
   toPublicInterviewQuestion,
   toPublicInterviewSession,

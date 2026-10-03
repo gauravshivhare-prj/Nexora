@@ -1,4 +1,5 @@
 import { getStudentConsistencyReport } from '../services/consistency.service.js';
+import { recordAuditLog } from '../services/auditLog.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
@@ -38,6 +39,20 @@ export const getAdminConsistencyReport = asyncHandler(async (req, res) => {
     req.body?.autoReconcile === true;
 
   const report = await getStudentConsistencyReport(userId, { autoReconcile });
+
+  await recordAuditLog({
+    actor: req.auth.userId,
+    actorRole: req.auth.role,
+    action: autoReconcile ? 'ADMIN_RECONCILE' : 'ADMIN_CONSISTENCY_AUDIT',
+    targetUser: userId,
+    resourceType: 'StudentIntelligence',
+    details: {
+      isConsistent: report.isConsistent,
+      violationCount: report.violationCount,
+      selfHealed: report.selfHealed,
+    },
+    ipAddress: req.ip,
+  });
 
   res.status(200).json({
     success: true,

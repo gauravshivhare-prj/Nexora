@@ -9,6 +9,7 @@ import {
 } from '../constants/authPolicy.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { User, toPublicUser } from '../models/index.js';
+import { recordAuditLog } from './auditLog.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { signAccessToken } from '../utils/jwt.js';
 import { getDummyPasswordHash, hashPassword, verifyPassword } from '../utils/password.js';
@@ -188,6 +189,15 @@ export async function loginUser(payload) {
       const update = { failedLoginAttempts: attempts };
       if (attempts >= 10) {
         update.lockoutUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes lockout
+        recordAuditLog({
+          actor: user._id,
+          actorRole: user.role || 'student',
+          action: 'ACCOUNT_LOCKED',
+          targetUser: user._id,
+          resourceType: 'User',
+          resourceId: user._id.toString(),
+          details: { failedLoginAttempts: attempts },
+        }).catch(() => {});
       }
       User.updateOne({ _id: user._id }, { $set: update }).catch(() => {});
     }
@@ -280,6 +290,16 @@ export async function changePassword(userId, payload) {
       },
     },
   );
+
+  await recordAuditLog({
+    actor: user._id,
+    actorRole: user.role || 'student',
+    action: 'PASSWORD_CHANGED',
+    targetUser: user._id,
+    resourceType: 'User',
+    resourceId: user._id.toString(),
+    details: { changedBy: 'self' },
+  });
 
   return {
     success: true,
