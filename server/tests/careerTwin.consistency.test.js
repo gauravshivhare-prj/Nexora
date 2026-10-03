@@ -42,7 +42,7 @@ const EXTRACTION = {
 
 describe('G08 — CareerTwin Consistency & Stale-Invalidation Suite', () => {
   before(async () => {
-    server = await startTestServer();
+    server = await startTestServer({ suiteId: 'twinconsistency' });
     registerAiProvider({
       name: 'twin-double-g08',
       async complete(request) {

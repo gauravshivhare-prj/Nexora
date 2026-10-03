@@ -42,7 +42,7 @@ let counter = 0;
 
 describe('Task 07 — CareerTwin Intelligence Engine Reconstruction Suite', () => {
   before(async () => {
-    server = await startTestServer();
+    server = await startTestServer({ suiteId: 'twinintel' });
   });
 
   after(async () => {

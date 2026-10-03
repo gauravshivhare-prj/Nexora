@@ -69,7 +69,7 @@ describe('career twin', () => {
   let double;
 
   before(async () => {
-    server = await startTestServer();
+    server = await startTestServer({ suiteId: 'careertwin' });
     double = createProviderDouble();
     registerAiProvider(double.provider);
   });

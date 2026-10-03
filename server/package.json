@@ -12,6 +12,7 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1 \"tests/**/*.test.js\"",
     "seed:demo": "node src/scripts/seedDemo.js",
     "prepare": "git config core.hooksPath .githooks && node ../scripts/install-gitleaks.mjs || true"
   },

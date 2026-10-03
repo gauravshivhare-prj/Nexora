@@ -59,7 +59,7 @@ describe('career twin evidence integration', () => {
   let counter = 0;
 
   before(async () => {
-    server = await startTestServer();
+    server = await startTestServer({ suiteId: 'twinevidence' });
 
     registerAiProvider({
       name: 'test-double',
