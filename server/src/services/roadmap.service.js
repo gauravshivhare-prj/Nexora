@@ -1,5 +1,7 @@
 import { ERROR_CODES } from '../constants/errorCodes.js';
+import { LEARNING_STYLES } from '../constants/profilePolicy.js';
 import { buildRoadmap } from '../domain/roadmap/buildRoadmap.js';
+import { StudentProfile } from '../models/index.js';
 import { getSkillGap } from './skillGap.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { checkInteger } from '../utils/fieldTypes.js';
@@ -81,6 +83,12 @@ function parseStudentGoals(raw) {
   return [...new Set(raw.split(',').map((g) => g.trim()).filter(Boolean))];
 }
 
+function parseLearningStyle(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const normalized = raw.trim().toLowerCase();
+  return LEARNING_STYLES.includes(normalized) ? normalized : null;
+}
+
 /**
  * Generates a personalised roadmap towards one role.
  *
@@ -90,6 +98,7 @@ function parseStudentGoals(raw) {
  * @param {unknown} [options.maxItems]
  * @param {unknown} [options.availableHoursPerWeek]
  * @param {unknown} [options.studentGoals]
+ * @param {unknown} [options.learningStyle]
  * @param {object} [options.skillGap] Pre-computed gap (e.g. from summary.service).
  * @throws {ApiError} 404 unknown role, 409 no CareerTwin.
  */
@@ -97,6 +106,7 @@ export async function getRoadmap(userId, roleId, {
   maxItems,
   availableHoursPerWeek,
   studentGoals,
+  learningStyle,
   skillGap,
 } = {}) {
   // Reuses the skill gap service wholesale, including its ownership scoping,
@@ -104,10 +114,32 @@ export async function getRoadmap(userId, roleId, {
   // precomputed skillGap is provided (e.g. by summary.service), reuse it directly.
   const { gap, basedOn } = skillGap ?? (await getSkillGap(userId, roleId));
 
+  let profilePreferences = null;
+  if (availableHoursPerWeek === undefined || studentGoals === undefined || learningStyle === undefined) {
+    try {
+      const profile = await StudentProfile.findOne({ user: userId }).select('preferences');
+      profilePreferences = profile?.preferences;
+    } catch {
+      // Safe fallback if student profile read fails
+    }
+  }
+
+  const effectiveHours = availableHoursPerWeek !== undefined
+    ? parseHoursPerWeek(availableHoursPerWeek)
+    : (profilePreferences?.availableHoursPerWeek ?? 15);
+
+  const effectiveGoals = studentGoals !== undefined
+    ? parseStudentGoals(studentGoals)
+    : (profilePreferences?.priorityGoals ?? []);
+
+  const parsedStyle = parseLearningStyle(learningStyle);
+  const effectiveLearningStyle = parsedStyle ?? (profilePreferences?.learningStyle ?? 'mixed');
+
   const roadmap = buildRoadmap(gap, {
     maxItems: parseMaxItems(maxItems),
-    availableHoursPerWeek: parseHoursPerWeek(availableHoursPerWeek),
-    studentGoals: parseStudentGoals(studentGoals),
+    availableHoursPerWeek: effectiveHours,
+    studentGoals: effectiveGoals,
+    learningStyle: effectiveLearningStyle,
   });
 
   return {

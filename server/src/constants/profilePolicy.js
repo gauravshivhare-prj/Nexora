@@ -38,6 +38,12 @@ export const PROFILE_LIMITS = {
   },
   certifications: { maxItems: 30, name: 200, issuer: 150 },
 
+  // --- Preferences ---
+  preferences: {
+    priorityGoals: { maxItems: 10, maxLength: 60 },
+    availableHoursPerWeek: { min: 1, max: 80 },
+  },
+
   /** Applies to every URL field: project, repository and credential links. */
   url: 500,
 };
@@ -116,3 +122,15 @@ export const CGPA_LIMITS = {
   /** Transcripts are issued to two decimal places. */
   decimals: 2,
 };
+
+/**
+ * Opt-in learning styles that influence roadmap resource presentation and pacing.
+ */
+export const LEARNING_STYLES = ['visual', 'hands_on', 'reading', 'structured', 'mixed'];
+export const LEARNING_STYLE_VALUES = Object.freeze([...LEARNING_STYLES]);
+
+/**
+ * Student's preferred starting difficulty for technical evaluations and mock interviews.
+ */
+export const PREFERRED_DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
+export const PREFERRED_DIFFICULTY_VALUES = Object.freeze([...PREFERRED_DIFFICULTIES]);

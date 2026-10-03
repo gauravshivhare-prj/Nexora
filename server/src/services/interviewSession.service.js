@@ -4,15 +4,15 @@ import { ERROR_CODES } from '../constants/errorCodes.js';
 import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../utils/logger.js';
 import {
+  CareerTwin,
   InterviewSession,
+  SkillEvidenceCheck,
+  StudentProfile,
+  User,
   toPublicInterviewQuestion,
   toPublicInterviewSession,
-} from '../models/InterviewSession.model.js';
-import {
-  SkillEvidenceCheck,
   toPublicSkillEvidenceCheck,
-} from '../models/SkillEvidenceCheck.model.js';
-import { User } from '../models/User.model.js';
+} from '../models/index.js';
 import {
   INTERVIEW_DIFFICULTY,
   INTERVIEW_DIFFICULTY_VALUES,
@@ -20,6 +20,7 @@ import {
   SESSION_STATUS,
   adaptDifficulty,
   canTransitionSession,
+  suggestInterviewDifficulty,
 } from '../domain/interview/interviewContract.js';
 import { selectQuestionsForSession } from '../domain/interview/interviewQuestions.js';
 import {
@@ -81,6 +82,35 @@ function sessionNotFound() {
 }
 
 /**
+ * Suggests starting interview difficulty based on student's CareerTwin evidence and preferences.
+ *
+ * @param {string} userId
+ * @param {object} [options]
+ * @param {string[]} [options.targetSkills=[]]
+ * @param {string} [options.targetRole]
+ * @returns {Promise<object>}
+ */
+export async function getInterviewDifficultySuggestion(
+  userId,
+  { targetSkills = [], targetRole = null } = {},
+) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw ApiError.unauthorized('Authentication required.', ERROR_CODES.AUTH_TOKEN_MISSING);
+  }
+
+  const [twin, profile] = await Promise.all([
+    CareerTwin.findOne({ user: userId }).lean(),
+    StudentProfile.findOne({ user: userId }).select('preferences').lean(),
+  ]);
+
+  return suggestInterviewDifficulty({
+    targetSkills,
+    twin,
+    preferredDifficulty: profile?.preferences?.preferredDifficulty,
+  });
+}
+
+/**
  * Creates and initializes a new interview session with selected questions.
  *
  * @param {string} userId
@@ -95,7 +125,6 @@ export async function createSession(userId, input = {}) {
   const targetRole = input.targetRole || input.targetRoleId;
   const targetSkills = input.targetSkills || input.skills;
   const {
-    difficulty = INTERVIEW_DIFFICULTY.INTERMEDIATE,
     questionCount = 5,
     timeLimitMinutes = 30,
   } = input;
@@ -150,7 +179,16 @@ export async function createSession(userId, input = {}) {
     throw ApiError.badRequest('At least one canonical target skill is required.');
   }
 
-  if (!INTERVIEW_DIFFICULTY_VALUES.includes(difficulty)) {
+  let resolvedDifficulty = input.difficulty;
+  if (!resolvedDifficulty || resolvedDifficulty === 'auto') {
+    const suggestion = await getInterviewDifficultySuggestion(userId, {
+      targetSkills: canonicalTargets,
+      targetRole: matchedRole.id,
+    });
+    resolvedDifficulty = suggestion.suggestedDifficulty;
+  }
+
+  if (!INTERVIEW_DIFFICULTY_VALUES.includes(resolvedDifficulty)) {
     throw ApiError.badRequest(
       `Difficulty must be one of: ${INTERVIEW_DIFFICULTY_VALUES.join(', ')}.`,
       ERROR_CODES.BAD_REQUEST,
@@ -168,7 +206,7 @@ export async function createSession(userId, input = {}) {
     selectedQuestions = selectQuestionsForSession({
       targetRole: matchedRole.id,
       targetSkills: canonicalTargets,
-      difficulty,
+      difficulty: resolvedDifficulty,
       count: boundedCount,
       seed: `${userId}-${Date.now()}`,
     });
@@ -181,7 +219,7 @@ export async function createSession(userId, input = {}) {
     status: SESSION_STATUS.INITIALIZED,
     targetRole: matchedRole.title,
     targetSkills: canonicalTargets,
-    difficulty,
+    difficulty: resolvedDifficulty,
     questionCount: selectedQuestions.length,
     timeLimitMinutes: Math.min(
       INTERVIEW_LIMITS.maxSessionMinutes,

@@ -3,7 +3,9 @@ import {
   CGPA_LIMITS,
   GENDER_VALUES,
   GRADUATION_YEAR_WINDOW,
+  LEARNING_STYLES,
   PHONE_PATTERN,
+  PREFERRED_DIFFICULTIES,
   PROFILE_LIMITS,
   SEMESTER_LIMITS,
   SKILL_LEVEL_VALUES,
@@ -92,11 +94,21 @@ const CAREER_FIELDS = {
   bio: (raw) => checkString(raw, { max: PROFILE_LIMITS.bio }),
 };
 
+const PREFERENCE_FIELDS = {
+  learningStyle: (raw) => checkEnum(raw, LEARNING_STYLES),
+  availableHoursPerWeek: (raw) =>
+    checkInteger(raw, PROFILE_LIMITS.preferences.availableHoursPerWeek),
+  priorityGoals: (raw) =>
+    checkStringArray(raw, PROFILE_LIMITS.preferences.priorityGoals),
+  preferredDifficulty: (raw) => checkEnum(raw, PREFERRED_DIFFICULTIES),
+};
+
 /** Sections whose members are scalar fields, handled by the same walker. */
 const SCALAR_SECTIONS = {
   personal: PERSONAL_FIELDS,
   academic: ACADEMIC_FIELDS,
   career: CAREER_FIELDS,
+  preferences: PREFERENCE_FIELDS,
 };
 
 /** The complete set of keys a request body may contain. */
@@ -222,7 +234,8 @@ function applyScalarSection(input, { section, fields, changes, collector }) {
     // Blank means "clear this". Arrays clear to empty rather than null, so a
     // read never has to cope with both shapes for the same field.
     if (isBlank(raw)) {
-      changes[path] = field === 'careerInterests' ? [] : null;
+      changes[path] =
+        field === 'careerInterests' || field === 'priorityGoals' ? [] : null;
       continue;
     }
 
@@ -491,6 +504,7 @@ export async function updateProfile(userId, payload, options = {}) {
     personal: { ...existing?.personal?.toObject?.(), ...extractSection(changes, 'personal') },
     academic: { ...existing?.academic?.toObject?.(), ...extractSection(changes, 'academic') },
     career: { ...existing?.career?.toObject?.(), ...extractSection(changes, 'career') },
+    preferences: { ...existing?.preferences?.toObject?.(), ...extractSection(changes, 'preferences') },
     skills: changes.skills || existing?.skills || [],
     projects: changes.projects || existing?.projects || [],
     certifications: changes.certifications || existing?.certifications || [],

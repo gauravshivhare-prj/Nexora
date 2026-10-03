@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import {
   CGPA_LIMITS,
   GENDER_VALUES,
+  LEARNING_STYLE_VALUES,
+  PREFERRED_DIFFICULTY_VALUES,
   PROFILE_LIMITS,
   SEMESTER_LIMITS,
   SKILL_LEVEL_VALUES,
@@ -84,6 +86,36 @@ const certificationSchema = new mongoose.Schema(
   SUBDOCUMENT_OPTIONS,
 );
 
+const preferencesSchema = new mongoose.Schema(
+  {
+    learningStyle: {
+      type: String,
+      enum: [...LEARNING_STYLE_VALUES, null],
+      default: 'mixed',
+    },
+    availableHoursPerWeek: {
+      type: Number,
+      min: PROFILE_LIMITS.preferences.availableHoursPerWeek.min,
+      max: PROFILE_LIMITS.preferences.availableHoursPerWeek.max,
+      default: 15,
+    },
+    priorityGoals: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (list) => list.length <= PROFILE_LIMITS.preferences.priorityGoals.maxItems,
+        message: `Priority goals may list at most ${PROFILE_LIMITS.preferences.priorityGoals.maxItems} items`,
+      },
+    },
+    preferredDifficulty: {
+      type: String,
+      enum: [...PREFERRED_DIFFICULTY_VALUES, null],
+      default: 'intermediate',
+    },
+  },
+  SUBDOCUMENT_OPTIONS,
+);
+
 const studentProfileSchema = new mongoose.Schema(
   {
     /**
@@ -126,6 +158,7 @@ const studentProfileSchema = new mongoose.Schema(
     skills: { type: [skillSchema], default: [] },
     projects: { type: [projectSchema], default: [] },
     certifications: { type: [certificationSchema], default: [] },
+    preferences: { type: preferencesSchema, default: () => ({}) },
 
     // --- Task 06 Lifecycle, Auditability & Freshness ---
     version: { type: Number, default: 1 },
@@ -200,6 +233,12 @@ export function toPublicProfile(profile) {
       issueDate: toCalendarDate(certification.issueDate),
       credentialUrl: certification.credentialUrl ?? null,
     })),
+    preferences: {
+      learningStyle: profile.preferences?.learningStyle ?? 'mixed',
+      availableHoursPerWeek: profile.preferences?.availableHoursPerWeek ?? 15,
+      priorityGoals: profile.preferences?.priorityGoals ?? [],
+      preferredDifficulty: profile.preferences?.preferredDifficulty ?? 'intermediate',
+    },
     updatedAt: profile.updatedAt ?? null,
   };
 }

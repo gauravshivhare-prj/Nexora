@@ -780,6 +780,7 @@ export function evaluateInterviewSession(
   };
 }
 export { adaptDifficulty } from './adaptiveDifficulty.js';
+export { suggestInterviewDifficulty } from './suggestInterviewDifficulty.js';
 export {
   scoreFeedbackQuality,
   detectHallucinatedSkills,

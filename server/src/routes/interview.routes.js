@@ -10,6 +10,7 @@ import {
   report,
   start,
   submitAnswer,
+  suggestDifficulty,
 } from '../controllers/interview.controller.js';
 import { createRateLimiter } from '../middleware/rateLimiter.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -32,6 +33,7 @@ export const evaluationLimiter = createRateLimiter(RATE_LIMIT_POLICY.aiAnalysis)
 /** Per-user limit on session writes that are not AI calls. */
 export const sessionWriteLimiter = createRateLimiter(RATE_LIMIT_POLICY.interviewSession);
 
+router.get('/suggest-difficulty', suggestDifficulty);
 router.post('/sessions', sessionWriteLimiter, create);
 router.get('/sessions', list);
 router.get('/sessions/:sessionId', read);

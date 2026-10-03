@@ -55,3 +55,17 @@ export const SEMESTER_OPTIONS = Array.from({ length: 12 }, (_, index) => ({
   value: String(index + 1),
   label: `Semester ${index + 1}`,
 }));
+
+export const LEARNING_STYLE_OPTIONS = [
+  { value: 'mixed', label: 'Mixed / Balanced (default)' },
+  { value: 'hands_on', label: 'Hands-on (projects first)' },
+  { value: 'reading', label: 'Reading (documentation first)' },
+  { value: 'visual', label: 'Visual (video & courses first)' },
+  { value: 'structured', label: 'Structured (step-by-step curriculum)' },
+];
+
+export const DIFFICULTY_OPTIONS = [
+  { value: 'beginner', label: 'Beginner (foundations & core concepts)' },
+  { value: 'intermediate', label: 'Intermediate (practical application & trade-offs)' },
+  { value: 'advanced', label: 'Advanced (deep systems, architecture & edge cases)' },
+];

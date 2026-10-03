@@ -12,8 +12,10 @@ import { ProfileCard } from '../components/profile/ProfileCard.jsx';
 import { ProjectsEditor } from '../components/profile/ProjectsEditor.jsx';
 import { SkillsEditor } from '../components/profile/SkillsEditor.jsx';
 import {
+  DIFFICULTY_OPTIONS,
   FIELD_LIMITS,
   GENDER_OPTIONS,
+  LEARNING_STYLE_OPTIONS,
   LIST_LIMITS,
   SEMESTER_OPTIONS,
 } from '../constants/profileOptions.js';
@@ -463,6 +465,67 @@ export function ProfilePage() {
             errorFor={errorFor}
             disabled={isSaving}
           />
+        </ProfileCard>
+
+        <ProfileCard
+          title="Learning & Pacing Preferences"
+          description="Personalize your roadmap pace, resource presentation, and technical evaluation starting points."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormSelect
+              label="Learning style"
+              value={values.preferences.learningStyle}
+              onChange={setSectionField('preferences', 'learningStyle')}
+              options={LEARNING_STYLE_OPTIONS}
+              error={errorFor('preferences.learningStyle')}
+              hint="Influences resource ordering (e.g. projects vs documentation vs courses)."
+              disabled={isSaving}
+            />
+
+            <FormField
+              label="Available study time (hours/week)"
+              type="number"
+              min="1"
+              max="80"
+              value={values.preferences.availableHoursPerWeek}
+              onChange={setSectionField('preferences', 'availableHoursPerWeek')}
+              error={errorFor('preferences.availableHoursPerWeek')}
+              placeholder="15"
+              hint="Paces your personalized learning roadmap."
+              disabled={isSaving}
+            />
+
+            <FormSelect
+              label="Evaluation starting difficulty"
+              value={values.preferences.preferredDifficulty}
+              onChange={setSectionField('preferences', 'preferredDifficulty')}
+              options={DIFFICULTY_OPTIONS}
+              error={errorFor('preferences.preferredDifficulty')}
+              hint="Sets your default starting tier for AI mock interviews and technical assessments."
+              disabled={isSaving}
+            />
+
+            <div className="sm:col-span-2">
+              <TagListField
+                label="Priority career goals"
+                values={values.preferences.priorityGoals}
+                onChange={(entries) => {
+                  setValues((current) => ({
+                    ...current,
+                    preferences: { ...current.preferences, priorityGoals: entries },
+                  }));
+                  clearResult();
+                }}
+                maxItems={10}
+                maxLength={60}
+                placeholder="e.g. interview_prep, backend, react, internship"
+                disabled={isSaving}
+              />
+              <p className="mt-1 text-xs text-ink-muted">
+                Roadmap skills and dashboard sections will prioritize these topics.
+              </p>
+            </div>
+          </div>
         </ProfileCard>
 
         {/*

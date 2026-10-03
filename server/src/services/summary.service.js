@@ -14,6 +14,7 @@ import { recommendRoles } from './recommendation.service.js';
 import { getRoadmap } from './roadmap.service.js';
 import { getSkillGap } from './skillGap.service.js';
 import { computeJourneyProgress } from '../domain/student/journeyMilestones.js';
+import { prioritizeDashboardSections } from '../domain/student/personalizeDashboardOrder.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -121,6 +122,8 @@ export async function getSummary(userId) {
     assessmentAttemptsCount,
     interviewSessionsCount,
     journeyProgress: null,
+    preferences: profile.preferences ?? null,
+    sectionPriority: null,
     /** What the student should do next, by the pipeline's own ordering. */
     nextStep: null,
   };
@@ -131,6 +134,7 @@ export async function getSummary(userId) {
   if (!twinData.exists) {
     summary.nextStep = nextStepFor(summary);
     summary.journeyProgress = computeJourneyProgress(summary);
+    summary.sectionPriority = prioritizeDashboardSections(summary, profile.preferences);
     return summary;
   }
 
@@ -181,6 +185,7 @@ export async function getSummary(userId) {
 
   summary.nextStep = nextStepFor(summary);
   summary.journeyProgress = computeJourneyProgress(summary);
+  summary.sectionPriority = prioritizeDashboardSections(summary, profile.preferences);
 
   return summary;
 }
@@ -194,7 +199,7 @@ export async function getSummary(userId) {
  */
 async function loadProfileStatus(userId) {
   const profile = await StudentProfile.findOne({ user: userId }).select(
-    'skills projects certifications career.targetRole updatedAt',
+    'skills projects certifications career.targetRole preferences updatedAt',
   );
 
   if (!profile) {
@@ -204,6 +209,7 @@ async function loadProfileStatus(userId) {
       projectCount: 0,
       certificationCount: 0,
       hasTargetRole: false,
+      preferences: null,
       updatedAt: null,
     };
   }
@@ -214,6 +220,14 @@ async function loadProfileStatus(userId) {
     projectCount: profile.projects?.length ?? 0,
     certificationCount: profile.certifications?.length ?? 0,
     hasTargetRole: Boolean(profile.career?.targetRole),
+    preferences: profile.preferences
+      ? {
+          learningStyle: profile.preferences.learningStyle ?? 'mixed',
+          availableHoursPerWeek: profile.preferences.availableHoursPerWeek ?? 15,
+          priorityGoals: profile.preferences.priorityGoals ?? [],
+          preferredDifficulty: profile.preferences.preferredDifficulty ?? 'intermediate',
+        }
+      : null,
     updatedAt: profile.updatedAt ?? null,
   };
 }

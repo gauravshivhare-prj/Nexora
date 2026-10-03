@@ -2,6 +2,7 @@ import {
   abandonSession,
   completeSession,
   createSession,
+  getInterviewDifficultySuggestion,
   getSession,
   listSessions,
   startSession,
@@ -10,6 +11,28 @@ import {
 import { generateSessionReport } from '../services/interviewReport.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { clientGoneSignal } from '../utils/requestSignal.js';
+
+/**
+ * GET /api/interviews/suggest-difficulty
+ * Suggests starting difficulty based on student's CareerTwin evidence and preferences.
+ */
+export const suggestDifficulty = asyncHandler(async (req, res) => {
+  const skillsQuery = req.query.skills || req.query.targetSkills;
+  const targetSkills = typeof skillsQuery === 'string'
+    ? skillsQuery.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const suggestion = await getInterviewDifficultySuggestion(req.auth.userId, {
+    targetSkills,
+    targetRole: req.query.targetRole || req.query.roleId,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Interview difficulty suggestion generated',
+    data: suggestion,
+  });
+});
 
 /**
  * POST /api/interviews/sessions

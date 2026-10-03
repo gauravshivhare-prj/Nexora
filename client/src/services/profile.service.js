@@ -21,6 +21,12 @@ export function blankProfile() {
       cgpa: '',
     },
     career: { targetRole: '', preferredLocation: '', careerInterests: [], bio: '' },
+    preferences: {
+      learningStyle: 'mixed',
+      availableHoursPerWeek: '15',
+      priorityGoals: [],
+      preferredDifficulty: 'intermediate',
+    },
     skills: [],
     projects: [],
     certifications: [],
@@ -42,6 +48,12 @@ function toFormValues(profile) {
     career: {
       ...fillSection(blank.career, profile?.career),
       careerInterests: profile?.career?.careerInterests ?? [],
+    },
+    preferences: {
+      learningStyle: profile?.preferences?.learningStyle ?? 'mixed',
+      availableHoursPerWeek: String(profile?.preferences?.availableHoursPerWeek ?? 15),
+      priorityGoals: profile?.preferences?.priorityGoals ?? [],
+      preferredDifficulty: profile?.preferences?.preferredDifficulty ?? 'intermediate',
     },
     skills: (profile?.skills ?? []).map((skill) => ({
       name: skill.name ?? '',
@@ -122,6 +134,16 @@ export async function saveProfile(values) {
 function toRequestPayload(values) {
   return {
     ...values,
+    preferences: values.preferences
+      ? {
+          learningStyle: values.preferences.learningStyle || 'mixed',
+          availableHoursPerWeek: values.preferences.availableHoursPerWeek
+            ? Number(values.preferences.availableHoursPerWeek)
+            : 15,
+          priorityGoals: values.preferences.priorityGoals || [],
+          preferredDifficulty: values.preferences.preferredDifficulty || 'intermediate',
+        }
+      : undefined,
     skills: values.skills.filter((skill) => skill.name.trim() !== ''),
     projects: values.projects.filter((project) => project.title.trim() !== ''),
     certifications: values.certifications.filter(

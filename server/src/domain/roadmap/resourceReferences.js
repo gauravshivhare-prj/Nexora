@@ -33,7 +33,7 @@ export const RESOURCE_TYPES = {
 };
 
 /**
- * Builds the resource references for one skill.
+ * Builds the resource references for one skill, ordered by student's learningStyle.
  *
  * Deliberately the same three kinds for every skill rather than a curated
  * set per skill. A per-skill list would either be a catalogue Nexora does
@@ -41,38 +41,50 @@ export const RESOURCE_TYPES = {
  * the search hint, which is genuinely useful and makes no claim.
  *
  * @param {string} skillName
+ * @param {object} [options]
+ * @param {string} [options.learningStyle='mixed']
  * @returns {object[]}
  */
-export function resourcesFor(skillName) {
-  return [
-    {
-      type: RESOURCE_TYPES.DOCUMENTATION,
-      title: `Official ${skillName} documentation`,
-      /**
-       * Null, always, until a verified catalogue exists. Guessing a
-       * documentation URL from a skill name is how a student ends up at a
-       * parked domain.
-       */
-      url: null,
-      searchHint: `${skillName} official documentation`,
-      verified: false,
-    },
-    {
-      type: RESOURCE_TYPES.COURSE,
-      title: `An introductory ${skillName} course`,
-      url: null,
-      searchHint: `learn ${skillName} beginner course`,
-      verified: false,
-    },
-    {
-      type: RESOURCE_TYPES.PRACTICE_PROJECT,
-      title: `Build something small with ${skillName}`,
-      url: null,
-      // No search hint: this is a thing to do, not a thing to look up.
-      searchHint: null,
-      verified: false,
-    },
-  ];
+export function resourcesFor(skillName, { learningStyle = 'mixed' } = {}) {
+  const docResource = {
+    type: RESOURCE_TYPES.DOCUMENTATION,
+    title: `Official ${skillName} documentation`,
+    url: null,
+    searchHint: `${skillName} official documentation`,
+    verified: false,
+    learningStyleAffinity: 'reading',
+  };
+
+  const courseResource = {
+    type: RESOURCE_TYPES.COURSE,
+    title: `An introductory ${skillName} course`,
+    url: null,
+    searchHint: `learn ${skillName} beginner course`,
+    verified: false,
+    learningStyleAffinity: 'visual',
+  };
+
+  const projectResource = {
+    type: RESOURCE_TYPES.PRACTICE_PROJECT,
+    title: `Build something small with ${skillName}`,
+    url: null,
+    searchHint: null,
+    verified: false,
+    learningStyleAffinity: 'hands_on',
+  };
+
+  if (learningStyle === 'hands_on') {
+    return [projectResource, docResource, courseResource];
+  }
+  if (learningStyle === 'reading') {
+    return [docResource, courseResource, projectResource];
+  }
+  if (learningStyle === 'visual' || learningStyle === 'structured') {
+    return [courseResource, projectResource, docResource];
+  }
+
+  // Default 'mixed' order
+  return [docResource, courseResource, projectResource];
 }
 
 /**

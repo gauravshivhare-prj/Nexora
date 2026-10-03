@@ -119,6 +119,7 @@ export function buildRoadmap(gap, {
   maxItems = 10,
   availableHoursPerWeek = 15,
   studentGoals = [],
+  learningStyle = 'mixed',
 } = {}) {
   const safeGap = gap && typeof gap === 'object' ? gap : {};
   const roleId = safeGap.roleId ?? null;
@@ -240,7 +241,7 @@ export function buildRoadmap(gap, {
 
   // Build roadmap items from the pace-enriched list
   const items = itemsWithPace
-    .map((engineItem, index) => buildItem(engineItem, safeGap, index + 1));
+    .map((engineItem, index) => buildItem(engineItem, safeGap, index + 1, { learningStyle }));
 
   // Run sequence validation and surface any ordering violations in the payload.
   // A violation here means a data-quality issue in the ontology or gap shape —
@@ -288,6 +289,7 @@ export function buildRoadmap(gap, {
       personalization: {
         weeklyPace: hoursPerWeek,
         studentGoals: goals,
+        learningStyle,
       },
       /**
        * Sequence integrity report from the priority engine's validator.
@@ -305,7 +307,7 @@ export function buildRoadmap(gap, {
 }
 
 /** One roadmap item, enriched with priority-engine metadata. */
-function buildItem(engineItem, gap, order) {
+function buildItem(engineItem, gap, order, { learningStyle = 'mixed' } = {}) {
   const gapSkill = engineItem; // engineItem extends the original gapSkill object
   const priority = priorityFor(gapSkill);
   const isMissing = gapSkill.status === GAP_STATUS.MISSING;
@@ -373,7 +375,7 @@ function buildItem(engineItem, gap, order) {
      */
     prerequisites: prerequisitesFor(gapSkill, gap),
 
-    resources: resourcesFor(name),
+    resources: resourcesFor(name, { learningStyle }),
 
     verification: verificationFor(name),
 
