@@ -129,4 +129,71 @@ describe('G05 — Mongo Indexes & Query Audit Suite', () => {
     const userEmailUnique = userIndexes.find((idx) => idx.key.email === 1 && idx.unique === true);
     assert.ok(userEmailUnique, 'User must enforce unique email index');
   });
+
+  it('verifies ReadinessSnapshot collection indexes for historical progression queries', async () => {
+    const { ReadinessSnapshot } = await import('../src/models/ReadinessSnapshot.model.js');
+    const indexes = await ReadinessSnapshot.collection.indexes();
+
+    const hasUserRoleCreatedAt = indexes.some(
+      (idx) => idx.key.user === 1 && idx.key.roleId === 1 && idx.key.createdAt === -1,
+    );
+    assert.ok(
+      hasUserRoleCreatedAt,
+      'ReadinessSnapshot must have compound index on { user: 1, roleId: 1, createdAt: -1 }',
+    );
+  });
+
+  it('verifies AuditLog collection indexes for compliance queries and actor/targetUser filters', async () => {
+    const { AuditLog } = await import('../src/models/AuditLog.model.js');
+    const indexes = await AuditLog.collection.indexes();
+
+    const hasCreatedAt = indexes.some((idx) => idx.key.createdAt === -1);
+    assert.ok(hasCreatedAt, 'AuditLog must have index on { createdAt: -1 }');
+
+    const hasTargetUser = indexes.some(
+      (idx) => idx.key.targetUser === 1 && idx.key.createdAt === -1,
+    );
+    assert.ok(hasTargetUser, 'AuditLog must have compound index on { targetUser: 1, createdAt: -1 }');
+
+    const hasActor = indexes.some(
+      (idx) => idx.key.actor === 1 && idx.key.createdAt === -1,
+    );
+    assert.ok(hasActor, 'AuditLog must have compound index on { actor: 1, createdAt: -1 }');
+
+    const hasAction = indexes.some(
+      (idx) => idx.key.action === 1 && idx.key.createdAt === -1,
+    );
+    assert.ok(hasAction, 'AuditLog must have compound index on { action: 1, createdAt: -1 }');
+  });
+
+  it('enforces TLS connection security validation for production MongoDB URIs', async () => {
+    const { isTlsMongoUri, isLocalMongoUri, validateMongoUriSecurity } = await import(
+      '../src/config/database.js'
+    );
+
+    // TLS detection
+    assert.equal(isTlsMongoUri('mongodb+srv://cluster.mongodb.net/nexora'), true);
+    assert.equal(isTlsMongoUri('mongodb://cluster.net:27017/nexora?ssl=true'), true);
+    assert.equal(isTlsMongoUri('mongodb://cluster.net:27017/nexora?tls=true'), true);
+    assert.equal(isTlsMongoUri('mongodb://insecure-cluster.net:27017/nexora'), false);
+
+    // Local detection
+    assert.equal(isLocalMongoUri('mongodb://127.0.0.1:27017/nexora_test'), true);
+    assert.equal(isLocalMongoUri('mongodb://localhost:27017/nexora'), true);
+    assert.equal(isLocalMongoUri('mongodb://remote-db.production:27017/nexora'), false);
+
+    // Production security rejection
+    assert.throws(
+      () => validateMongoUriSecurity('mongodb://remote-db.production:27017/nexora', 'production'),
+      /Insecure production database connection/i,
+    );
+
+    // Allowed connections
+    assert.doesNotThrow(() =>
+      validateMongoUriSecurity('mongodb+srv://cluster.mongodb.net/nexora', 'production'),
+    );
+    assert.doesNotThrow(() =>
+      validateMongoUriSecurity('mongodb://127.0.0.1:27017/nexora_test', 'production'),
+    );
+  });
 });
