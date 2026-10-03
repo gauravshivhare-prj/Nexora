@@ -89,6 +89,7 @@ export function DashboardPage() {
       </header>
 
       <div className="flex flex-col gap-5">
+        <JourneyProgressTile section={data.journeyProgress} />
         <CareerTwinTile section={data.careerTwin} onRetry={() => load()} />
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -479,3 +480,128 @@ function RoadmapTile({ section, role, onRetry }) {
     </Tile>
   );
 }
+
+/**
+ * Task 27 — Journey Progress Tile
+ *
+ * Shows closed-loop progress across the 10 canonical milestones,
+ * current stage, animated progress bar, and recommended next step.
+ */
+function JourneyProgressTile({ section }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (section?.status !== SECTION_STATUS.READY || !section.value) {
+    return null;
+  }
+
+  const {
+    completedCount,
+    totalMilestones,
+    progressPercentage,
+    currentStage,
+    milestones,
+    nextMilestone,
+  } = section.value;
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-4">
+        {/* Header row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                Stage: {currentStage}
+              </span>
+              <span className="text-xs font-medium text-ink-muted">
+                {completedCount} of {totalMilestones} milestones completed
+              </span>
+            </div>
+            <h2 className="mt-1 text-lg font-semibold text-ink">Career Readiness Journey</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold tracking-tight text-ink">
+              {progressPercentage}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {isExpanded ? 'Hide Steps' : 'View Steps'}
+            </button>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-muted">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500 ease-out"
+            style={{ width: `${Math.max(4, Math.min(100, progressPercentage))}%` }}
+          />
+        </div>
+
+        {/* Next step recommendation prompt */}
+        {nextMilestone && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3.5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-800">
+                Recommended Next Step
+              </p>
+              <p className="text-sm font-medium text-ink mt-0.5">{nextMilestone.description}</p>
+            </div>
+            <Link
+              to={nextMilestone.actionRoute}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-indigo-700"
+            >
+              {nextMilestone.label} →
+            </Link>
+          </div>
+        )}
+
+        {/* Collapsible milestone breakdown */}
+        {isExpanded && (
+          <div className="mt-2 grid grid-cols-1 gap-2 pt-2 border-t border-surface-border sm:grid-cols-2">
+            {milestones.map((m) => (
+              <div
+                key={m.key}
+                className={`flex items-start gap-2.5 rounded-lg border p-2.5 transition-colors ${
+                  m.isCompleted
+                    ? 'border-emerald-200 bg-emerald-50/40 text-emerald-950'
+                    : 'border-surface-border bg-surface text-ink-muted'
+                }`}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {m.isCompleted ? (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                      ✓
+                    </span>
+                  ) : (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full border border-surface-border bg-surface text-[10px] font-medium text-ink-muted">
+                      {m.order}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className={`text-xs font-semibold ${m.isCompleted ? 'text-emerald-900' : 'text-ink'}`}>
+                      {m.label}
+                    </p>
+                    <Link
+                      to={m.actionRoute}
+                      className="text-[11px] text-primary hover:underline shrink-0"
+                    >
+                      Open
+                    </Link>
+                  </div>
+                  <p className="text-[11px] text-ink-muted truncate">{m.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+

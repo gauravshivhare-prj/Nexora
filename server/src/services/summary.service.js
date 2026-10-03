@@ -1,11 +1,19 @@
 import mongoose from 'mongoose';
 
 import { PROCESSING_STATUS } from '../constants/resumePolicy.js';
-import { CareerTwin, Resume, StudentProfile, isCareerTwinStale } from '../models/index.js';
+import {
+  CareerTwin,
+  Resume,
+  StudentProfile,
+  AssessmentAttempt,
+  InterviewSession,
+  isCareerTwinStale,
+} from '../models/index.js';
 import { getCareerTwin } from './careerTwin.service.js';
 import { recommendRoles } from './recommendation.service.js';
 import { getRoadmap } from './roadmap.service.js';
 import { getSkillGap } from './skillGap.service.js';
+import { computeJourneyProgress } from '../domain/student/journeyMilestones.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -52,11 +60,24 @@ const TOP_MATCHES = 3;
  * @param {string} userId From requireAuth. Every query below is scoped to it.
  */
 export async function getSummary(userId) {
-  const [profileResult, twinResult, resumeResult] = await Promise.allSettled([
+  const [
+    profileResult,
+    twinResult,
+    resumeResult,
+    assessmentCountResult,
+    interviewCountResult,
+  ] = await Promise.allSettled([
     loadProfileStatus(userId),
     getCareerTwin(userId),
     loadResumeCounts(userId),
+    AssessmentAttempt.countDocuments({ user: userId }),
+    InterviewSession.countDocuments({ user: userId, status: 'completed' }),
   ]);
+
+  const assessmentAttemptsCount =
+    assessmentCountResult.status === 'fulfilled' ? assessmentCountResult.value : 0;
+  const interviewSessionsCount =
+    interviewCountResult.status === 'fulfilled' ? interviewCountResult.value : 0;
 
   const profile =
     profileResult.status === 'fulfilled'
@@ -97,6 +118,9 @@ export async function getSummary(userId) {
     focusRole: null,
     skillGap: null,
     roadmap: null,
+    assessmentAttemptsCount,
+    interviewSessionsCount,
+    journeyProgress: null,
     /** What the student should do next, by the pipeline's own ordering. */
     nextStep: null,
   };
@@ -106,6 +130,7 @@ export async function getSummary(userId) {
   // not failed at anything.
   if (!twinData.exists) {
     summary.nextStep = nextStepFor(summary);
+    summary.journeyProgress = computeJourneyProgress(summary);
     return summary;
   }
 
@@ -155,6 +180,7 @@ export async function getSummary(userId) {
   }
 
   summary.nextStep = nextStepFor(summary);
+  summary.journeyProgress = computeJourneyProgress(summary);
 
   return summary;
 }

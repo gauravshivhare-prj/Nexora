@@ -67,6 +67,7 @@ export async function fetchDashboard({ signal } = {}) {
     skillGap: data.skillGap ? section(READY, data.skillGap) : section(EMPTY),
     roadmap: data.roadmap ? section(READY, data.roadmap) : section(EMPTY),
     readiness,
+    journeyProgress: data.journeyProgress ? section(READY, data.journeyProgress) : section(EMPTY),
 
     /**
      * What to do next, decided by the backend.
