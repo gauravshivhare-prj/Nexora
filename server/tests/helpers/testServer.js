@@ -2,7 +2,12 @@ import mongoose from 'mongoose';
 
 import { createApp } from '../../src/app.js';
 import { ensureModelIndexes } from '../../src/models/index.js';
-import { loginLimiter, registerLimiter } from '../../src/routes/auth.routes.js';
+import {
+  deleteAccountLimiter,
+  exportLimiter,
+  loginLimiter,
+  registerLimiter,
+} from '../../src/routes/auth.routes.js';
 import { generateLimiter } from '../../src/routes/careerTwin.routes.js';
 import { analysisLimiter, uploadLimiter } from '../../src/routes/resume.routes.js';
 import { assessmentAttemptLimiter, assessmentSubmitLimiter } from '../../src/routes/assessment.routes.js';
@@ -77,6 +82,8 @@ export function resetRateLimiters() {
   // with a 429 once it happens to run late enough.
   loginLimiter.reset();
   registerLimiter.reset();
+  exportLimiter.reset();
+  deleteAccountLimiter.reset();
   analysisLimiter.reset();
   uploadLimiter.reset();
   generateLimiter.reset();
@@ -193,6 +200,16 @@ export async function clearAuditLogs() {
     // Collection might not exist yet
   }
 }
+
+/** Removes all user AI quota records. */
+export async function clearAiQuotas() {
+  try {
+    await mongoose.connection.collection('useraiquotas').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
 
 
 

@@ -11,7 +11,8 @@ export function requestLogger(req, res, next) {
   res.on('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
     const reqId = req.id ? `[${req.id}] ` : '';
-    const message = `${reqId}${req.method} ${req.originalUrl} ${res.statusCode} — ${durationMs.toFixed(1)}ms`;
+    const safeUrl = req.originalUrl?.replace(/([?&](?:token|key|apiKey|secret|password|email|phone)=)[^&]+/gi, '$1[REDACTED]') || req.url || '';
+    const message = `${reqId}${req.method} ${safeUrl} ${res.statusCode} — ${durationMs.toFixed(1)}ms`;
 
     if (res.statusCode >= 500) logger.error(message);
     else if (res.statusCode >= 400) logger.warn(message);

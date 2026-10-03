@@ -146,4 +146,23 @@ export const RATE_LIMIT_POLICY = {
     windowMs: 15 * 60 * 1000,   // 15 minutes
     maxAttempts: 60,
   },
+
+  /**
+   * Task 39 — Data export (GDPR portability).
+   * Aggregates multi-collection user history; throttled to prevent resource exhaustion.
+   */
+  exportData: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 15,
+  },
+
+  /**
+   * Task 39 — Account deletion (GDPR right to erasure).
+   * Irreversible cascade across all collections; throttled against abuse.
+   */
+  accountDeletion: {
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    maxAttempts: 10,
+  },
 };
+

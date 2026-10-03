@@ -28,12 +28,26 @@ const SENSITIVE_KEYS = new Set([
   'authorization',
   'cookie',
   'sessionsecret',
+  'email',
+  'phone',
+  'phonenumber',
 ]);
+
+const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+const PHONE_PATTERN = /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+
+export function sanitizeLogString(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/bearer\s+[a-zA-Z0-9_\-\.]+/gi, 'Bearer [REDACTED]')
+    .replace(EMAIL_PATTERN, '[REDACTED_EMAIL]')
+    .replace(PHONE_PATTERN, '[REDACTED_PHONE]');
+}
 
 function sanitizeMeta(meta, depth = 0) {
   if (meta == null || depth > 4) return meta;
   if (typeof meta === 'string') {
-    return meta.replace(/bearer\s+[a-zA-Z0-9_\-\.]+/gi, 'Bearer [REDACTED]');
+    return sanitizeLogString(meta);
   }
   if (Array.isArray(meta)) {
     return meta.map((item) => sanitizeMeta(item, depth + 1));

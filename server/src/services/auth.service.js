@@ -8,7 +8,26 @@ import {
   PASSWORD_REQUIREMENT_MESSAGE,
 } from '../constants/authPolicy.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
-import { User, toPublicUser } from '../models/index.js';
+import {
+  AssessmentAttempt,
+  CareerTwin,
+  InterviewSession,
+  ReadinessSnapshot,
+  Resume,
+  SkillEvidenceCheck,
+  StudentProfile,
+  User,
+  UserAiQuota,
+  toPublicAssessmentAttempt,
+  toPublicCareerTwin,
+  toPublicInterviewSession,
+  toPublicProfile,
+  toPublicReadinessSnapshot,
+  toPublicResume,
+  toPublicSkillEvidenceCheck,
+  toPublicUser,
+  toPublicUserAiQuota,
+} from '../models/index.js';
 import { recordAuditLog } from './auditLog.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { signAccessToken } from '../utils/jwt.js';
@@ -364,3 +383,118 @@ export async function getAuthenticatedUser(userId) {
 
   return toPublicUser(user);
 }
+
+/**
+ * Task 39 — Compiles a complete data export of all personal data held for a student
+ * in adherence to GDPR right of data portability.
+ * Excludes internal hashes, secrets, and raw file byte buffers.
+ *
+ * @param {string} userId
+ * @returns {Promise<object>}
+ */
+export async function exportUserData(userId) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw ApiError.unauthorized('Authentication token is invalid.', ERROR_CODES.AUTH_TOKEN_INVALID);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw ApiError.notFound('User not found', ERROR_CODES.NOT_FOUND);
+  }
+
+  const [
+    profile,
+    resumes,
+    careerTwin,
+    evidenceChecks,
+    interviewSessions,
+    assessmentAttempts,
+    readinessSnapshots,
+    aiQuotas,
+  ] = await Promise.all([
+    StudentProfile.findOne({ user: userId }),
+    Resume.find({ user: userId }).sort({ createdAt: -1 }),
+    CareerTwin.findOne({ user: userId }),
+    SkillEvidenceCheck.find({ user: userId }).sort({ createdAt: -1 }),
+    InterviewSession.find({ user: userId }).sort({ createdAt: -1 }),
+    AssessmentAttempt.find({ user: userId }).sort({ createdAt: -1 }),
+    ReadinessSnapshot.find({ user: userId }).sort({ createdAt: -1 }),
+    UserAiQuota.find({ user: userId }).sort({ dateKey: -1 }),
+  ]);
+
+  return {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: '1.0.0',
+    account: {
+      id: String(user._id),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    },
+    profile: profile ? toPublicProfile(profile) : null,
+    resumes: resumes.map((r) => toPublicResume(r)),
+    careerTwin: careerTwin ? toPublicCareerTwin(careerTwin) : null,
+    skillEvidence: evidenceChecks.map((e) => toPublicSkillEvidenceCheck(e)),
+    interviewSessions: interviewSessions.map((s) => toPublicInterviewSession(s)),
+    assessmentAttempts: assessmentAttempts.map((a) => toPublicAssessmentAttempt(a)),
+    readinessSnapshots: readinessSnapshots.map((snap) => toPublicReadinessSnapshot(snap)),
+    aiQuota: aiQuotas.map((q) => toPublicUserAiQuota(q)),
+  };
+}
+
+/**
+ * Task 39 — Permanently deletes a user's account and cascades removal across all
+ * associated personal data collections in adherence to GDPR / privacy right to erasure.
+ *
+ * @param {string} userId
+ * @param {object} [options]
+ * @param {string} [options.ipAddress]
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+export async function deleteAccount(userId, { ipAddress = null } = {}) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw ApiError.unauthorized('Authentication token is invalid.', ERROR_CODES.AUTH_TOKEN_INVALID);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw ApiError.notFound('User not found', ERROR_CODES.NOT_FOUND);
+  }
+
+  // 1. Cascade delete across all 8 user-data collections in parallel
+  await Promise.all([
+    StudentProfile.deleteMany({ user: userId }),
+    Resume.deleteMany({ user: userId }),
+    CareerTwin.deleteMany({ user: userId }),
+    SkillEvidenceCheck.deleteMany({ user: userId }),
+    InterviewSession.deleteMany({ user: userId }),
+    AssessmentAttempt.deleteMany({ user: userId }),
+    ReadinessSnapshot.deleteMany({ user: userId }),
+    UserAiQuota.deleteMany({ user: userId }),
+  ]);
+
+  // 2. Delete the user record
+  await User.findByIdAndDelete(userId);
+
+  // 3. Record compliance audit log
+  await recordAuditLog({
+    actor: userId,
+    actorRole: user.role,
+    action: 'ACCOUNT_DELETED',
+    targetUser: userId,
+    resourceType: 'User',
+    resourceId: String(userId),
+    details: {
+      deletedAt: new Date().toISOString(),
+      role: user.role,
+    },
+    ipAddress,
+  });
+
+  return {
+    success: true,
+    message: 'Account and all associated personal data permanently deleted',
+  };
+}
+

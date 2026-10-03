@@ -1,5 +1,7 @@
 import {
   changePassword,
+  deleteAccount,
+  exportUserData,
   getAuthenticatedUser,
   loginUser,
   refreshUserSession,
@@ -93,3 +95,35 @@ export const updatePassword = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
+/**
+ * GET /api/auth/export
+ *
+ * Exports all personal data held for the authenticated user in portable JSON.
+ */
+export const exportData = asyncHandler(async (req, res) => {
+  const exportPayload = await exportUserData(req.auth.userId);
+
+  res.status(200).json({
+    success: true,
+    message: 'User data exported successfully',
+    data: exportPayload,
+  });
+});
+
+/**
+ * DELETE /api/auth/account
+ *
+ * Permanently deletes the authenticated user's account and cascades erasure
+ * across all collections (GDPR Right to Erasure).
+ */
+export const removeAccount = asyncHandler(async (req, res) => {
+  const ipAddress = req.ip || req.socket?.remoteAddress;
+  const result = await deleteAccount(req.auth.userId, { ipAddress });
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+  });
+});
+
