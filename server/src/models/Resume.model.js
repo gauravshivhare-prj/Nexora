@@ -65,6 +65,7 @@ const fileSchema = new mongoose.Schema(
      * them.
      */
     storageKey: { type: String, default: null, maxlength: 512 },
+    fileHash: { type: String, default: null, maxlength: 64 },
   },
   SUBDOCUMENT_OPTIONS,
 );
@@ -265,6 +266,7 @@ export function toResumeSummary(resume) {
     file: {
       originalName: resume.file?.originalName ?? null,
       sizeBytes: resume.file?.sizeBytes ?? null,
+      fileHash: resume.file?.fileHash ?? null,
     },
     textLength: resume.textLength ?? 0,
     contentHash: resume.contentHash ?? null,

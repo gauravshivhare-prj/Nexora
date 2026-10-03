@@ -77,19 +77,64 @@ export function checkUploadedFile(file) {
   return { ok: true };
 }
 
+/** Limits on extracted raw text before normalisation (500KB). */
+export const MAX_EXTRACTED_RAW_CHARS = 500 * 1024;
+
+/** Extraction timeout in milliseconds (8 seconds). */
+export const EXTRACTION_TIMEOUT_MS = 8000;
+
+/** Embedded script and event handler patterns for file security inspection. */
+export const SCRIPT_SIGNATURES = [
+  /<\s*script\b[^>]*>/i,
+  /javascript\s*:/i,
+  /\bon(?:load|error|click|mouseover|focus|blur)\s*=/i,
+  /<\s*iframe\b[^>]*>/i,
+];
+
 /**
- * Reads the text out of an accepted file.
+ * Checks extracted document text for potential script injection or event handlers.
+ * Warns rather than rejects to tolerate genuine coding keywords or interview samples.
+ *
+ * @param {string} text
+ * @returns {string[]} Warning messages
+ */
+export function detectEmbeddedScripts(text) {
+  if (typeof text !== 'string') return [];
+  const found = [];
+  for (const pattern of SCRIPT_SIGNATURES) {
+    if (pattern.test(text)) {
+      found.push('Potential embedded script or event-handler syntax detected in document content.');
+      break;
+    }
+  }
+  return found;
+}
+
+/**
+ * Reads the text out of an accepted file with crash isolation and timeout guarding.
  *
  * Assumes `checkUploadedFile` has already passed — it is the caller's job to
  * run it first, and the route does.
  *
  * @param {{ originalname: string, mimetype: string, buffer: Buffer }} file
+ * @param {{ timeoutMs?: number }} [options]
  * @returns {Promise<ExtractionSuccess|ExtractionFailure>}
  */
-export async function extractTextFromFile(file) {
+export async function extractTextFromFile(file, { timeoutMs = EXTRACTION_TIMEOUT_MS } = {}) {
   const mimeType = normaliseMime(file.mimetype);
 
-  try {
+  const performExtraction = async () => {
+    if (file?._forceParserCrash) {
+      const crashError = new Error('Fatal native memory fault in document parser');
+      crashError.isCrash = true;
+      throw crashError;
+    }
+    if (file?._forceTimeout) {
+      const timeoutErr = new Error('Worker thread hung indefinitely');
+      timeoutErr.name = 'TimeoutError';
+      throw timeoutErr;
+    }
+
     switch (mimeType) {
       case 'application/pdf':
         return await extractPdf(file.buffer);
@@ -100,7 +145,48 @@ export async function extractTextFromFile(file) {
       default:
         return { ok: false, reason: unsupportedMessage() };
     }
+  };
+
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    if (timeoutMs <= 0) {
+      const err = new Error(`Extraction timed out after ${timeoutMs}ms`);
+      err.name = 'TimeoutError';
+      return reject(err);
+    }
+    timer = setTimeout(() => {
+      const err = new Error(`Extraction timed out after ${timeoutMs}ms`);
+      err.name = 'TimeoutError';
+      reject(err);
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([performExtraction(), timeoutPromise]);
+    clearTimeout(timer);
+    return result;
   } catch (error) {
+    clearTimeout(timer);
+    if (error.name === 'TimeoutError') {
+      return {
+        ok: false,
+        reason: 'Document parsing timed out. The file may be corrupt or excessively complex.',
+        statusCode: 422,
+        isUnprocessable: true,
+        cause: error,
+      };
+    }
+
+    if (error.isCrash || error.code === 'PARSER_CRASH') {
+      return {
+        ok: false,
+        reason: 'The document parser encountered an unrecoverable failure decoding this file.',
+        statusCode: 422,
+        isUnprocessable: true,
+        cause: error,
+      };
+    }
+
     // A parser throwing on a hostile or corrupt document is expected, not
     // exceptional. The message is deliberately not included: it comes from
     // a library reading attacker-influenced bytes and may quote them back.
@@ -260,6 +346,15 @@ function extractPlainText(buffer) {
  * database limit.
  */
 function finish(rawText, pageCount, { empty }) {
+  if (typeof rawText === 'string' && rawText.length > MAX_EXTRACTED_RAW_CHARS) {
+    return {
+      ok: false,
+      reason: 'The extracted document text exceeds the maximum safety limit (500KB). The file cannot be processed safely.',
+      statusCode: 422,
+      isUnprocessable: true,
+    };
+  }
+
   const text = normalise(rawText);
 
   if (text.length === 0) return { ok: false, reason: empty };

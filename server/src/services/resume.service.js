@@ -11,7 +11,7 @@ import {
 } from '../constants/resumePolicy.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import { Resume, StudentProfile, toPublicResume, toResumeSummary } from '../models/index.js';
-import { checkUploadedFile, extractTextFromFile } from '../domain/resume/extractText.js';
+import { checkUploadedFile, detectEmbeddedScripts, extractTextFromFile } from '../domain/resume/extractText.js';
 import { groundParsedResume } from '../domain/resume/groundParsedResume.js';
 import { detectResumeConflicts } from '../domain/resume/resumeConflictDetector.js';
 import { validateParsedResume } from '../domain/resume/parsedResumeSchema.js';
@@ -114,6 +114,7 @@ export async function createResume(userId, payload) {
 
   const contentHash = crypto.createHash('sha256').update(text.trim().toLowerCase()).digest('hex');
   const duplicate = await Resume.findOne({ user: userId, contentHash });
+  const scriptWarnings = detectEmbeddedScripts(text);
 
   const resume = await Resume.create({
     user: userId,
@@ -123,6 +124,7 @@ export async function createResume(userId, payload) {
     isDuplicate: Boolean(duplicate),
     duplicateOf: duplicate?._id || null,
     extractedText: text,
+    warnings: scriptWarnings,
     extraction: {
       status: PROCESSING_STATUS.COMPLETED,
       startedAt: new Date(),
@@ -200,16 +202,40 @@ export async function createResumeFromFile(userId, file, fields = {}) {
       logger.warn(`Resume extraction failed for user ${userId}: ${extracted.cause.message}`);
     }
 
+    if (extracted.statusCode === 422 || extracted.isUnprocessable) {
+      throw ApiError.unprocessableEntity(extracted.reason, ERROR_CODES.UNPROCESSABLE_ENTITY);
+    }
+
     const failure = new ValidationCollector();
     failure.add('file', extracted.reason);
     failure.throwIfInvalid();
   }
 
+  const fileHash = crypto
+    .createHash('sha256')
+    .update(file.buffer)
+    .digest('hex');
+
   const contentHash = crypto
     .createHash('sha256')
     .update(extracted.text.trim().toLowerCase())
     .digest('hex');
+
+  const existingFileDuplicate = await Resume.findOne({
+    user: userId,
+    'file.originalName': file.originalname,
+    $or: [{ 'file.fileHash': fileHash }, { contentHash }],
+  });
+
+  if (existingFileDuplicate) {
+    throw ApiError.conflict(
+      'An identical resume file has already been uploaded for this user. Delete the existing version first or upload a new revision.',
+      ERROR_CODES.CONFLICT,
+    );
+  }
+
   const duplicate = await Resume.findOne({ user: userId, contentHash });
+  const scriptWarnings = detectEmbeddedScripts(extracted.text);
 
   const resume = await Resume.create({
     user: userId,
@@ -222,11 +248,11 @@ export async function createResumeFromFile(userId, file, fields = {}) {
       originalName: file.originalname,
       mimeType: file.mimetype,
       sizeBytes: file.size ?? file.buffer.length,
-      // Nothing is persisted anywhere, so there is no key to record. Null
-      // rather than a made-up path, which would imply a file exists.
       storageKey: null,
+      fileHash,
     },
     extractedText: extracted.text,
+    warnings: scriptWarnings,
     extraction: {
       status: PROCESSING_STATUS.COMPLETED,
       startedAt,

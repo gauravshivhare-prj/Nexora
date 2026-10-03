@@ -8,6 +8,7 @@ export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
+  UNPROCESSABLE_ENTITY: 'UNPROCESSABLE_ENTITY',
   /** Registration rejected because the email is already registered. */
   EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
 

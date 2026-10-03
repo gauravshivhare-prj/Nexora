@@ -37,6 +37,10 @@ export class ApiError extends Error {
     return new ApiError(409, message, errorCode);
   }
 
+  static unprocessableEntity(message, errorCode = ERROR_CODES.UNPROCESSABLE_ENTITY) {
+    return new ApiError(422, message, errorCode);
+  }
+
   static serviceUnavailable(message, errorCode = ERROR_CODES.SERVICE_UNAVAILABLE) {
     return new ApiError(503, message, errorCode);
   }
