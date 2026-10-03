@@ -46,7 +46,7 @@ export async function fetchDashboard({ signal } = {}) {
 
   const readiness = data.focusRole
     ? await request(
-        `/api/careers/roles/${encodeURIComponent(data.focusRole.roleId)}/readiness`,
+        `/api/careers/roles/${encodeURIComponent(data.focusRole.roleId)}/readiness?includeScore=true`,
         { signal },
       )
           .then((result) => {

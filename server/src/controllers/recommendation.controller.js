@@ -6,7 +6,7 @@ import {
   scoreAgainstRole,
 } from '../services/recommendation.service.js';
 import { getRoadmap } from '../services/roadmap.service.js';
-import { getReadiness } from '../services/readiness.service.js';
+import { getReadiness, getReadinessHistory } from '../services/readiness.service.js';
 import { getSkillGap } from '../services/skillGap.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -28,6 +28,7 @@ export const roles = asyncHandler(async (_req, res) => {
 
 /**
  * GET /api/careers/roles/:roleId
+
  *
  * Returns detailed structured requirements and expectations for one career role.
  */
@@ -115,7 +116,7 @@ export const skillGap = asyncHandler(async (req, res) => {
 export const readiness = asyncHandler(async (req, res) => {
   // The standard readiness endpoint deliberately omits the numeric score.
   // Pass ?includeScore=true to receive the score block alongside readiness.
-  const includeScore = req.query.includeScore === 'true';
+  const includeScore = req.query.includeScore === 'true' || req.headers['x-include-score'] === 'true';
   const data = await getReadiness(req.auth.userId, req.params.roleId, { includeScore });
 
   res.status(200).json({
@@ -126,7 +127,29 @@ export const readiness = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/careers/roles/:roleId/readiness/history
+ * or GET /api/readiness/history/:roleId
+ *
+ * Retrieves chronological historical readiness snapshots for the authenticated student.
+ */
+export const readinessHistory = asyncHandler(async (req, res) => {
+  const history = await getReadinessHistory(req.auth.userId, req.params.roleId, {
+    limit: req.query.limit,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Readiness history retrieved',
+    data: {
+      roleId: req.params.roleId,
+      history,
+    },
+  });
+});
+
+/**
  * GET /api/careers/roles/:roleId/roadmap
+
  *
  * A prioritised plan for closing the gaps towards this role.
  *

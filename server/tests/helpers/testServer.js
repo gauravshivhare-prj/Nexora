@@ -176,6 +176,16 @@ export async function clearCareerTwins() {
   return mongoose.connection.collection('careertwins').deleteMany({});
 }
 
+/** Removes all readiness snapshots. */
+export async function clearReadinessSnapshots() {
+  try {
+    await mongoose.connection.collection('readinesssnapshots').deleteMany({});
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
+
 /**
  * POSTs a raw body so tests can send malformed JSON, not just valid objects.
  *

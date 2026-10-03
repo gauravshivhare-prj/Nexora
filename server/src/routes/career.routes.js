@@ -3,6 +3,7 @@ import { Router } from 'express';
 import {
   recommendations,
   readiness,
+  readinessHistory,
   roadmap,
   roleDetails,
   roleMatch,
@@ -32,7 +33,9 @@ router.get('/roles/:roleId', roleDetails);
 router.get('/roles/:roleId/match', roleMatch);
 router.get('/roles/:roleId/skill-gap', skillGap);
 router.get('/roles/:roleId/readiness', readiness);
+router.get('/roles/:roleId/readiness/history', readinessHistory);
 router.get('/roles/:roleId/roadmap', roadmap);
+
 router.get('/recommendations', recommendations);
 router.get('/benchmark', benchmark);
 

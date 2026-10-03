@@ -18,6 +18,10 @@ import {
   AssessmentAttempt,
   toPublicAssessmentAttempt,
 } from './AssessmentAttempt.model.js';
+import {
+  ReadinessSnapshot,
+  toPublicReadinessSnapshot,
+} from './ReadinessSnapshot.model.js';
 
 /**
  * Model registry and index management.
@@ -34,6 +38,7 @@ const MODELS = [
   Assessment,
   AssessmentAttempt,
   InterviewSession,
+  ReadinessSnapshot,
 ];
 
 /**
@@ -56,6 +61,7 @@ export {
   AssessmentAttempt,
   CareerTwin,
   InterviewSession,
+  ReadinessSnapshot,
   Resume,
   SkillEvidenceCheck,
   StudentProfile,
@@ -69,6 +75,7 @@ export {
   toPublicInterviewQuestion,
   toPublicInterviewSession,
   toPublicProfile,
+  toPublicReadinessSnapshot,
   toPublicResume,
   toPublicSkillEvidenceCheck,
   toPublicUser,

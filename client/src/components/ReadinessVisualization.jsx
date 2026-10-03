@@ -31,6 +31,7 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
     required = { total: 0, missing: 0, claimed: 0, supported: 0, verified: 0 },
     preferred = { total: 0, missing: 0, claimed: 0, supported: 0, verified: 0 },
     blockingSkills = [],
+    score: readinessScore = null,
   } = readiness;
 
   const statusInfo = READINESS_STATUS_PRESENTATION[evidenceStatus] ?? READINESS_STATUS_PRESENTATION.insufficient_data;
@@ -44,6 +45,65 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Mathematical Readiness Score Card (Task 17 & Task 23) */}
+      {readinessScore && typeof readinessScore.score === 'number' && (
+        <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/5 via-surface to-brand/10 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center rounded-2xl bg-brand text-on-brand shadow-md">
+                <span className="text-2xl font-black tracking-tight leading-none">{readinessScore.score}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">/ 100</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-ink">Readiness Score</span>
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ${
+                      readinessScore.band === 'interview-ready'
+                        ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
+                        : readinessScore.band === 'strong'
+                          ? 'border border-sky-300 bg-sky-100 text-sky-800'
+                          : readinessScore.band === 'developing'
+                            ? 'border border-amber-300 bg-amber-100 text-amber-800'
+                            : 'border border-slate-300 bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {readinessScore.band?.replace('-', ' ')}
+                  </span>
+                  {readinessScore.interviewBoostApplied && (
+                    <span
+                      title="Includes interview boost for verified demonstration"
+                      className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700"
+                    >
+                      ⚡ Interview Boost
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-ink-muted">
+                  <span>Confidence: <strong className="capitalize text-ink">{readinessScore.confidence || 'medium'}</strong></span>
+                  <span>·</span>
+                  <span>Required: <strong>{readinessScore.breakdown?.requiredScore ?? 0}</strong>/{readinessScore.breakdown?.requiredContributionMax ?? 70} pts</span>
+                  <span>·</span>
+                  <span>Preferred: <strong>{readinessScore.breakdown?.preferredScore ?? 0}</strong>/{readinessScore.breakdown?.preferredContributionMax ?? 30} pts</span>
+                </div>
+              </div>
+            </div>
+
+            {readinessScore.nextMilestone?.achievable && (
+              <div className="rounded-xl border border-brand/20 bg-surface/80 p-3 sm:max-w-xs">
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-brand-text">
+                  <span>Next Milestone</span>
+                  <span>+{readinessScore.nextMilestone.pointsNeeded} pts to {readinessScore.nextMilestone.nextBand}</span>
+                </div>
+                <p className="mt-1 text-xs text-ink-muted leading-relaxed line-clamp-2">
+                  {readinessScore.nextMilestone.action}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Evidence Status Header Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -73,7 +133,9 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
         {statusInfo.description}
       </p>
       <p className="text-xs text-ink-muted">
-        Readiness is based on evidence states, not a percentage or overall score.
+        {readinessScore
+          ? 'Score is mathematically derived from verified (100%), supported (65%), and claimed (25%) evidence weights.'
+          : 'Readiness is based on evidence states, not a subjective or uncalibrated percentage.'}
       </p>
 
       {/* Stale State Notice */}
@@ -83,6 +145,7 @@ export const ReadinessVisualization = memo(function ReadinessVisualization({ rea
           Rebuild CareerTwin from your profile to synchronize readiness.
         </div>
       )}
+
 
       {/* Dynamic Stacked Composition Bar */}
       {reqTotal > 0 ? (

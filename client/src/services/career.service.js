@@ -121,7 +121,7 @@ export async function fetchOpportunities({ signal } = {}) {
 
 /**
  * GET /api/careers/roles/:roleId/readiness
- * Fetches explainable career readiness derived from skill-gap evidence.
+ * Fetches explainable career readiness derived from skill-gap evidence and includes score.
  *
  * @param {string} roleId
  * @param {{ signal?: AbortSignal }} [options]
@@ -130,7 +130,7 @@ export async function fetchReadiness(roleId, { signal } = {}) {
   if (!roleId) throw new Error('roleId is required.');
 
   const body = await request(
-    `/api/careers/roles/${encodeURIComponent(roleId)}/readiness`,
+    `/api/careers/roles/${encodeURIComponent(roleId)}/readiness?includeScore=true`,
     { signal },
   );
   const data = body?.data;
@@ -139,4 +139,21 @@ export async function fetchReadiness(roleId, { signal } = {}) {
   }
 
   return { readiness: data.readiness };
+}
+
+/**
+ * GET /api/readiness/history/:roleId
+ * Fetches chronological historical readiness snapshots for a career role.
+ *
+ * @param {string} roleId
+ * @param {{ signal?: AbortSignal }} [options]
+ */
+export async function fetchReadinessHistory(roleId, { signal } = {}) {
+  if (!roleId) throw new Error('roleId is required.');
+
+  const body = await request(
+    `/api/readiness/history/${encodeURIComponent(roleId)}`,
+    { signal },
+  );
+  return body?.data?.history ?? [];
 }

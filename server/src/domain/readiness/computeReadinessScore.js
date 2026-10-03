@@ -134,6 +134,7 @@ export function computeReadinessScore(gap, { interviewPassedSkillKeys = new Set(
   return {
     roleId: gap.roleId,
     value: composite,
+    score: composite,
     band,
     confidence,
     breakdown: {
@@ -391,6 +392,7 @@ function emptyScore(roleId) {
   return {
     roleId,
     value: 0,
+    score: 0,
     band: 'beginning',
     confidence: 'low',
     breakdown: {
