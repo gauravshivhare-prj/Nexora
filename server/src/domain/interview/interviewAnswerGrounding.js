@@ -111,9 +111,15 @@ export function escapeCandidateAnswerForPrompt(text) {
  * @param {object} params.question Interview question definition (from bank or session)
  * @param {string} params.answerText Candidate's submitted answer text
  * @param {string} [params.targetSkill] Optional explicit target skill
+ * @param {Array<object>} [params.previousTurns=[]] Optional previous Q&A turns in the session
  * @returns {{ system: string, user: string, maxOutputTokens: number }}
  */
-export function buildInterviewEvaluationRequest({ question, answerText, targetSkill }) {
+export function buildInterviewEvaluationRequest({
+  question,
+  answerText,
+  targetSkill,
+  previousTurns = [],
+}) {
   if (!question || typeof question !== 'object') {
     throw new Error('Question definition is required to build evaluation request.');
   }
@@ -142,6 +148,20 @@ export function buildInterviewEvaluationRequest({ question, answerText, targetSk
     ? rawPrompt.trim().slice(0, INTERVIEW_LIMITS.questionPrompt.max)
     : '';
 
+  let contextBlock = '';
+  if (Array.isArray(previousTurns) && previousTurns.length > 0) {
+    const turns = previousTurns
+      .slice(-3)
+      .map(
+        (turn, idx) => `  <turn index="${idx + 1}">
+    <prior_question>${escapeCandidateAnswerForPrompt(String(turn.questionPrompt || '').slice(0, 300))}</prior_question>
+    <candidate_prior_response>${escapeCandidateAnswerForPrompt(String(turn.answerSummary || '').slice(0, 300))}</candidate_prior_response>
+  </turn>`,
+      )
+      .join('\n');
+    contextBlock = `\n<previous_interview_context>\n${turns}\n</previous_interview_context>\n`;
+  }
+
   const userPrompt = `<question_target>
 Target Skill: ${canonical.name}
 Question Type: ${question.type || 'conceptual'}
@@ -151,8 +171,7 @@ Prompt: ${questionPrompt}
 
 <rubric_criteria>
 ${rubricItems}
-</rubric_criteria>
-
+</rubric_criteria>${contextBlock}
 <candidate_untrusted_answer>
 ${escapedAnswer}
 </candidate_untrusted_answer>

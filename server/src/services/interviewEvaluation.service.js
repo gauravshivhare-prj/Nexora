@@ -49,6 +49,7 @@ export const DEFAULT_AI_TIMEOUT_MS = 15_000;
 export async function evaluateQuestionAnswer({
   question,
   answerText,
+  previousTurns = [],
   signal,
   timeoutMs = DEFAULT_AI_TIMEOUT_MS,
 }) {
@@ -93,6 +94,7 @@ export async function evaluateQuestionAnswer({
   const requestPayload = buildInterviewEvaluationRequest({
     question,
     answerText,
+    previousTurns,
   });
 
   // Step 2: Configure bounded timeout signal

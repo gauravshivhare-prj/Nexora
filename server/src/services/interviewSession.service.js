@@ -18,6 +18,7 @@ import {
   INTERVIEW_DIFFICULTY_VALUES,
   INTERVIEW_LIMITS,
   SESSION_STATUS,
+  adaptDifficulty,
   canTransitionSession,
 } from '../domain/interview/interviewContract.js';
 import { selectQuestionsForSession } from '../domain/interview/interviewQuestions.js';
@@ -446,13 +447,33 @@ export async function submitQuestionAnswer(
 
   inFlightEvaluations.add(inflightKey);
   try {
+    // Multi-turn context window: Collect previous answered turns (bounded to last 3)
+    const previousTurns = session.questions
+      .slice(0, questionIndex)
+      .filter((q) => q.answer?.answerText && q.evaluation?.compositeScore !== undefined)
+      .slice(-3)
+      .map((q) => ({
+        questionPrompt: q.prompt,
+        answerSummary: q.answer.answerText.slice(0, 250),
+      }));
+
     // Step: Run AI evaluation service
     const { evaluation, providerMetadata, warnings } = await evaluateQuestionAnswer({
       question,
       answerText: answerText.trim(),
+      previousTurns,
       signal: options.signal,
       timeoutMs: options.timeoutMs,
     });
+
+    // Adaptive difficulty recommendation based on session performance history
+    const completedHistory = session.questions
+      .slice(0, questionIndex)
+      .filter((q) => typeof q.evaluation?.compositeScore === 'number')
+      .map((q) => ({ score: q.evaluation.compositeScore, difficulty: q.difficulty }));
+    completedHistory.push({ score: evaluation.compositeScore, difficulty: question.difficulty });
+
+    const adaptation = adaptDifficulty(completedHistory, question.difficulty || session.difficulty);
 
     // Record answer and evaluation on question subdocument
     const previousAttemptNumber = question.answer?.attemptNumber || 0;
@@ -540,6 +561,7 @@ export async function submitQuestionAnswer(
     return {
       session: toPublicInterviewSession(updated),
       evaluatedQuestion: toPublicInterviewQuestion(recorded),
+      adaptation,
       warnings,
     };
   } finally {

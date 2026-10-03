@@ -779,3 +779,4 @@ export function evaluateInterviewSession(
     completedAt: new Date(),
   };
 }
+export { adaptDifficulty } from './adaptiveDifficulty.js';
