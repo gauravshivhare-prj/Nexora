@@ -22,6 +22,7 @@ import {
 } from '../domain/interview/interviewFeedbackSafety.js';
 import { buildInterviewResult } from '../domain/evidence/skillEvidenceCheck.js';
 import { canonicalSkill } from '../domain/skills/skillKey.js';
+import { scoreFeedbackQuality } from '../domain/interview/feedbackQuality.js';
 
 /**
  * Standard timeout in milliseconds for single-question AI evaluation.
@@ -177,7 +178,15 @@ export async function evaluateQuestionAnswer({
     contractVersion: INTERVIEW_CONTRACT_VERSION,
   };
 
+  const quality = scoreFeedbackQuality(grounded.evaluation, {
+    question,
+    answerText,
+  });
+
   const warnings = [...validated.warnings, ...grounded.warnings];
+  if (!quality.isAcceptable && quality.reasons.length > 0) {
+    logger.info(`Feedback quality advisory note: ${quality.reasons.join('; ')}`);
+  }
   if (warnings.length > 0) {
     logger.info(`AI interview evaluation recorded ${warnings.length} warning(s)`);
   }
@@ -185,6 +194,11 @@ export async function evaluateQuestionAnswer({
   return {
     evaluation: grounded.evaluation,
     providerMetadata,
+    quality: {
+      qualityScore: quality.qualityScore,
+      isAcceptable: quality.isAcceptable,
+      dimensions: quality.dimensions,
+    },
     warnings,
   };
 }

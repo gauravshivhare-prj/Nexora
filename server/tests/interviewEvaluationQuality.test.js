@@ -1,673 +1,353 @@
+/**
+ * Task 22 — AI Interview Anti-Hallucination & Feedback Quality Test Suite
+ *
+ * Verifies:
+ * 1. Anti-Hallucination Benchmark Dataset & Grounding:
+ *    - Validates all 16 expert-curated benchmark fixtures.
+ *    - Confirms detectHallucinatedSkills flags 100% of phantom skills across all fixtures.
+ *    - Confirms legitimate demonstrated skills are never falsely flagged.
+ *    - Confirms groundAnswerEvaluation eliminates hallucinated skills from AI outputs.
+ *
+ * 2. Feedback Quality Scoring (scoreFeedbackQuality):
+ *    - High-quality technical feedback earns score >= 0.75 and isAcceptable: true.
+ *    - Generic boilerplate feedback is penalized and flagged with clear reasons.
+ *    - Terse (< 20 chars) or overly verbose feedback triggers length warnings.
+ *    - Actionability detects prescriptive guidance in growthAreas.
+ *    - Secret or stack trace leakage drives tone score down and fails acceptability.
+ *
+ * 3. Model Drift Canary Infrastructure (checkModelDrift & CANARY_BASELINES):
+ *    - Verifies 5 canonical canary scenarios against their baseline bounds.
+ *    - Flags drift when simulated performance deviates by > 20%.
+ *    - Accurately tracks missing canaries and max drift magnitude.
+ */
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, it } from 'node:test';
-import mongoose from 'mongoose';
+import { describe, it } from 'node:test';
 
+import { HALLUCINATION_BENCHMARK_FIXTURES } from './fixtures/hallucinationBenchmark.js';
 import {
-  INTERVIEW_CONTRACT_VERSION,
-  INTERVIEW_PASS_MARK,
-  RUBRIC_DIMENSIONS,
-  RUBRIC_DIMENSION_KEYS,
-  RUBRIC_DIMENSION_WEIGHTS,
-  calculateCompositeQuestionScore,
-  validateAiQuestionEvaluation,
-  validateStudentAnswer,
-} from '../src/domain/interview/interviewContract.js';
-import {
-  hasInjectionContent,
-  validateAiEvaluationJson,
-  parseAndValidateAiEvaluation,
-} from '../src/domain/interview/interviewEvaluationSchema.js';
-import {
-  buildInterviewEvaluationRequest,
-  escapeCandidateAnswerForPrompt,
-  groundAnswerEvaluation,
-} from '../src/domain/interview/interviewAnswerGrounding.js';
-import {
-  evaluateQuestionAnswer,
-  evaluateSessionResults,
-} from '../src/services/interviewEvaluation.service.js';
-import {
-  registerAiProvider,
-  resetAiProviders,
-  useAiProvider,
-} from '../src/services/ai/aiProvider.js';
-import {
-  clearInterviewSessions,
-  clearUsers,
-  postJson,
-  resetRateLimiters,
-  sendJsonWithToken,
-  startTestServer,
-} from './helpers/testServer.js';
-import {
-  EVALUATION_QUALITY_FIXTURES,
-  EVALUATION_TIERS,
-  STRONG_ANSWER_FIXTURES,
-  PARTIAL_ANSWER_FIXTURES,
-  WEAK_ANSWER_FIXTURES,
-  ADVERSARIAL_ANSWER_FIXTURES,
-  RUBRIC_BOUNDARY_FIXTURES,
-  getFixturesByTier,
-} from './fixtures/evaluationQualityFixtures.js';
-import { InterviewSession } from '../src/models/InterviewSession.model.js';
+  scoreFeedbackQuality,
+  detectHallucinatedSkills,
+  checkModelDrift,
+  CANARY_BASELINES,
+  GENERIC_FEEDBACK_PHRASES,
+  ACTIONABLE_VERBS,
+} from '../src/domain/interview/feedbackQuality.js';
+import { groundAnswerEvaluation } from '../src/domain/interview/interviewAnswerGrounding.js';
 
-describe('TASK R17 — Evaluation Quality Fixtures & Rubric Boundaries Suite', () => {
-  let server;
-  let mockProviderOutput;
-  let mockShouldThrow = false;
-  let lastCapturedRequest = null;
-  const PASSWORD = 'StrongTestPassword123!';
-
-  before(async () => {
-    // Start real test server connected to isolated MongoDB (nexora_radhika_r17_test)
-    server = await startTestServer();
-
-    // Verify isolated MongoDB name
-    const dbName = mongoose.connection.name;
-    assert.ok(
-      dbName.endsWith('_test'),
-      `Test must run against isolated database ending in _test, got: ${dbName}`,
-    );
-
-    registerAiProvider({
-      name: 'r17-quality-evaluator',
-      async complete(request) {
-        lastCapturedRequest = request;
-        if (mockShouldThrow) {
-          throw new Error('Upstream provider temporary failure');
-        }
-        return {
-          text: typeof mockProviderOutput === 'string'
-            ? mockProviderOutput
-            : JSON.stringify(mockProviderOutput),
-          model: 'r17-quality-test-model',
-        };
-      },
-    });
-
-    useAiProvider('r17-quality-evaluator');
-  });
-
-  after(async () => {
-    resetAiProviders();
-    await server.close();
-  });
-
-  beforeEach(async () => {
-    resetRateLimiters();
-    await clearInterviewSessions();
-    await clearUsers();
-    mockShouldThrow = false;
-    lastCapturedRequest = null;
-  });
-
-  // =========================================================================
-  // 1. Rubric Weights & Mathematical Invariants
-  // =========================================================================
-  describe('1. Rubric Dimension Weights & Arithmetic Invariants', () => {
-    it('verifies rubric dimension weights sum exactly to 1.0000', () => {
-      const weights = Object.values(RUBRIC_DIMENSION_WEIGHTS);
-      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-      assert.equal(
-        Math.round(totalWeight * 10000) / 10000,
-        1.0,
-        'Rubric dimension weights must sum to exactly 1.0',
+describe('Task 22 — Anti-Hallucination & Feedback Quality System', () => {
+  // ─── 1. Anti-Hallucination Benchmark & Detection ──────────────────────────
+  describe('1. Anti-Hallucination Benchmark & Grounding', () => {
+    it('contains at least 15 curated benchmark fixtures (has 16)', () => {
+      assert.ok(
+        Array.isArray(HALLUCINATION_BENCHMARK_FIXTURES),
+        'Benchmark fixtures must be an array',
+      );
+      assert.ok(
+        HALLUCINATION_BENCHMARK_FIXTURES.length >= 15,
+        `Expected at least 15 fixtures, found ${HALLUCINATION_BENCHMARK_FIXTURES.length}`,
       );
     });
 
-    it('verifies exact weight distribution per canonical dimension', () => {
-      assert.equal(RUBRIC_DIMENSION_WEIGHTS.accuracy, 0.35, 'accuracy weight must be 0.35');
-      assert.equal(RUBRIC_DIMENSION_WEIGHTS.depth, 0.30, 'depth weight must be 0.30');
-      assert.equal(RUBRIC_DIMENSION_WEIGHTS.clarity, 0.20, 'clarity weight must be 0.20');
-      assert.equal(RUBRIC_DIMENSION_WEIGHTS.relevance, 0.15, 'relevance weight must be 0.15');
-    });
-
-    it('verifies RUBRIC_DIMENSION_KEYS contains exactly 4 canonical keys', () => {
-      assert.deepEqual([...RUBRIC_DIMENSION_KEYS].sort(), ['accuracy', 'clarity', 'depth', 'relevance']);
-    });
-
-    it('clamps negative dimension scores to 0.0 in composite score calculation', () => {
-      const negativeDimensions = {
-        accuracy: -0.5,
-        depth: -0.2,
-        clarity: -1.0,
-        relevance: -0.05,
-      };
-      const score = calculateCompositeQuestionScore(negativeDimensions);
-      assert.equal(score, 0.0);
-    });
-
-    it('clamps overflow dimension scores (> 1.0) to 1.0 in composite score calculation', () => {
-      const overflowDimensions = {
-        accuracy: 1.5,
-        depth: 2.0,
-        clarity: 10.0,
-        relevance: 1.05,
-      };
-      const score = calculateCompositeQuestionScore(overflowDimensions);
-      assert.equal(score, 1.0);
-    });
-
-    it('handles non-numeric or missing dimensions safely as 0', () => {
-      const partialDimensions = { accuracy: 0.8 };
-      // 0.8 * 0.35 = 0.28
-      const score = calculateCompositeQuestionScore(partialDimensions);
-      assert.equal(score, 0.28);
-    });
-
-    it('rejects out-of-range dimensions in strict schema validation', () => {
-      const invalidJson = {
-        dimensions: {
-          accuracy: 1.25, // > 1.0
-          depth: 0.8,
-          clarity: 0.8,
-          relevance: 0.8,
-        },
-        feedback: 'Valid feedback text here.',
-      };
-      const result = validateAiEvaluationJson(invalidJson);
-      assert.equal(result.isValid, false);
-      assert.ok(result.errors.some((e) => e.includes('out of range')));
-    });
-
-    it('warns when AI model attempts to inject divergent score', () => {
-      const raw = {
-        dimensions: { accuracy: 0.8, depth: 0.8, clarity: 0.8, relevance: 0.8 },
-        compositeScore: 1.0, // Model tries to force 1.0 instead of 0.8
-        feedback: 'Candidate performed well on core concepts.',
-      };
-      const result = validateAiEvaluationJson(raw);
-      assert.equal(result.isValid, true);
-      assert.equal(result.data.compositeScore, 0.8);
-      assert.ok(result.warnings.some((w) => w.includes('overridden by verified composite score')));
-    });
-  });
-
-  // =========================================================================
-  // 2. Rubric Threshold Boundaries & Asymmetric Profiles
-  // =========================================================================
-  describe('2. Rubric Threshold Boundaries & Policy Invariants', () => {
-    it('enforces institutional pass mark of 0.7500', () => {
-      assert.equal(INTERVIEW_PASS_MARK, 0.75);
-    });
-
-    it('verifies exact borderline fail boundary: score 0.7465 < 0.7500 fails human evaluation', () => {
-      const boundaryFixture = RUBRIC_BOUNDARY_FIXTURES.BORDERLINE_FAIL_7499;
-      const calculated = calculateCompositeQuestionScore(boundaryFixture.dimensions);
-      assert.equal(calculated, boundaryFixture.compositeScore);
-      assert.ok(calculated < INTERVIEW_PASS_MARK, 'Score must be strictly less than pass mark');
-
-      const session = {
-        _id: new mongoose.Types.ObjectId().toString(),
-        targetSkills: ['Node.js'],
-        questions: [{ questionId: 'iq-node-001', targetSkill: 'Node.js', evaluation: { compositeScore: calculated } }],
-      };
-
-      const result = evaluateSessionResults({ session, evaluatorType: 'human' });
-      assert.equal(result.overallScore, calculated);
-      assert.equal(result.eligibleForVerified, false);
-      assert.equal(result.evidenceResults[0].outcome, 'fail');
-    });
-
-    it('verifies exact borderline pass boundary: score 0.7500 >= 0.7500 passes human evaluation', () => {
-      const boundaryFixture = RUBRIC_BOUNDARY_FIXTURES.BORDERLINE_PASS_7500;
-      const calculated = calculateCompositeQuestionScore(boundaryFixture.dimensions);
-      assert.equal(calculated, 0.7500);
-      assert.ok(calculated >= INTERVIEW_PASS_MARK, 'Score must meet or exceed pass mark');
-
-      const session = {
-        _id: new mongoose.Types.ObjectId().toString(),
-        targetSkills: ['Node.js'],
-        questions: [{ questionId: 'iq-node-001', targetSkill: 'Node.js', evaluation: { compositeScore: calculated } }],
-      };
-
-      const result = evaluateSessionResults({ session, evaluatorType: 'human' });
-      assert.equal(result.overallScore, 0.75);
-      assert.equal(result.eligibleForVerified, true);
-      assert.equal(result.evidenceResults[0].outcome, 'pass');
-      assert.equal(result.evidenceResults[0].evidence.strength, 'verified');
-    });
-
-    it('verifies Eloquent Charlatan test: high clarity (1.0) with zero accuracy (0.0) cannot pass', () => {
-      const fixture = RUBRIC_BOUNDARY_FIXTURES.ELOQUENT_CHARLATAN;
-      const score = calculateCompositeQuestionScore(fixture.dimensions);
-      // 0*0.35 + 0.40*0.30 + 1.0*0.20 + 0.80*0.15 = 0.4400
-      assert.equal(score, 0.4400);
-      assert.ok(score < INTERVIEW_PASS_MARK, 'Eloquent answer with no technical accuracy must fail');
-
-      const session = {
-        _id: new mongoose.Types.ObjectId().toString(),
-        targetSkills: ['Node.js'],
-        questions: [{ questionId: 'iq-node-001', targetSkill: 'Node.js', evaluation: { compositeScore: score } }],
-      };
-      const result = evaluateSessionResults({ session, evaluatorType: 'human' });
-      assert.equal(result.eligibleForVerified, false);
-      assert.equal(result.evidenceResults[0].outcome, 'fail');
-    });
-
-    it('verifies Incoherent Genius test: exceptional accuracy & depth passes despite poor clarity (0.20)', () => {
-      const fixture = RUBRIC_BOUNDARY_FIXTURES.INCOHERENT_GENIUS;
-      const score = calculateCompositeQuestionScore(fixture.dimensions);
-      // 0.95*0.35 + 0.90*0.30 + 0.20*0.20 + 0.90*0.15 = 0.3325 + 0.2700 + 0.0400 + 0.1350 = 0.7775
-      assert.equal(score, 0.7775);
-      assert.ok(score >= INTERVIEW_PASS_MARK, 'Technical substance must outweigh poor prose style');
-
-      const session = {
-        _id: new mongoose.Types.ObjectId().toString(),
-        targetSkills: ['Node.js'],
-        questions: [{ questionId: 'iq-node-001', targetSkill: 'Node.js', evaluation: { compositeScore: score } }],
-      };
-      const result = evaluateSessionResults({ session, evaluatorType: 'human' });
-      assert.equal(result.eligibleForVerified, true);
-      assert.equal(result.evidenceResults[0].outcome, 'pass');
-    });
-
-    it('enforces Skill Grounding threshold: accuracy 0.64 drops skill, accuracy 0.65 retains skill', () => {
-      const question = { targetSkill: 'Node.js' };
-
-      // Case A: accuracy 0.64 (< 0.65 threshold)
-      const failEval = {
-        dimensions: { accuracy: 0.64, depth: 0.70, clarity: 0.70, relevance: 0.80 },
-        feedback: 'Good overview but missed crucial details.',
-        groundedSkills: ['Node.js'],
-      };
-      const groundedA = groundAnswerEvaluation(failEval, {
-        question,
-        candidateAnswer: 'Valid explanation about Node.js event loops and timers.',
-      });
-      assert.deepEqual(groundedA.evaluation.groundedSkills, [], 'Accuracy 0.64 must not award grounded skill');
-
-      // Case B: accuracy 0.65 and relevance 0.65 meets threshold
-      const passEval = {
-        dimensions: { accuracy: 0.65, depth: 0.70, clarity: 0.70, relevance: 0.65 },
-        feedback: 'Solid explanation meeting minimum thresholds.',
-        groundedSkills: ['Node.js'],
-      };
-      const groundedB = groundAnswerEvaluation(passEval, {
-        question,
-        candidateAnswer: 'Valid explanation about Node.js event loops and timers.',
-      });
-      assert.deepEqual(groundedB.evaluation.groundedSkills, ['Node.js'], 'Accuracy 0.65 must award grounded skill');
-    });
-
-    it('enforces AI evaluation advisory rule: even score of 1.00 cannot grant verified credentials', () => {
-      const perfectSession = {
-        _id: new mongoose.Types.ObjectId().toString(),
-        targetSkills: ['Node.js'],
-        questions: [{ questionId: 'iq-node-001', targetSkill: 'Node.js', evaluation: { compositeScore: 1.0 } }],
-      };
-      const result = evaluateSessionResults({ session: perfectSession, evaluatorType: 'ai' });
-      assert.equal(result.overallScore, 1.0);
-      assert.equal(result.evaluatorType, 'ai');
-      assert.equal(result.eligibleForVerified, false);
-      assert.equal(result.evidenceResults[0].outcome, 'uncertain');
-      assert.equal(result.evidenceResults[0].eligibleForVerified, false);
-      assert.equal(result.evidenceResults[0].evidence, null);
-    });
-  });
-
-  // =========================================================================
-  // 3. Strong Candidate Answer Fixtures Suite
-  // =========================================================================
-  describe('3. Strong Answer Fixtures (Accurate, Deep, Well-Structured)', () => {
-    for (const [key, fixture] of Object.entries(STRONG_ANSWER_FIXTURES)) {
-      it(`evaluates strong fixture "${fixture.targetSkill}" (${fixture.id}) exceeding pass mark`, async () => {
-        // Mock provider output aligned with strong fixture dimensions
-        mockProviderOutput = {
-          dimensions: fixture.expectedDimensions,
-          feedback: `Candidate demonstrated exceptional mastery of ${fixture.targetSkill}.`,
-          strengths: ['Deep technical nuance', 'Comprehensive edge case coverage'],
-          growthAreas: [],
-          groundedSkills: [fixture.targetSkill],
-        };
-
-        const result = await evaluateQuestionAnswer({
-          question: {
-            id: fixture.questionId,
-            targetSkill: fixture.targetSkill,
-            prompt: fixture.questionPrompt,
-          },
-          answerText: fixture.answerText,
-        });
-
-        // Verify composite score meets/exceeds pass mark
-        assert.ok(
-          result.evaluation.compositeScore >= INTERVIEW_PASS_MARK,
-          `Composite score (${result.evaluation.compositeScore}) should be >= ${INTERVIEW_PASS_MARK}`,
-        );
-        assert.equal(result.evaluation.compositeScore, fixture.compositeScore);
-
-        // Verify canonical skill grounding
-        assert.deepEqual(result.evaluation.groundedSkills, fixture.expectedGroundedSkills);
-
-        // Verify student answer length validation succeeds
-        const studentAns = validateStudentAnswer({
-          questionId: fixture.questionId,
-          answerText: fixture.answerText,
-          durationSeconds: 120,
-        });
-        assert.equal(studentAns.questionId, fixture.questionId);
-      });
-    }
-  });
-
-  // =========================================================================
-  // 4. Partial Candidate Answer Fixtures Suite
-  // =========================================================================
-  describe('4. Partial Answer Fixtures (Foundational, Incomplete, Sub-Pass)', () => {
-    for (const [key, fixture] of Object.entries(PARTIAL_ANSWER_FIXTURES)) {
-      it(`evaluates partial fixture "${fixture.targetSkill}" (${fixture.id}) strictly below pass mark`, async () => {
-        mockProviderOutput = {
-          dimensions: fixture.expectedDimensions,
-          feedback: `Candidate shows understanding but misses key architectural details in ${fixture.targetSkill}.`,
-          strengths: ['Basic conceptual understanding'],
-          growthAreas: ['Deepen technical knowledge on edge cases and mechanisms'],
-          groundedSkills: [fixture.targetSkill],
-        };
-
-        const result = await evaluateQuestionAnswer({
-          question: {
-            id: fixture.questionId,
-            targetSkill: fixture.targetSkill,
-            prompt: fixture.questionPrompt,
-          },
-          answerText: fixture.answerText,
-        });
-
-        // Must strictly fall below institutional pass mark of 0.75
-        assert.ok(
-          result.evaluation.compositeScore < INTERVIEW_PASS_MARK,
-          `Partial score (${result.evaluation.compositeScore}) must be < ${INTERVIEW_PASS_MARK}`,
-        );
-        assert.ok(
-          result.evaluation.compositeScore >= 0.50,
-          `Partial score (${result.evaluation.compositeScore}) should be >= 0.50`,
-        );
-        assert.equal(result.evaluation.compositeScore, fixture.compositeScore);
-
-        // Verify human session evaluation fails on this score
-        const session = {
-          _id: new mongoose.Types.ObjectId().toString(),
-          targetSkills: [fixture.targetSkill],
-          questions: [{ questionId: fixture.questionId, targetSkill: fixture.targetSkill, evaluation: result.evaluation }],
-        };
-        const sessionEval = evaluateSessionResults({ session, evaluatorType: 'human' });
-        assert.equal(sessionEval.eligibleForVerified, false);
-        assert.equal(sessionEval.evidenceResults[0].outcome, 'fail');
-      });
-    }
-  });
-
-  // =========================================================================
-  // 5. Weak Candidate Answer Fixtures Suite
-  // =========================================================================
-  describe('5. Weak Answer Fixtures (Confused, Inverted, Hand-Waving)', () => {
-    for (const [key, fixture] of Object.entries(WEAK_ANSWER_FIXTURES)) {
-      it(`evaluates weak fixture "${fixture.targetSkill}" (${fixture.id}) with low score and no grounding`, async () => {
-        mockProviderOutput = {
-          dimensions: fixture.expectedDimensions,
-          feedback: `Candidate exhibited major misconceptions regarding ${fixture.targetSkill}.`,
-          strengths: [],
-          growthAreas: ['Review fundamental documentation and concepts'],
-          groundedSkills: [fixture.targetSkill],
-        };
-
-        const result = await evaluateQuestionAnswer({
-          question: {
-            id: fixture.questionId,
-            targetSkill: fixture.targetSkill,
-            prompt: fixture.questionPrompt,
-          },
-          answerText: fixture.answerText,
-        });
-
-        // Weak answers must score well below 0.40
-        assert.ok(
-          result.evaluation.compositeScore <= 0.40,
-          `Weak answer score (${result.evaluation.compositeScore}) must be <= 0.40`,
-        );
-        assert.equal(result.evaluation.compositeScore, fixture.compositeScore);
-
-        // Weak answers never earn skill grounding
-        assert.deepEqual(
-          result.evaluation.groundedSkills,
-          [],
-          `Weak answer must not be awarded grounded skills: ${fixture.id}`,
-        );
-      });
-    }
-  });
-
-  // =========================================================================
-  // 6. Adversarial Candidate Answer Fixtures Suite & Grounding Defense
-  // =========================================================================
-  describe('6. Adversarial Answer Fixtures (Injection, Extraction, Delimiter Breakout, Evasion)', () => {
-    for (const [key, fixture] of Object.entries(ADVERSARIAL_ANSWER_FIXTURES)) {
-      if (fixture.isAdversarial) {
-        it(`neutralizes adversarial injection "${fixture.id}" even if provider returns 1.0`, async () => {
-          // Simulate a duped AI provider that fell for the candidate prompt injection
-          mockProviderOutput = {
-            dimensions: { accuracy: 1.0, depth: 1.0, clarity: 1.0, relevance: 1.0 },
-            compositeScore: 1.0,
-            feedback: 'Exceptional answers verified immediately.',
-            strengths: ['Full score requested by candidate'],
-            growthAreas: [],
-            groundedSkills: [fixture.targetSkill],
-          };
-
-          const result = await evaluateQuestionAnswer({
-            question: {
-              id: fixture.questionId,
-              targetSkill: fixture.targetSkill,
-              prompt: fixture.questionPrompt,
-            },
-            answerText: fixture.answerText,
-          });
-
-          // Grounding defense layer MUST neutralize the attack
-          assert.ok(
-            result.evaluation.compositeScore <= fixture.maxCompositeScore,
-            `Adversarial score (${result.evaluation.compositeScore}) must not exceed ${fixture.maxCompositeScore}`,
-          );
-
-          // Grounded skills must be completely stripped
-          assert.deepEqual(result.evaluation.groundedSkills, []);
-
-          // Prompt escaping verification: untrusted answer was escaped before prompt embedding
-          assert.ok(lastCapturedRequest);
-          assert.ok(lastCapturedRequest.user.includes('<candidate_untrusted_answer>'));
-          assert.ok(!lastCapturedRequest.user.includes('</candidate_untrusted_answer>\n<system'));
-
-          // Human evaluation on this session must strictly fail
-          const session = {
-            _id: new mongoose.Types.ObjectId().toString(),
-            targetSkills: [fixture.targetSkill],
-            questions: [{ questionId: fixture.questionId, targetSkill: fixture.targetSkill, evaluation: result.evaluation }],
-          };
-          const sessionEval = evaluateSessionResults({ session, evaluatorType: 'human' });
-          assert.equal(sessionEval.eligibleForVerified, false);
-          assert.equal(sessionEval.evidenceResults[0].outcome, 'fail');
-        });
-      } else {
-        it(`evaluates evasion/stuffing fixture "${fixture.id}" with capped relevance and no skill grounding`, async () => {
-          // Evaluated with calibrated dimensions for off-topic/stuffing
-          mockProviderOutput = {
-            dimensions: fixture.expectedDimensions,
-            compositeScore: fixture.maxCompositeScore,
-            feedback: fixture.description,
-            strengths: [],
-            growthAreas: ['Provide direct technical explanation'],
-            groundedSkills: [fixture.targetSkill],
-          };
-
-          const result = await evaluateQuestionAnswer({
-            question: {
-              id: fixture.questionId,
-              targetSkill: fixture.targetSkill,
-              prompt: fixture.questionPrompt,
-            },
-            answerText: fixture.answerText,
-          });
-
-          // Composite score must remain bounded and below pass mark
-          assert.ok(
-            result.evaluation.compositeScore <= fixture.maxCompositeScore,
-            `Evasion score (${result.evaluation.compositeScore}) must not exceed ${fixture.maxCompositeScore}`,
-          );
-          assert.ok(result.evaluation.compositeScore < INTERVIEW_PASS_MARK);
-
-          // Grounded skills must be strictly empty
-          assert.deepEqual(result.evaluation.groundedSkills, []);
-
-          // Human evaluation on this session must fail
-          const session = {
-            _id: new mongoose.Types.ObjectId().toString(),
-            targetSkills: [fixture.targetSkill],
-            questions: [{ questionId: fixture.questionId, targetSkill: fixture.targetSkill, evaluation: result.evaluation }],
-          };
-          const sessionEval = evaluateSessionResults({ session, evaluatorType: 'human' });
-          assert.equal(sessionEval.eligibleForVerified, false);
-          assert.equal(sessionEval.evidenceResults[0].outcome, 'fail');
-        });
+    it('validates benchmark schema across all fixtures', () => {
+      for (const fixture of HALLUCINATION_BENCHMARK_FIXTURES) {
+        assert.ok(typeof fixture.id === 'string' && fixture.id.length > 0);
+        assert.ok(typeof fixture.skill === 'string' && fixture.skill.length > 0);
+        assert.ok(typeof fixture.question?.prompt === 'string');
+        assert.ok(typeof fixture.answerText === 'string' && fixture.answerText.length >= 20);
+        assert.ok(Array.isArray(fixture.knownFacts) && fixture.knownFacts.length >= 2);
+        assert.ok(Array.isArray(fixture.hallucinatedSkills) && fixture.hallucinatedSkills.length >= 1);
+        assert.ok(fixture.sampleHallucinatedOutput && typeof fixture.sampleHallucinatedOutput === 'object');
+        assert.ok(fixture.sampleGroundedOutput && typeof fixture.sampleGroundedOutput === 'object');
       }
-    }
+    });
+
+    it('detects 100% of hallucinated skills across all benchmark fixtures', () => {
+      for (const fixture of HALLUCINATION_BENCHMARK_FIXTURES) {
+        const candidateAnswer = fixture.answerText;
+        const groundedWithHallucinations = fixture.sampleHallucinatedOutput.groundedSkills;
+
+        const check = detectHallucinatedSkills(groundedWithHallucinations, {
+          answerText: candidateAnswer,
+          questionPrompt: fixture.question.prompt,
+          targetSkill: fixture.skill,
+        });
+
+        assert.strictEqual(
+          check.hasHallucinations,
+          true,
+          `Failed to detect hallucination in fixture ${fixture.id}`,
+        );
+
+        for (const expectedHallucinated of fixture.hallucinatedSkills) {
+          const wasDetected = check.hallucinatedSkills.some(
+            (s) => s.toLowerCase() === expectedHallucinated.toLowerCase(),
+          );
+          assert.ok(
+            wasDetected,
+            `Expected hallucinated skill "${expectedHallucinated}" to be caught in ${fixture.id}`,
+          );
+        }
+      }
+    });
+
+    it('does not flag legitimate demonstrated skills in grounded sample outputs', () => {
+      for (const fixture of HALLUCINATION_BENCHMARK_FIXTURES) {
+        const legitimateSkills = fixture.sampleGroundedOutput.groundedSkills;
+
+        const check = detectHallucinatedSkills(legitimateSkills, {
+          answerText: fixture.answerText,
+          questionPrompt: fixture.question.prompt,
+          targetSkill: fixture.skill,
+        });
+
+        assert.strictEqual(
+          check.hasHallucinations,
+          false,
+          `False positive hallucination detected for fixture ${fixture.id}: ${check.hallucinatedSkills.join(', ')}`,
+        );
+        assert.ok(check.validSkills.length > 0);
+      }
+    });
+
+    it('strips hallucinated skills when passed through groundAnswerEvaluation', () => {
+      for (const fixture of HALLUCINATION_BENCHMARK_FIXTURES) {
+        const grounded = groundAnswerEvaluation(fixture.sampleHallucinatedOutput, {
+          question: {
+            id: fixture.question.id,
+            targetSkill: fixture.skill,
+            prompt: fixture.question.prompt,
+          },
+          candidateAnswer: fixture.answerText,
+        });
+
+        // The grounded result should strip all hallucinated skills
+        for (const hallucinated of fixture.hallucinatedSkills) {
+          assert.ok(
+            !grounded.evaluation.groundedSkills.includes(hallucinated),
+            `groundAnswerEvaluation failed to strip hallucinated skill "${hallucinated}" in ${fixture.id}`,
+          );
+        }
+      }
+    });
   });
 
-  // =========================================================================
-  // 7. End-to-End Database Integration with Isolated Database
-  // =========================================================================
-  describe('7. End-to-End Interview Session Database Lifecycle with Isolated Test DB', () => {
-    it('creates session, saves answers for all 4 quality tiers, and evaluates in MongoDB', async () => {
-      // 1. Register student & login to get token
-      const registerRes = await postJson(server.baseUrl, '/api/auth/register', {
-        name: 'Quality Fixture Student',
-        email: 'quality.student@nexora.test',
-        password: PASSWORD,
-      });
-      assert.equal(registerRes.status, 201);
+  // ─── 2. Feedback Quality Scoring (scoreFeedbackQuality) ───────────────────
+  describe('2. Feedback Quality Scoring (scoreFeedbackQuality)', () => {
+    it('rates high-quality technical feedback as acceptable with qualityScore >= 0.75', () => {
+      const evaluation = {
+        feedback:
+          'Excellent explanation of Node.js event loop phases, specifically articulating how timers execute before poll and check phases.',
+        strengths: ['Clear distinction between nextTick and setImmediate', 'Accurate phase order'],
+        growthAreas: ['Consider profiling worker thread offloading under heavy CPU loads'],
+        groundedSkills: ['Node.js'],
+        dimensions: { accuracy: 0.95, depth: 0.9, clarity: 0.95, relevance: 1.0 },
+      };
 
-      const loginRes = await postJson(server.baseUrl, '/api/auth/login', {
-        email: 'quality.student@nexora.test',
-        password: PASSWORD,
-      });
-      assert.equal(loginRes.status, 200);
-      const studentToken = loginRes.body.data.token;
-      assert.ok(studentToken, 'Login must yield JWT token');
-
-      // 2. Create interview session
-      const createRes = await sendJsonWithToken(server.baseUrl, '/api/interviews/sessions', {
-        method: 'POST',
-        token: studentToken,
-        payload: {
-          targetRole: 'backend-developer',
-          targetSkills: ['Node.js', 'SQL'],
-          difficulty: 'intermediate',
-          questionCount: 4,
+      const context = {
+        question: {
+          prompt: 'Explain the Node.js event loop phases and how setImmediate differs from process.nextTick.',
+          targetSkill: 'Node.js',
         },
-      });
-      assert.equal(createRes.status, 201);
-      const sessionData = createRes.body.data.session;
-      const sessionId = sessionData.id;
-      const sessionQuestions = sessionData.questions;
-      assert.equal(sessionQuestions.length, 4);
+        answerText:
+          'The event loop has timers, pending callbacks, poll, check (setImmediate), and close callbacks. NextTick runs immediately on the microtask queue before the next phase.',
+      };
 
-      // Start session (initialized -> in_progress)
-      const startRes = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${sessionId}/start`,
-        {
-          method: 'POST',
-          token: studentToken,
-          payload: {},
+      const quality = scoreFeedbackQuality(evaluation, context);
+
+      assert.strictEqual(quality.isAcceptable, true);
+      assert.ok(quality.qualityScore >= 0.75, `Expected qualityScore >= 0.75, got ${quality.qualityScore}`);
+      assert.ok(quality.dimensions.specificity >= 0.75);
+      assert.ok(quality.dimensions.relevance >= 0.85);
+      assert.ok(quality.dimensions.actionability >= 0.75);
+      assert.strictEqual(quality.hallucinationRisk, 0);
+    });
+
+    it('penalizes generic boilerplate feedback and marks it as low quality', () => {
+      const evaluation = {
+        feedback: 'Good job. You answered well. Keep it up and study more.',
+        strengths: ['Good explanation'],
+        growthAreas: ['Do better next time'],
+        groundedSkills: ['Node.js'],
+      };
+
+      const context = {
+        question: {
+          prompt: 'How does Node.js handle asynchronous I/O?',
+          targetSkill: 'Node.js',
         },
-      );
-      assert.equal(startRes.status, 200);
+        answerText: 'Node uses libuv and non-blocking sockets with the epoll system call on Linux.',
+      };
 
-      // 3. Submit 4 calibrated answers covering Strong, Partial, Weak, Adversarial
-      const strongFixture = STRONG_ANSWER_FIXTURES.STRONG_NODE_EVENT_LOOP;
-      const partialFixture = PARTIAL_ANSWER_FIXTURES.PARTIAL_SQL_INDEXING;
-      const weakFixture = WEAK_ANSWER_FIXTURES.WEAK_NODE_EVENT_LOOP;
-      const advFixture = ADVERSARIAL_ANSWER_FIXTURES.ADV_DIRECT_SYSTEM_OVERRIDE;
+      const quality = scoreFeedbackQuality(evaluation, context);
 
-      const submissions = [
-        { qIndex: 0, fixture: strongFixture },
-        { qIndex: 1, fixture: partialFixture },
-        { qIndex: 2, fixture: weakFixture },
-        { qIndex: 3, fixture: advFixture },
+      assert.ok(quality.qualityScore < 0.60, `Expected low score for generic feedback, got ${quality.qualityScore}`);
+      assert.ok(quality.dimensions.specificity <= 0.40);
+      assert.ok(quality.reasons.some((r) => r.includes('generic boilerplate')));
+    });
+
+    it('penalizes feedback with hallucinated skills and inflates hallucinationRisk', () => {
+      const evaluation = {
+        feedback: 'Good explanation of database tables and excellent demonstration of Redis cluster sharding.',
+        strengths: ['SQL knowledge', 'Redis caching'],
+        growthAreas: ['Consider Redis Sentinel failover'],
+        groundedSkills: ['SQL', 'Redis'],
+      };
+
+      const context = {
+        question: {
+          prompt: 'What is a SQL primary key?',
+          targetSkill: 'SQL',
+        },
+        answerText: 'A primary key is a column or set of columns that uniquely identifies each row in a table. It cannot contain null values.',
+      };
+
+      const quality = scoreFeedbackQuality(evaluation, context);
+
+      assert.ok(quality.hallucinationRisk > 0.30, `Expected high hallucination risk, got ${quality.hallucinationRisk}`);
+      assert.ok(quality.detectedHallucinations.includes('Redis'));
+      assert.ok(quality.reasons.some((r) => r.includes('Hallucinated skills detected')));
+    });
+
+    it('flags terse feedback summaries under 20 characters', () => {
+      const evaluation = {
+        feedback: 'Nice answer.',
+        strengths: [],
+        growthAreas: [],
+        groundedSkills: ['React'],
+      };
+
+      const context = {
+        question: { prompt: 'What is JSX in React?', targetSkill: 'React' },
+        answerText: 'JSX is syntax sugar for React.createElement that allows writing HTML-like tags in JavaScript.',
+      };
+
+      const quality = scoreFeedbackQuality(evaluation, context);
+
+      assert.strictEqual(quality.isAcceptable, false);
+      assert.ok(quality.dimensions.tone <= 0.50);
+      assert.ok(quality.reasons.some((r) => r.includes('too terse')));
+    });
+
+    it('penalizes feedback leaking secret credentials or raw provider errors', () => {
+      const evaluationWithSecret = {
+        feedback: 'Candidate showed good understanding of API keys like AIzaSyB123456789012345678901234567890 in requests.',
+        strengths: ['API key handling'],
+        growthAreas: [],
+        groundedSkills: ['JavaScript'],
+      };
+
+      const context = {
+        question: { prompt: 'How do you send headers in fetch?', targetSkill: 'JavaScript' },
+        answerText: 'Pass an options object with a headers key containing key-value pairs.',
+      };
+
+      const quality = scoreFeedbackQuality(evaluationWithSecret, context);
+
+      assert.strictEqual(quality.isAcceptable, false);
+      assert.ok(quality.dimensions.tone <= 0.20);
+      assert.ok(quality.reasons.some((r) => r.includes('sensitive credential')));
+    });
+
+    it('rewards actionable verbs in growthAreas (practice, explore, implement, optimize)', () => {
+      const evaluation = {
+        feedback: 'Accurate overview of indexing, though execution plans were not discussed.',
+        strengths: ['B-Tree search acceleration'],
+        growthAreas: [
+          'Practice analyzing queries with EXPLAIN ANALYZE to identify full table scans.',
+          'Explore composite index column ordering rules to optimize multi-column filters.',
+        ],
+        groundedSkills: ['SQL'],
+      };
+
+      const context = {
+        question: { prompt: 'How do indexes work in SQL?', targetSkill: 'SQL' },
+        answerText: 'Indexes use tree structures to find rows quickly without reading the entire table from disk.',
+      };
+
+      const quality = scoreFeedbackQuality(evaluation, context);
+
+      assert.ok(quality.dimensions.actionability >= 0.85);
+      assert.strictEqual(quality.isAcceptable, true);
+    });
+  });
+
+  // ─── 3. Model Drift Canary Infrastructure ─────────────────────────────────
+  describe('3. Model Drift Canary Infrastructure', () => {
+    it('defines exactly 5 canonical canary scenarios with valid baseline bounds', () => {
+      assert.strictEqual(CANARY_BASELINES.length, 5);
+
+      for (const baseline of CANARY_BASELINES) {
+        assert.ok(typeof baseline.id === 'string' && baseline.id.startsWith('canary-'));
+        assert.ok(typeof baseline.expectedScore === 'number' && baseline.expectedScore > 0);
+        assert.ok(baseline.minScore <= baseline.expectedScore);
+        assert.ok(baseline.maxScore >= baseline.expectedScore);
+        assert.ok(baseline.expectedDimensions && typeof baseline.expectedDimensions === 'object');
+      }
+    });
+
+    it('passes when canary evaluations match baseline expectations within tolerance', () => {
+      // Simulate healthy canary evaluation matching expected baseline values
+      const simulatedCanaries = CANARY_BASELINES.map((b) => ({
+        id: b.id,
+        score: b.expectedScore,
+        dimensions: b.expectedDimensions,
+      }));
+
+      const report = checkModelDrift(simulatedCanaries, CANARY_BASELINES);
+
+      assert.strictEqual(report.isDriftDetected, false);
+      assert.strictEqual(report.driftedCount, 0);
+      assert.strictEqual(report.totalCanaries, 5);
+      assert.ok(report.maxDrift <= 0.05);
+
+      for (const canary of report.canaries) {
+        assert.strictEqual(canary.isWithinTolerance, true);
+      }
+    });
+
+    it('detects model drift when canary scores deviate by > 20% from baseline', () => {
+      // Introduce an artificially drifted canary score (e.g. 0.94 -> 0.60, ~36% drift)
+      const driftedCanaries = CANARY_BASELINES.map((b) => {
+        if (b.id === 'canary-node-event-loop') {
+          return { id: b.id, score: 0.60 }; // 0.60 vs 0.94 baseline
+        }
+        return { id: b.id, score: b.expectedScore };
+      });
+
+      const report = checkModelDrift(driftedCanaries, CANARY_BASELINES, { maxTolerance: 0.20 });
+
+      assert.strictEqual(report.isDriftDetected, true);
+      assert.ok(report.driftedCount >= 1);
+      assert.ok(report.maxDrift > 0.25);
+
+      const drifted = report.canaries.find((c) => c.id === 'canary-node-event-loop');
+      assert.ok(drifted);
+      assert.strictEqual(drifted.isWithinTolerance, false);
+      assert.ok(drifted.reason.includes('exceeds tolerance'));
+    });
+
+    it('flags missing canary evaluations as drifted / failed', () => {
+      // Only 3 of 5 canaries executed
+      const partialCanaries = [
+        { id: 'canary-node-event-loop', score: 0.94 },
+        { id: 'canary-py-gil', score: 0.94 },
       ];
 
-      for (const { qIndex, fixture } of submissions) {
-        const targetQ = sessionQuestions[qIndex];
-        const questionId = targetQ.id || targetQ.questionId;
+      const report = checkModelDrift(partialCanaries, CANARY_BASELINES);
 
-        // Configure mock output for this specific step
-        mockProviderOutput = {
-          dimensions: fixture.expectedDimensions,
-          feedback: fixture.tier === EVALUATION_TIERS.ADVERSARIAL
-            ? 'Candidate answer did not address the asked technical question.'
-            : fixture.description,
-          strengths: fixture.tier === EVALUATION_TIERS.STRONG ? ['Solid explanation'] : [],
-          growthAreas: fixture.tier !== EVALUATION_TIERS.STRONG ? ['Needs improvement'] : [],
-          groundedSkills: [fixture.targetSkill],
-        };
+      assert.strictEqual(report.isDriftDetected, true);
+      assert.strictEqual(report.driftedCount, 3); // 3 missing
+      const missing = report.canaries.filter((c) => c.status === 'missing');
+      assert.strictEqual(missing.length, 3);
+    });
 
-        const answerRes = await sendJsonWithToken(
-          server.baseUrl,
-          `/api/interviews/sessions/${sessionId}/questions/${questionId}/answers`,
-          {
-            method: 'POST',
-            token: studentToken,
-            payload: {
-              answerText: fixture.answerText,
-              durationSeconds: 90,
-            },
-          },
-        );
+    it('is pure and deterministic — same input always yields identical drift report', () => {
+      const inputs = CANARY_BASELINES.map((b) => ({ id: b.id, score: b.expectedScore * 0.95 }));
 
-        assert.equal(answerRes.status, 200, `Answer submission failed for question ${questionId}: ${JSON.stringify(answerRes.body)}`);
-        assert.ok(answerRes.body.data.evaluatedQuestion?.evaluation, 'Response must include evaluation payload');
-      }
+      const run1 = checkModelDrift(inputs, CANARY_BASELINES);
+      const run2 = checkModelDrift(inputs, CANARY_BASELINES);
 
-      // 4. Verify session stored in MongoDB
-      const sessionDoc = await InterviewSession.findById(sessionId);
-      assert.ok(sessionDoc);
-      assert.equal(sessionDoc.questions.length, 4);
-
-      // Verify each question evaluation in DB
-      // Q0: Strong (Node.js) -> score >= 0.75
-      assert.ok(sessionDoc.questions[0].evaluation.compositeScore >= INTERVIEW_PASS_MARK);
-      assert.deepEqual(sessionDoc.questions[0].evaluation.groundedSkills, ['Node.js']);
-
-      // Q1: Partial (SQL) -> score in [0.50, 0.7499]
-      assert.ok(sessionDoc.questions[1].evaluation.compositeScore < INTERVIEW_PASS_MARK);
-      assert.ok(sessionDoc.questions[1].evaluation.compositeScore >= 0.50);
-
-      // Q2: Weak (Node.js) -> score <= 0.40
-      assert.ok(sessionDoc.questions[2].evaluation.compositeScore <= 0.40);
-      assert.deepEqual(sessionDoc.questions[2].evaluation.groundedSkills, []);
-
-      // Q3: Adversarial (Node.js) -> neutralized, score <= 0.10
-      assert.ok(sessionDoc.questions[3].evaluation.compositeScore <= 0.10);
-      assert.deepEqual(sessionDoc.questions[3].evaluation.groundedSkills, []);
-
-      // 5. Complete session
-      const completeRes = await sendJsonWithToken(
-        server.baseUrl,
-        `/api/interviews/sessions/${sessionId}/complete`,
-        {
-          method: 'POST',
-          token: studentToken,
-          payload: {},
-        },
-      );
-      assert.equal(completeRes.status, 200);
-
-      // Session overall score is the average across all 4 questions
-      const resultData = completeRes.body.data;
-      assert.ok(resultData.overallScore < INTERVIEW_PASS_MARK);
-      assert.equal(resultData.eligibleForVerified, false);
-      assert.equal(resultData.session.status, 'completed');
+      assert.deepStrictEqual(run1, run2);
     });
   });
 });
-

@@ -780,3 +780,9 @@ export function evaluateInterviewSession(
   };
 }
 export { adaptDifficulty } from './adaptiveDifficulty.js';
+export {
+  scoreFeedbackQuality,
+  detectHallucinatedSkills,
+  checkModelDrift,
+  CANARY_BASELINES,
+} from './feedbackQuality.js';
