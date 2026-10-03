@@ -7,6 +7,8 @@ import {
   auditOutboundAiRequest,
   auditInboundAiResponse,
 } from '../../domain/ai/aiSecurityAuditor.js';
+import { aiCircuitBreaker } from '../../utils/circuitBreaker.js';
+import { executeWithRetry } from '../../utils/retry.js';
 
 /**
  * The boundary between Nexora's domain logic and whichever model provider is
@@ -152,15 +154,38 @@ export async function requestCompletion(request) {
 
   let result;
   try {
-    result = await provider.complete(effectiveRequest);
-  } catch (error) {
-    logger.error(`AI provider "${provider.name}" failed`, {
-      errorType: error?.name ?? 'UnknownError',
-      // Structured facts only. The message can quote the prompt, so it is
-      // never logged.
-      reason: error?.reason,
-      status: Number.isInteger(error?.status) ? error.status : undefined,
+    result = await aiCircuitBreaker.execute(async () => {
+      return await executeWithRetry(
+        async () => {
+          try {
+            return await provider.complete(effectiveRequest);
+          } catch (error) {
+            logger.error(`AI provider "${provider.name}" failed`, {
+              errorType: error?.name ?? 'UnknownError',
+              // Structured facts only. The message can quote the prompt, so it is
+              // never logged.
+              reason: error?.reason,
+              status: Number.isInteger(error?.status) ? error.status : undefined,
+            });
+            throw ApiError.serviceUnavailable(
+              'The AI service could not be reached. Please try again in a moment.',
+              ERROR_CODES.AI_PROVIDER_FAILED,
+            );
+          }
+        },
+        {
+          maxRetries: Number.parseInt(process.env.AI_MAX_RETRIES ?? '1', 10),
+          backoffMs: Number.parseInt(
+            process.env.AI_RETRY_BACKOFF_MS ?? (process.env.NODE_ENV === 'production' ? '2000' : '20'),
+            10,
+          ),
+        },
+      );
     });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     throw ApiError.serviceUnavailable(
       'The AI service could not be reached. Please try again in a moment.',
       ERROR_CODES.AI_PROVIDER_FAILED,
@@ -199,4 +224,7 @@ export async function requestCompletion(request) {
 export function resetAiProviders() {
   providers.clear();
   activeProviderName = env.aiProviderName;
+  aiCircuitBreaker.reset();
 }
+
+export { aiCircuitBreaker };

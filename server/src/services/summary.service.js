@@ -184,8 +184,18 @@ export async function getSummary(userId) {
   }
 
   summary.nextStep = nextStepFor(summary);
-  summary.journeyProgress = computeJourneyProgress(summary);
-  summary.sectionPriority = prioritizeDashboardSections(summary, profile.preferences);
+  try {
+    summary.journeyProgress = computeJourneyProgress(summary);
+  } catch (err) {
+    logger.warn(`Summary: computeJourneyProgress failed for user ${userId}`, err);
+    summary.journeyProgress = null;
+  }
+  try {
+    summary.sectionPriority = prioritizeDashboardSections(summary, profile.preferences);
+  } catch (err) {
+    logger.warn(`Summary: prioritizeDashboardSections failed for user ${userId}`, err);
+    summary.sectionPriority = null;
+  }
 
   return summary;
 }
