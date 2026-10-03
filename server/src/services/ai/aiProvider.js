@@ -89,6 +89,21 @@ export function isAiConfigured() {
 }
 
 /**
+ * Task 40 — Probes AI provider health and circuit breaker status for deep health checks.
+ */
+export function getAiProviderHealth() {
+  const configured = isAiConfigured();
+  const isOpen = aiCircuitBreaker.isOpen();
+  return {
+    configured,
+    provider: activeProviderName || 'none',
+    circuitBreaker: isOpen ? 'open' : 'closed',
+    status: configured && !isOpen ? 'available' : (configured ? 'circuit_broken' : 'unconfigured'),
+  };
+}
+
+
+/**
  * Returns the active provider.
  *
  * @returns {AiProvider}

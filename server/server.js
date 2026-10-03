@@ -35,8 +35,16 @@ function registerProviders() {
   }
 }
 
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS || '10000', 10);
+
 async function shutdown(reason, exitCode = 0) {
   logger.info(`Shutting down (${reason})…`);
+
+  const forceExitTimer = setTimeout(() => {
+    logger.error(`Shutdown timed out after ${SHUTDOWN_TIMEOUT_MS}ms, forcing exit.`);
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceExitTimer.unref();
 
   try {
     if (httpServer) {
@@ -48,9 +56,11 @@ async function shutdown(reason, exitCode = 0) {
     await disconnectDatabase();
   } catch (error) {
     logger.error('Error during shutdown', error);
+    clearTimeout(forceExitTimer);
     process.exit(1);
   }
 
+  clearTimeout(forceExitTimer);
   process.exit(exitCode);
 }
 

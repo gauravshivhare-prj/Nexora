@@ -14,12 +14,16 @@ describe('deployment smoke', () => {
     await server.close();
   });
 
-  it('serves the health endpoint with a controlled response', async () => {
+  it('serves the health endpoint with deep inspection (database, ai, uptime)', async () => {
     const { status, body } = await requestWithHeaders(server.baseUrl, '/api/health');
 
     assert.equal(status, 200);
     assert.equal(body.success, true);
     assert.match(body.message, /healthy/i);
+    assert.equal(body.database, 'connected');
+    assert.ok(body.ai);
+    assert.equal(typeof body.uptime, 'number');
+    assert.ok(body.uptime >= 0);
   });
 
   it('sends baseline security headers and hides the framework', async () => {

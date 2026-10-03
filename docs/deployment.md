@@ -211,10 +211,62 @@ Avoid:
 - animation on every element,
 - distracting parallax.
 
-Recommended behavior:
-- Micro-interactions: ~150–250ms
-- Standard transitions: ~250–400ms
-- Complex/reveal animations: ~400–700ms
-- Respect `prefers-reduced-motion`.
-
 Animation must reinforce **cause → effect**. For example, completing an assessment should visibly update the relevant readiness/skill state instead of merely showing a generic success toast.
+
+---
+
+## Production Deployment Architecture & Security (Task 40)
+
+### 1. Reverse Proxy & HTTPS Enforcement (HSTS)
+In modern production environments (Vercel, Render, Cloudflare, AWS CloudFront), SSL/TLS termination is handled at the reverse proxy or edge CDN layer:
+- **Client (Vercel)**: Configured in `client/vercel.json` with `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`.
+- **API (Render / Reverse Proxy)**: Render automatically provisions Let's Encrypt certificates and redirects all HTTP traffic to HTTPS (port 443). The edge reverse proxy appends HSTS headers.
+- **Trust Proxy**: In `server/src/app.js`, `trust proxy` is configurable via `TRUST_PROXY=true` in production to accurately resolve client IP addresses through multi-tier reverse proxies.
+
+### 2. Frontend Deployment on Vercel (`client/vercel.json`)
+The React/Vite SPA is configured with:
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Clean URLs**: `true`
+- **SPA Rewrites**: `[ { "source": "/(.*)", "destination": "/index.html" } ]` ensuring client-side routes (e.g. `/assessment/attempt/123`, `/interview/session/456`) reload without 404s.
+- **Defensive Headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+
+### 3. Backend Deployment on Render (`render.yaml`)
+Infrastructure-as-code declaration in `render.yaml`:
+- **Service Name**: `nexora-api`
+- **Root Directory**: `server`
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/api/health`
+- **Auto-Deploy**: Explicitly set to `false` for controlled release cycles.
+- **Environment Variables**:
+  - `NODE_ENV=production`
+  - `PORT=10000`
+  - `MONGODB_POOL_SIZE=50`
+  - `MONGODB_MIN_POOL_SIZE=5`
+  - `SHUTDOWN_TIMEOUT_MS=10000`
+  - Secrets (`MONGODB_URI`, `JWT_SECRET`, `GEMINI_API_KEY`, `CLIENT_URL`) managed through Render Secret Dashboard with zero hardcoded references.
+
+### 4. Deep Health Check Verification
+The `/api/health` endpoint performs real deep inspection of dependencies:
+```json
+{
+  "success": true,
+  "status": "healthy",
+  "message": "Nexora API is healthy",
+  "environment": "production",
+  "database": "connected",
+  "ai": "available",
+  "uptime": 1420,
+  "timestamp": "2026-10-03T18:00:00.000Z"
+}
+```
+If MongoDB is disconnected, `/api/health` returns `status: "degraded"` and `database: "disconnected"`. If the AI circuit breaker is tripped, `ai: "circuit_broken"`.
+
+### 5. Configurable Graceful Shutdown
+When Render or Kubernetes sends `SIGTERM` or `SIGINT`:
+- The server stops accepting new connections on `httpServer`.
+- Existing in-flight requests are given up to `SHUTDOWN_TIMEOUT_MS` (default 10,000ms / 10s) to complete.
+- MongoDB connection pool is drained and closed via `disconnectDatabase()`.
+- An unreferenced timeout timer guarantees the container process terminates even if an unresponsive client socket fails to disconnect.
+

@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: nexora-api
+    runtime: node
+    plan: starter
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        sync: false
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: MONGODB_POOL_SIZE
+        value: 50
+      - key: MONGODB_MIN_POOL_SIZE
+        value: 5
+      - key: SHUTDOWN_TIMEOUT_MS
+        value: 10000
