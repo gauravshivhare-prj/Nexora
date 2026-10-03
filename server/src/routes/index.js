@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 
 import authRoutes from './auth.routes.js';
 import careerRoutes from './career.routes.js';
@@ -15,9 +15,16 @@ import readinessRoutes from './readiness.routes.js';
 
 import studentRoutes from './student.routes.js';
 import adminRoutes from './admin.routes.js';
+import { handleCspReport } from '../controllers/security.controller.js';
 
 /** Root API router. Future feature routers mount here, one per phase. */
 const router = Router();
+
+router.post(
+  '/csp-report',
+  express.json({ type: ['application/json', 'application/csp-report', '*/*'] }),
+  handleCspReport,
+);
 
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);

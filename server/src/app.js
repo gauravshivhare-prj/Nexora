@@ -8,6 +8,7 @@ import { notFoundHandler } from './middleware/notFoundHandler.js';
 import { requestId } from './middleware/requestId.js';
 import { responseTiming } from './middleware/responseTiming.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 
 /**
  * Builds the Express application.
@@ -23,16 +24,7 @@ export function createApp() {
 
   app.use(requestId);
   app.use(responseTiming);
-
-  // A JSON API is never meant to be sniffed as another type or framed.
-  app.use((_req, res, next) => {
-    res.set({
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'no-referrer',
-    });
-    next();
-  });
+  app.use(securityHeaders);
   const allowedOrigins = env.clientUrl?.includes(',')
     ? env.clientUrl.split(',').map((s) => s.trim()).filter(Boolean)
     : env.clientUrl;

@@ -109,7 +109,7 @@ export function errorHandler(error, req, res, next) {
 
   const body = { success: false, message, errorCode };
 
-  if (req.id) {
+  if (req.id && (!isProduction || req.headers['x-request-id'])) {
     body.requestId = req.id;
   }
 
