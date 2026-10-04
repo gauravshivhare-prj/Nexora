@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 
 import { logger, sanitizeLogString } from '../src/utils/logger.js';
 import { requestLogger } from '../src/middleware/requestLogger.js';
-import { fakePassword } from './helpers/fakeSecrets.js';
+import { fakePassword, fakeSecretValue } from './helpers/fakeSecrets.js';
 import {
   clearAiQuotas,
   clearAssessmentAttempts,

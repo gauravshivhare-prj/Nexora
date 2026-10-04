@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: |
             server/package-lock.json
@@ -40,15 +40,30 @@ jobs:
   client-build-and-test:
     name: Client Build & Tests
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install Server Dependencies
+        run: npm ci --prefix server
 
       - name: Install Client Dependencies
         run: npm ci --prefix client
@@ -56,19 +71,53 @@ jobs:
       - name: Build Client (Vite + SRI)
         run: npm run build --prefix client
 
-      - name: Run Client Unit Tests
-        run: npm test --prefix client
+      - name: Configure Headless Chrome
+        run: |
+          if [ -f /usr/bin/google-chrome ]; then
+            sudo mv /usr/bin/google-chrome /usr/bin/google-chrome-bin
+            sudo bash -c 'cat > /usr/bin/google-chrome << "EOF"
+#!/bin/bash
+exec /usr/bin/google-chrome-bin --no-sandbox --disable-dev-shm-usage "$@"
+EOF'
+            sudo chmod +x /usr/bin/google-chrome
+          elif [ -f /usr/bin/chromium ]; then
+            sudo mv /usr/bin/chromium /usr/bin/chromium-bin
+            sudo bash -c 'cat > /usr/bin/chromium << "EOF"
+#!/bin/bash
+exec /usr/bin/chromium-bin --no-sandbox --disable-dev-shm-usage "$@"
+EOF'
+            sudo chmod +x /usr/bin/chromium
+          fi
+
+      - name: Run Client Tests
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/nexora_test
+          MONGODB_URI_TEST: mongodb://localhost:27017/nexora_test
+        run: |
+          export JWT_SECRET=$(node -e "import('crypto').then(c => console.log(c.randomBytes(32).toString('hex')))")
+          npm test --prefix client
 
   server-test:
     name: Server Test Suite
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
@@ -79,6 +128,8 @@ jobs:
         env:
           NODE_ENV: test
           PORT: 5055
+          MONGODB_URI: mongodb://localhost:27017/nexora_test
+          MONGODB_URI_TEST: mongodb://localhost:27017/nexora_test
         run: |
           export JWT_SECRET=$(node -e "import('crypto').then(c => console.log(c.randomBytes(32).toString('hex')))")
           npm test --prefix server
